@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "roomdiff"
+version = "0.1.0"
+description = "Compare two phone videos of the same room and report what was added, removed or moved."
+readme = "README.md"
+requires-python = ">=3.12"
+# torch and torchvision are deliberately NOT listed: they are installed separately
+# from the CUDA 12.8 wheel index (RTX 5090 / sm_120 needs the cu128 build), see docs/env_report.md.
+dependencies = [
+    "numpy",
+    "opencv-python-headless",
+    "av",
+    "pillow",
+    "scipy",
+    "scikit-learn",
+    "scikit-image",
+    "open3d",
+    "rerun-sdk",
+    "trimesh",
+    "plyfile",
+    "huggingface_hub",
+    "transformers",
+    "accelerate",
+    "einops",
+    "safetensors",
+    "tqdm",
+    "pyyaml",
+    "typer",
+    "matplotlib",
+    "imageio",
+    "imageio-ffmpeg",
+    "pycocotools",
+    "timm",
+    "qwen-vl-utils",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[project.scripts]
+roomdiff = "roomdiff.cli:app"
+
+[tool.setuptools]
+packages = ["roomdiff"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

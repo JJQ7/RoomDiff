@@ -1,0 +1,28 @@
+# RoomDiff default configuration. Override with `--config other.yaml` and/or
+# `--set section.key=value` on the command line.
+
+# M1: video decoding and keyframe selection
+ingest:
+  num_keyframes: 48      # keyframes per video (one per equal-length time segment)
+  max_side: 1024         # longer image side of saved keyframes in px (never upscaled)
+  sharpness_window: 5    # candidates evaluated per segment
+  min_motion: 0.02       # drop a keyframe whose motion to the previous one is below this
+  jpeg_quality: 95
+
+# M2: joint Pi3X reconstruction of both keyframe sets (poses, depth, points)
+recon: {}
+
+# M3: per-recording occupied / free / unknown voxel grids and change candidates
+visibility: {}
+
+# M4: SAM 3 instances, 3D lifting, cross-recording matching
+instances: {}
+
+# M4: change classification (added / removed / moved / unverified) and rigid transforms
+changes: {}
+
+# M5: Qwen3-VL naming, description and paired-crop judge
+semantics: {}
+
+# M6: Rerun recording and static web viewer assets
+viz: {}

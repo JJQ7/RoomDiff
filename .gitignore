@@ -1,0 +1,21 @@
+# Python / env
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.cache/
+
+# Large local data, third-party clones, outputs
+data/
+third_party/
+outputs/
+
+# Visualisation / logs / OS
+*.rrd
+*.log
+.DS_Store
+
+# Point clouds (keep any under examples/)
+*.ply
+!examples/**/*.ply
+!**/examples/**/*.ply
