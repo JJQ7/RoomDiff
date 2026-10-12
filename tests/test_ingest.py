@@ -1,5 +1,6 @@
 """Tests for M1 ingest on tiny synthetic videos written with imageio-ffmpeg's ffmpeg."""
 
+import itertools
 import json
 import math
 import subprocess
@@ -182,7 +183,7 @@ def test_select_drops_static_frames_but_keeps_60_percent(pan_then_still_video):
     # near-duplicates, and one of them is restored to reach ceil(0.6 * 12) = 8.
     assert len(kfs) == math.ceil(0.6 * 12) == 8
     assert [k.index for k in kfs][:7] == list(range(8, 140, 20))
-    assert all(a.index < b.index for a, b in zip(kfs, kfs[1:]))
+    assert all(a.index < b.index for a, b in itertools.pairwise(kfs))
 
 
 def test_select_on_a_static_video_returns_60_percent(tmp_path):
@@ -240,5 +241,5 @@ def test_cli_ingest_and_unimplemented_commands(tmp_path, pan_then_still_video):
     result = runner.invoke(app, ["ingest", *args, "--set", "ingest.num_keyframe=4"])
     assert result.exit_code == 2 and "num_keyframe" in result.output  # typo is reported
 
-    result = runner.invoke(app, ["run", *args])
+    result = runner.invoke(app, ["eval", "--out", str(out)])
     assert result.exit_code == 1 and "not implemented yet" in result.output

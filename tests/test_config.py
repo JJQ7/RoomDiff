@@ -57,6 +57,7 @@ def test_int_is_accepted_for_a_float_key():
      "ingest.max_side=big",  # wrong type
      "ingest.num_keyframes=4.5",
      "ingest.max_side=null",
+     "ingest.max_side=auto",  # only an "auto" default accepts a number (not vice versa)
      "ingest.num_keyframes"],  # no '='
 )
 def test_bad_overrides_fail(bad):

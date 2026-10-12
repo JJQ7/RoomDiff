@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 from typing import Annotated
 
@@ -50,6 +51,20 @@ def ingest(
 
 
 @app.command()
+def recon(out: OutOpt, config: ConfigOpt = None, set_: SetOpt = None) -> None:
+    """Reconstruct both keyframe sets with Pi3X in one metric frame (<out>/recon/)."""
+    from roomdiff.recon import run_recon  # heavy imports (torch, pi3) only when needed
+
+    run_recon(out, _load_config(config, set_))
+
+
+@app.command()
+def visibility(out: OutOpt, config: ConfigOpt = None, set_: SetOpt = None) -> None:
+    """Voxel occupied / free / unknown grids and change candidates (<out>/visibility/)."""
+    _visibility_stage(out, _load_config(config, set_))
+
+
+@app.command()
 def run(
     before: BeforeOpt,
     after: AfterOpt,
@@ -57,20 +72,51 @@ def run(
     config: ConfigOpt = None,
     set_: SetOpt = None,
 ) -> None:
-    """Run the full pipeline (ingest -> recon -> visibility -> instances -> report)."""
-    _not_implemented("run")
+    """Run the pipeline; implemented so far: ingest -> recon -> visibility -> viz."""
+    from roomdiff.ingest import ingest_pair
+    from roomdiff.recon import run_recon
+
+    cfg = _load_config(config, set_)
+    stages = {
+        "ingest": lambda: ingest_pair(before, after, out, cfg),
+        "recon": lambda: run_recon(out, cfg),
+        "visibility": lambda: _visibility_stage(out, cfg),
+        "viz": lambda: _viz_stage(out),
+    }
+    seconds = {}
+    for name, stage in stages.items():
+        start = time.perf_counter()
+        stage()
+        seconds[name] = time.perf_counter() - start
+    typer.echo("[run] wall time: " + ", ".join(f"{k} {v:.1f} s" for k, v in seconds.items()))
 
 
 @app.command()
 def viz(out: OutOpt) -> None:
-    """Open the results of a run in Rerun / build the web viewer assets."""
-    _not_implemented("viz")
+    """Write the Rerun recording <out>/scene.rrd (reconstruction + change candidates)
+    and <out>/recon/recon.rrd (reconstruction only)."""
+    _viz_stage(out)
 
 
 @app.command("eval")
 def eval_(out: OutOpt) -> None:
     """Evaluate a run against ground truth."""
     _not_implemented("eval")
+
+
+def _visibility_stage(out: Path, cfg: Config) -> None:
+    from roomdiff.visibility import run_visibility  # torch / scipy only when needed
+    from roomdiff.viz_rerun import log_visibility
+
+    run_visibility(out, cfg)
+    log_visibility(out)
+
+
+def _viz_stage(out: Path) -> None:
+    from roomdiff.viz_rerun import log_recon, log_scene
+
+    log_scene(out)
+    log_recon(out)  # reconstruction-only file, kept for compatibility (about 1 s)
 
 
 def _load_config(config: Path | None, overrides: list[str] | None) -> Config:

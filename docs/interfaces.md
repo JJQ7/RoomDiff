@@ -29,12 +29,33 @@ versa, fraction under 3 cm / 10 cm), and the chosen `scale_factor`.
 World points are recomputed from `depth`, `K`, `cam2world` (helper in `roomdiff/geometry.py`).
 
 ## M3 visibility -> `<out>/visibility/`
-`grid.npz`: `voxel_size`, `origin` (3,), `dims` (3,), per recording `state` (uint8:
-0 unknown, 1 free, 2 occupied), `free_count` (rays that passed through), `occ_count`
-(confident points inside). `candidates.json`: connected components of
-occupied(before) & free(after) -> `disappeared`, occupied(after) & free(before) ->
-`appeared`, occupied(x) & unknown(y) -> `unverified`; each with id, type, voxel count,
-centroid, axis-aligned bbox, evidence {free_rays, observing_views, min_camera_distance}.
+Implemented (`roomdiff/visibility.py`, parameters in `configs/default.yaml: visibility`).
+Voxel (i, j, k) spans `origin + [i, i+1) * voxel_size` along x (j: y, k: z); arrays are
+3D with shape `dims` (C order).
+
+`grid.npz` (`load_grid`): `voxel_size`, `origin` (3,), `dims` (3,); per recording
+`<rec>` in before / after: `state_<rec>` uint8 (0 unknown, 1 free, 2 occupied),
+`free_count_<rec>` int16 (keyframes that saw the voxel empty), `occ_count_<rec>` int32
+(valid points inside); `labels_<type>` int32 per candidate type (0 = none, else the blob
+id of `candidates.json`).
+
+`candidates.json`: `{voxel_size, origin, dims, counts, candidates: [...]}`, blobs sorted by
+volume, ids 1..N unique across types. Types (own recording = where it is occupied):
+`disappeared` = occupied(before) & free(after), `appeared` = occupied(after) &
+free(before), `unverified_before` / `unverified_after` = occupied in that recording and
+unknown in the other; voxels within `dist_margin` of the other recording's surfaces are
+excluded. Per blob: `id, type, voxels, volume_m3, centroid, aabb [[min], [max]]`,
+`evidence {free_frames_mean` (mean free_count of the other recording over the blob),
+`occ_points` (points of the own recording), `observing_views` (keyframes of the other
+recording that saw past the centroid), `min_camera_distance` (centroid to the nearest
+camera of the other recording)`}`, `views {before, after}`: best keyframes of the centroid
+(`frame` index into recon.npz, `file`, `occluded`, projected `box` [x0,y0,x1,y1],
+`crop` = `debug/blob_<id>_<type>_<rec>_<k>.jpg`).
+
+`meta.json`: parameters used, voxel size source, grid, voxels per state, candidate voxel
+counts (raw / after opening / in blobs), blobs per type, runtime, peak VRAM.
+`visibility.rrd`: blobs as Rerun boxes. Projection helpers for later stages:
+`roomdiff/projection.py` (`project_to_pixels`, `project_aabb`, `best_views`).
 
 ## M4 instances + changes -> `<out>/instances/`, `<out>/changes.json`
 `instances/<rec>.json`: per object: id, label votes, point count, centroid, aabb, best
@@ -61,5 +82,6 @@ RLE masks with object ids. `instances/<rec>_feats.npy`: L2-normalised features.
 ```
 
 ## M5/M6 outputs
-`report.md` (summary + per-change sections with crops), `scene.rrd` (Rerun),
+`report.md` (summary + per-change sections with crops), `scene.rrd` (Rerun; written by
+`roomdiff viz` since M3: reconstruction + candidate blobs),
 `viewer/` (static web viewer assets: downsampled clouds, boxes, crops, changes.json).

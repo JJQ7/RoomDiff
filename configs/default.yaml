@@ -10,10 +10,40 @@ ingest:
   jpeg_quality: 95
 
 # M2: joint Pi3X reconstruction of both keyframe sets (poses, depth, points)
-recon: {}
+recon:
+  model: yyfz233/Pi3X    # Hugging Face model id (weights from the local HF cache)
+  mode: joint            # joint: one pass over both recordings; separate: one pass each + Sim(3)
+  pixel_limit: 255000    # max pixels per model input image (sides multiples of 14)
+  max_frames: 96         # refuse bigger passes (VRAM / RAM safety); lower ingest.num_keyframes
+  head_chunk: 16         # frames per chunk in Pi3X's point/conf heads (upstream 64; 16 cuts peak VRAM)
+  conf_threshold: 0.25   # valid pixel: sigmoid(conf) above this ...
+  edge_rtol: 0.03        # ... and not a depth/normal edge (relative depth jump)
+  scale_factor: 1.0      # multiplies all metric outputs (e.g. from a tape-measure check)
+  n_anchor: 8            # separate mode: keyframes per recording in the anchor joint pass
+  icp_refine: true       # separate mode: refine the Sim(3) with point-to-plane ICP
+  voxel_size_diag: 0.02  # voxel size (m) for diagnostics, ICP and the .ply clouds
 
 # M3: per-recording occupied / free / unknown voxel grids and change candidates
-visibility: {}
+visibility:
+  device: cuda           # torch device for point counting and ray carving (cpu if no GPU)
+  voxel_size: auto       # metres, or auto = clip(2 x co-visible median NN distance, 0.02, 0.05)
+  max_voxels: 12000000   # grid cap: the voxel size grows (and is logged) if the scene needs more
+  bounds_percentile: 0.5 # grid box = [p, 100 - p] percentiles of all valid points per axis ...
+  pad_voxels: 3          # ... padded by this many voxels
+  n_occ_min: 3           # occupied: at least this many valid points in the voxel
+  pixel_stride: 2        # free-space rays from every n-th valid pixel (rows and columns)
+  carve_rel: 0.03        # rays carve up to depth * (1 - carve_rel) - carve_abs ...
+  carve_abs: 0.04        # ... metres, in steps of voxel_size / 2
+  n_free_min: 2          # free: seen empty by at least this many keyframes
+  dist_margin: 0.06      # m, candidates must be farther than this from the other recording's surfaces
+  opening_size: 2        # binary opening (cube edge, voxels) of disappeared / appeared; 1 = off.
+                         # 3 (a 3x3x3 cube) erased every real change on the SceneDiff test scenes:
+                         # surfaces are only 2-3 voxels thick
+  min_blob_volume: 0.0015  # m^3, smaller candidate blobs are dropped ...
+  min_blob_voxels: 8     # ... as are blobs with fewer voxels
+  debug_views: 2         # debug crops per blob and recording (best views of the centroid)
+  occlusion_tol: 0.10    # m, a debug view may see a surface at most this far in front of the centroid
+  max_debug_blobs: 200   # debug crops for the largest blobs only
 
 # M4: SAM 3 instances, 3D lifting, cross-recording matching
 instances: {}

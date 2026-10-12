@@ -3,7 +3,8 @@ and by `section.key=value` strings from the command line.
 
 The default file doubles as the schema: overrides may only set keys that already exist,
 with a value of the same type (an int is accepted for a float; a null default accepts
-anything), so a typo fails loudly instead of being silently ignored.
+anything; an "auto" default accepts a number), so a typo fails loudly instead of
+being silently ignored.
 """
 
 from __future__ import annotations
@@ -105,6 +106,11 @@ def _merge(base: dict[str, Any], update: Mapping[str, Any], prefix: str = "") ->
             continue
         if isinstance(old, float) and type(value) is int:
             value = float(value)
-        if old is not None and type(value) is not type(old):
+        if old is not None and type(value) is not type(old) and not _auto_or_number(old, value):
             raise ConfigError(f"{dotted!r} must be {type(old).__name__}, got {value!r}")
         base[key] = value
+
+
+def _auto_or_number(old: Any, value: Any) -> bool:
+    """A key whose default is "auto" also accepts a number."""
+    return old == "auto" and isinstance(value, int | float) and not isinstance(value, bool)
