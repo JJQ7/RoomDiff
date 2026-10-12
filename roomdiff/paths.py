@@ -3,7 +3,8 @@
 ```
 <out>/keyframes/before/*.jpg     <out>/recon/          <out>/changes.json
 <out>/keyframes/after/*.jpg      <out>/visibility/     <out>/report.md
-<out>/keyframes/index.json       <out>/instances/      <out>/viewer/
+<out>/keyframes/index.json       <out>/appearance/     <out>/viewer/
+                                 <out>/instances/
 ```
 """
 
@@ -45,6 +46,10 @@ class OutputPaths:
     @property
     def visibility(self) -> Path:
         return self.root / "visibility"
+
+    @property
+    def appearance(self) -> Path:
+        return self.root / "appearance"
 
     @property
     def instances(self) -> Path:

@@ -57,6 +57,43 @@ visibility:
                          # surface lies more than this in front of it (other recording)
   max_debug_blobs: 200   # debug crops for the largest blobs only
 
+# Appearance channel (roomdiff/appearance.py): small or flat changes that the voxel
+# differencing misses (closer than dist_margin to a surface), from the reprojected DINOv3
+# feature dissimilarity and an asymmetric depth cue between co-visible keyframes of the two
+# recordings; SAM 2.1 / DINOv3 / device / lift_voxel as configured under `instances`
+appearance:
+  enabled: true
+  covis_stride: 8        # co-visibility: every n-th valid pixel (rows and columns) of a keyframe,
+  covis_depth_rel: 0.03  # depth-consistent in the other keyframe if |z - depth| < max(covis_depth_abs,
+  covis_depth_abs: 0.05  # covis_depth_rel z) (m); the same tolerance tells occluded patches apart
+  min_covisibility: 0.3  # partners need this co-visibility (the smaller of both directions) ...
+  pairs_per_frame: 2     # ... and every keyframe keeps this many best partners
+  geom_tol_abs: 0.03     # depth cue: the partner sees more than geom_tol_abs + geom_tol_rel z (m)
+  geom_tol_rel: 0.02     # beyond the patch's surface point, i.e. that surface is gone there
+  w_feat: 1.0            # patch score = mean over observing partners of depth cue + w_feat (1 - cos)
+  min_votes: 2           # patches observed by fewer partners score 0
+  score_threshold: 0.60  # threshold of the bilinearly upsampled score map (0.45 at first: with
+                         # the lighting change of living_room_1 unchanged surfaces score 0.4-0.5,
+                         # so the hairbrush (0.76) merged into a bed-sheet region and flat false
+                         # regions abounded; the wallet / hairbrush / tissue box score >= 0.7) ...
+  threshold_mode: fixed  # ... or max_entropy: Kapur's threshold of all scores (always in meta.json)
+  min_region_frac: 0.002 # connected regions smaller than this share of the image are dropped ...
+  max_region_frac: 0.25  # ... as are larger ones
+  max_regions_per_frame: 10  # at most this many regions per keyframe (highest mean score first)
+  box_enlarge: 0.10      # SAM prompt = region box enlarged by this ...
+  n_prompt_points: 5     # ... + up to this many highest-scoring patch centres inside the region
+  min_mask_iou: 0.3      # the SAM mask must overlap the region by more than this IoU
+  min_points: 30         # candidates / clusters with fewer lifted points (1 cm voxels) are dropped
+  static_dist: 0.02      # m, a candidate driven by the depth cue with more than static_frac of its
+  static_frac: 0.5       # points this close to the other recording's surfaces is static: dropped
+  cluster_dist: 0.03     # m, candidates of one recording are clustered when more than cluster_frac
+  cluster_frac: 0.3      # of the points of one lie this close to the other's
+  min_frames: 2          # clusters need candidates in at least this many keyframes
+  covered_dist: 0.03     # m, a cluster with more than covered_frac of its points this close to an
+  covered_frac: 0.5      # M4 instance of its recording is already covered (not added)
+  replace_overlap: 0.3   # an appearance instance of each recording whose boxes (grown by 2 cm)
+                         # overlap more than this: a candidate `replaced` pair (removed + added)
+
 # M4: object instances from the change blobs (SAM 2.1 masks lifted to 3D, DINOv3 features)
 instances:
   device: cuda           # torch device for SAM 2.1 and DINOv3 (cpu if no GPU)

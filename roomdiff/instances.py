@@ -15,7 +15,10 @@ handled in its *owner* recording (where it is occupied):
 4. fragments of one object are merged (shared-view mask IoU or 3D overlap), then
    touching fragments of the same kind (a chair seat and its base) if the union stays
    object-sized (`merge_close_fragments`);
-5. each instance gets a DINOv3 feature (mask-pooled patch tokens, averaged over views)
+5. the appearance clusters of `<out>/appearance/` (`roomdiff.appearance`: small or flat
+   changes the voxel differencing misses) that no instance covers yet are appended
+   (`source: "appearance"`, kind disappeared / appeared by recording);
+6. each instance gets a DINOv3 feature (mask-pooled patch tokens, averaged over views)
    and a CLS token of its box crop, and SAM masks in every keyframe of its recording
    where its points are visible (COCO RLE, for the SceneDiff evaluation).
 
@@ -87,6 +90,8 @@ class Instance:
     merged_from: list[list[int]] = field(default_factory=list)  # blob ids per gap-merged part
     lift_fallback: bool = False  # some view's mask grew too far: bounded lifting was used
     lift_growth: list[float | None] = field(default_factory=list)  # per view (`growth`)
+    source: str = "geometry"  # "geometry" (M3 blobs) | "appearance" (roomdiff.appearance)
+    evidence: dict[str, Any] | None = None  # set for appearance instances (no blobs)
 
     @property
     def blob_ids(self) -> list[int]:
@@ -756,7 +761,9 @@ def instance_record(inst: Instance, recon: Mapping[str, Any]) -> dict[str, Any]:
         "n_frame_masks": len(inst.frame_masks),
         "merged_from": inst.merged_from,
         "lift_fallback": inst.lift_fallback,
-        "evidence": aggregate_evidence(inst.blobs),
+        "source": inst.source,
+        "evidence": inst.evidence if inst.evidence is not None
+        else aggregate_evidence(inst.blobs),
     }
 
 
@@ -892,6 +899,20 @@ def run_instances(
     times["merge"] = time.perf_counter() - t0
 
     t0 = time.perf_counter()
+    appearance_meta = None
+    app = cfg.get("appearance") or {}
+    if app.get("enabled") and (paths.appearance / "clusters.json").is_file():
+        from roomdiff.appearance import load_appearance_instances
+
+        extra, appearance_meta = load_appearance_instances(
+            out_dir, final, app["covered_dist"], app["covered_frac"])
+        for rec, instances in enumerate(extra):  # appended after the geometric ones
+            for k, inst in enumerate(instances, start=len(final[rec]) + 1):
+                inst.id = k
+            final[rec] += instances
+    times["appearance"] = time.perf_counter() - t0
+
+    t0 = time.perf_counter()
     for instances in final:
         for inst in instances:
             describe_features(inst, recon, featurizer, params["mask_erode_px"],
@@ -924,17 +945,25 @@ def run_instances(
                            for r, name in enumerate(RECORDINGS)},
         "lift_growth": {str(i.blobs[0]["id"]): i.lift_growth for r in raw for i in r},
         "gap_merges": gap_merges,
+        "appearance": appearance_meta,
         "instances": counts,
         "kinds": {name: {k: sum(i.kind == k for i in final[r])
                          for k in (*VERIFIED_TYPES, "unverified")}
                   for r, name in enumerate(RECORDINGS)},
+        "sources": {name: {k: sum(i.source == k for i in final[r])
+                           for k in ("geometry", "appearance")}
+                    for r, name in enumerate(RECORDINGS)},
         "frame_masks": {name: sum(len(i.frame_masks) for i in final[r])
                         for r, name in enumerate(RECORDINGS)},
         "runtime_s": {k: round(v, 2) for k, v in times.items()},
         "peak_vram_gb": _cuda_peak_gb(),
     }
     (folder / "meta.json").write_text(json.dumps(meta, indent=2))
+    added = {name: meta["sources"][name]["appearance"] for name in RECORDINGS}
+    extra = (f" (+ appearance {added['before']} / {added['after']})"
+             if appearance_meta is not None else "")
     print(f"[instances] {len(selected)} blobs -> fragments "
           f"{meta['fragments']['before']} before / {meta['fragments']['after']} after -> "
-          f"instances {counts['before']} / {counts['after']}, {times['total']:.1f} s -> {folder}")
+          f"instances {counts['before']} / {counts['after']}{extra}, {times['total']:.1f} s"
+          f" -> {folder}")
     return meta

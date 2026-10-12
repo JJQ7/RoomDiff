@@ -25,7 +25,8 @@ python -m roomdiff.cli ingest --before before.mov --after after.mov --out output
 # any value in configs/default.yaml can be overridden (or use --config scene.yaml)
 python -m roomdiff.cli ingest ... --set ingest.num_keyframes=32 --set ingest.max_side=768
 
-# full pipeline: ingest -> recon -> visibility -> instances -> changes -> describe -> viz -> viewer
+# full pipeline: ingest -> recon -> visibility -> appearance -> instances -> changes ->
+# describe -> viz -> viewer
 roomdiff run --before before.mov --after after.mov --out outputs/scene1
 # single stages on an existing output folder, e.g. the semantics stage and the viewer
 python -m roomdiff.cli describe --out outputs/scene1

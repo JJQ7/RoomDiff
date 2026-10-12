@@ -10,6 +10,13 @@
   if the ICP fitness reaches icp_min_fitness and marked `rotation_reliable` from
   icp_reliable_fitness on), unmatched D -> `removed`, unmatched A -> `added`, unverified
   instances -> `unverified` (with the recording that saw them).
+* Appearance instances (`source` "appearance", roomdiff.appearance) are disappeared (before)
+  or appeared (after) instances like the others. A before and an after appearance
+  instance at the same place (oriented boxes grown by `REPLACE_PAD` overlapping more than
+  `appearance.replace_overlap` of the smaller one; greedy, largest overlap first) are a
+  candidate in-place replacement instead: they skip the moved matching and become a
+  `removed` and an `added` change linked by `replaced_by` / `replaces` (the M5 judge
+  decides: same object, different object, object gone or object new).
 * Confidence in [0, 1] = (w_mask * S_mask + w_free * S_free + w_consistency * S_cons) /
   (w_mask + w_free + w_consistency) with S_mask = mean SAM mask score, S_free =
   min(observing_views / free_views_full, 1) of the other recording (moved: mean of both
@@ -37,6 +44,7 @@ from typing import Any
 import numpy as np
 from scipy import ndimage
 
+from roomdiff.geometry import obb_overlap
 from roomdiff.instances import (
     decode_rle,
     enlarge_box,
@@ -62,6 +70,7 @@ FINE_ICP_DIST = 0.03  # m, correspondence distance of the fine ICP pass and its 
 CROP_DEPTH_TOL = 0.05  # m, depth tolerance of the crop view scoring
 CROP_MIN_ASPECT = 0.6  # crops are at least this wide relative to their height (and v.v.)
 UNITS = "metres (approx.)"
+REPLACE_PAD = 0.02  # m, boxes of a candidate replaced pair are grown by this before the overlap
 
 
 # ------------------------------------------------------------------ matching
@@ -183,6 +192,29 @@ def confidence(
     return round(total / max(w_mask + w_free + w_cons, 1e-9), 3)
 
 
+def replaced_pairs(
+    before: Sequence[Mapping[str, Any]], after: Sequence[Mapping[str, Any]], min_overlap: float,
+) -> list[tuple[int, int, float]]:
+    """Candidate in-place replacements `(i, j, overlap)` among appearance instance records
+    (indices into `before` / `after`): oriented boxes grown by `REPLACE_PAD` overlapping
+    more than `min_overlap` (`obb_overlap`, relative to the smaller box); one-to-one,
+    largest overlap first."""
+    scored = []
+    for i, b in enumerate(before):
+        for j, a in enumerate(after):
+            if b.get("obb") and a.get("obb"):
+                overlap = obb_overlap(b["obb"], a["obb"], REPLACE_PAD)
+                if overlap > min_overlap:
+                    scored.append((overlap, i, j))
+    pairs, used_b, used_a = [], set(), set()
+    for overlap, i, j in sorted(scored, key=lambda x: (-x[0], x[1], x[2])):
+        if i not in used_b and j not in used_a:
+            pairs.append((i, j, overlap))
+            used_b.add(i)
+            used_a.add(j)
+    return pairs
+
+
 # ------------------------------------------------------------------ crops
 
 
@@ -292,7 +324,8 @@ def side_record(record: Mapping[str, Any]) -> dict[str, Any]:
     """`before` / `after` entry of a change from an instance record."""
     return {"instance_id": record["id"], "centroid": record["centroid"], "aabb": record["aabb"],
             "extents": record["extents"], "obb": record.get("obb"),
-            "n_points": record["n_points"], "blob_ids": record["blob_ids"]}
+            "n_points": record["n_points"], "blob_ids": record["blob_ids"],
+            "source": record.get("source", "geometry")}
 
 
 def _xyz(v: Sequence[float]) -> str:
@@ -350,12 +383,16 @@ def scene_info(paths: OutputPaths) -> dict[str, str]:
 
 
 def instance_evidence(record: Mapping[str, Any]) -> dict[str, Any]:
-    """Evidence of a removed / added / unverified change from its instance record."""
+    """Evidence of a removed / added / unverified change from its instance record (plus
+    the appearance terms for an appearance instance)."""
     ev = record["evidence"]
-    return {"free_rays": ev["free_rays"], "free_frames_mean": ev["free_frames_mean"],
-            "observing_views": ev["observing_views"], "occ_points": ev["occ_points"],
-            "mask_score": record["mask_score_mean"],
-            "view_consistency": record["view_consistency"]}
+    out = {"free_rays": ev["free_rays"], "free_frames_mean": ev["free_frames_mean"],
+           "observing_views": ev["observing_views"], "occ_points": ev["occ_points"],
+           "mask_score": record["mask_score_mean"],
+           "view_consistency": record["view_consistency"]}
+    if ev.get("appearance") is not None:
+        out["appearance"] = ev["appearance"]
+    return out
 
 
 # ------------------------------------------------------------------ stage
@@ -372,6 +409,14 @@ def run_changes(out_dir: str | Path, cfg: Mapping[str, Any]) -> dict[str, Any]:
     bef, aft = data["before"], data["after"]
     d_idx = [k for k, r in enumerate(bef["instances"]) if r["kind"] == "disappeared"]
     a_idx = [k for k, r in enumerate(aft["instances"]) if r["kind"] == "appeared"]
+    app_d = [k for k in d_idx if bef["instances"][k].get("source") == "appearance"]
+    app_a = [k for k in a_idx if aft["instances"][k].get("source") == "appearance"]
+    min_overlap = (cfg.get("appearance") or {}).get("replace_overlap", 0.3)
+    replaced = [(app_d[i], app_a[j], o) for i, j, o in replaced_pairs(
+        [bef["instances"][k] for k in app_d], [aft["instances"][k] for k in app_a], min_overlap)]
+    in_place_b, in_place_a = {kb for kb, _, _ in replaced}, {ka for _, ka, _ in replaced}
+    d_idx = [k for k in d_idx if k not in in_place_b]  # no moved match for these
+    a_idx = [k for k in a_idx if k not in in_place_a]
     pairs, cos, cost = match_instances(
         bef["feats"][d_idx], aft["feats"][a_idx],
         [box_extents(bef["instances"][k]) for k in d_idx],
@@ -404,6 +449,9 @@ def run_changes(out_dir: str | Path, cfg: Mapping[str, Any]) -> dict[str, Any]:
         entries.append(("moved", {"before": side_record(rb), "after": side_record(ra),
                                   "transform": transform, "evidence": evidence,
                                   "confidence": conf}))
+    links = {}  # instance index per recording -> (pair number, box overlap)
+    for n, (kb, ka, overlap) in enumerate(replaced):
+        links[("before", kb)], links[("after", ka)] = (n, overlap), (n, overlap)
     for doc, kind, side, matched in ((bef, "removed", "before", matched_d),
                                      (aft, "added", "after", matched_a)):
         for k, r in enumerate(doc["instances"]):
@@ -411,8 +459,11 @@ def run_changes(out_dir: str | Path, cfg: Mapping[str, Any]) -> dict[str, Any]:
                 continue
             conf = confidence([r["mask_score_mean"]], [r["view_consistency"]],
                               [r["evidence"]["observing_views"]], params)
-            entries.append((kind, {side: side_record(r), "evidence": instance_evidence(r),
-                                   "confidence": conf}))
+            body = {side: side_record(r), "evidence": instance_evidence(r), "confidence": conf}
+            if (side, k) in links:
+                body["link"], overlap = links[(side, k)]
+                body["evidence"]["replace_overlap"] = round(overlap, 4)
+            entries.append((kind, body))
     for name, doc in (("before", bef), ("after", aft)):
         for r in doc["instances"]:
             if r["kind"] != "unverified":
@@ -434,6 +485,13 @@ def run_changes(out_dir: str | Path, cfg: Mapping[str, Any]) -> dict[str, Any]:
         change["description"] = describe(kind, change)
         change["crops"] = make_crops(crops, cid, kind, change, data)
         changes.append(change)
+    linked = [(c, body["link"]) for c, (_, body) in zip(changes, entries) if "link" in body]
+    ids = {(c["type"], n): c["id"] for c, n in linked}
+    for c, n in linked:  # removed: replaced_by the added id; added: replaces the removed id
+        if c["type"] == "removed":
+            c["replaced_by"] = ids[("added", n)]
+        else:
+            c["replaces"] = ids[("removed", n)]
 
     doc = {"scene": scene_info(paths), "changes": changes, "summary": summarize(changes)}
     paths.changes_json.write_text(json.dumps(doc, indent=2))
@@ -444,6 +502,8 @@ def run_changes(out_dir: str | Path, cfg: Mapping[str, Any]) -> dict[str, Any]:
         "cost": np.round(np.minimum(cost, INFEASIBLE), 4).tolist(),
         "accepted": [[bef["instances"][d_idx[i]]["id"], aft["instances"][a_idx[j]]["id"],
                       round(c, 4)] for i, j, c in pairs],
+        "replaced": [[bef["instances"][kb]["id"], aft["instances"][ka]["id"], round(o, 4)]
+                     for kb, ka, o in replaced],
         "params": params,
         "runtime_s": round(time.perf_counter() - start, 2),
     }

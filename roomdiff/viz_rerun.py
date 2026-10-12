@@ -8,7 +8,10 @@ labelled "id:type") and `world/candidates/<type>/voxels` (subsampled voxel centr
 `world/changes/<type>/<id>/<rec>/box` and `.../points` (box and subsampled instance
 points per change and side, coloured by change type: added green, removed red, moved
 blue, unverified yellow; labelled "id type: label"; the oriented box `obb` when present,
-else the AABB) and `world/changes/moved/<id>/arrow` (old to new box centre).
+else the AABB) and `world/changes/moved/<id>/arrow` (old to new box centre). With an
+appearance stage output: `world/<rec>/cam/<i>/appearance` (the appearance score map over
+the keyframe, for the cameras that carry an image) and `world/appearance/<rec>/<id>` (one
+oriented box per appearance cluster, labelled with its instance or "covered").
 World axes: x left, y up, z forward (LUF) in a levelled reconstruction (recon/meta.json
 `levelled`), else the OpenCV axes of the model frame (RDF).
 
@@ -72,6 +75,20 @@ def box_centre(side: Mapping[str, Any]) -> np.ndarray:
     return np.asarray((side.get("obb") or {}).get("center", side["centroid"]), np.float64)
 
 
+def image_cameras(n: int) -> set[int]:
+    """Indices (within a recording) of the cameras logged with their keyframe image."""
+    count = min(IMAGES_PER_RECORDING, n)
+    return set(np.linspace(0, n - 1, count).round().astype(int).tolist()) if n else set()
+
+
+def heat_overlay(image: np.ndarray, score: np.ndarray) -> np.ndarray:
+    """The keyframe dimmed by half with a black-red-yellow-white heat map of `score`
+    (clipped to [0, 1], same size) added."""
+    s = np.clip(np.asarray(score, np.float32), 0.0, 1.0)[..., None]
+    heat = np.clip(3 * s - np.array([0.0, 1.0, 2.0], np.float32), 0.0, 1.0) * 255
+    return np.clip(0.5 * image.astype(np.float32) + 0.5 * heat, 0, 255).astype(np.uint8)
+
+
 def _log_recon_entities(stream: rr.RecordingStream, out_dir: Path, max_points: int) -> int:
     """Log clouds and cameras of `<out>/recon/recon.npz`; returns the camera count."""
     import rerun as rr
@@ -91,8 +108,7 @@ def _log_recon_entities(stream: rr.RecordingStream, out_dir: Path, max_points: i
         )
 
         frames = np.flatnonzero(recon["rec"] == rec_id)
-        count = min(IMAGES_PER_RECORDING, len(frames))
-        with_image = set(np.linspace(0, len(frames) - 1, count).round().astype(int).tolist())
+        with_image = image_cameras(len(frames))
         for j, i in enumerate(frames):
             entity = f"world/{name}/cam/{j}"
             T = recon["cam2world"][i]
@@ -148,6 +164,50 @@ def _log_visibility_entities(stream: rr.RecordingStream, out_dir: Path,
                 static=True,
             )
     return len(blobs)
+
+
+def _log_appearance_entities(stream: rr.RecordingStream, out_dir: Path) -> int:
+    """Log the appearance score maps of the cameras that carry an image and one box per
+    appearance cluster; returns the number of clusters (0 without appearance output)."""
+    import rerun as rr
+
+    from roomdiff.appearance import upsample
+
+    paths = OutputPaths(out_dir)
+    folder = paths.appearance
+    if not (folder / "clusters.json").is_file():
+        return 0
+    recon = load_recon(paths.recon / "recon.npz")
+    height, width = recon["depth"].shape[1:]
+    for rec_id, name in enumerate(RECORDINGS):
+        file = folder / f"scores_{name}.npz"
+        if not file.is_file():
+            continue
+        with np.load(file) as f:
+            row_of = {int(i): k for k, i in enumerate(f["frames"])}
+            scores = f["score"].astype(np.float32)
+        frames = np.flatnonzero(recon["rec"] == rec_id)
+        for j in sorted(image_cameras(len(frames))):
+            k = row_of.get(int(frames[j]))
+            if k is None:
+                continue
+            heat = heat_overlay(recon["images"][frames[j]], upsample(scores[k], height, width))
+            stream.log(f"world/{name}/cam/{j}/appearance",
+                       rr.Image(heat).compress(jpeg_quality=85), static=True)
+    clusters = json.loads((folder / "clusters.json").read_text())["clusters"]
+    meta_file = paths.instances / "meta.json"
+    covered = set()
+    if meta_file.is_file():
+        app = json.loads(meta_file.read_text()).get("appearance") or {}
+        covered = {c["cluster"] for c in app.get("covered", [])}
+    for c in clusters:
+        color = (230, 40, 40) if c["recording"] == "before" else (40, 200, 60)
+        status = " (covered)" if c["id"] in covered else ""
+        stream.log(f"world/appearance/{c['recording']}/{c['id']}",
+                   rr.Boxes3D(**box_args(c), labels=[f"a{c['id']} {c['recording']}{status}"],
+                              colors=[color]),
+                   static=True)
+    return len(clusters)
 
 
 def log_recon(out_dir: str | Path, max_points: int = 2_000_000) -> Path:
@@ -242,6 +302,8 @@ def log_scene(out_dir: str | Path, max_points: int = 2_000_000) -> Path:
     extra = []
     if (paths.visibility / "candidates.json").exists():
         extra.append(f"{_log_visibility_entities(stream, out_dir)} candidate blobs")
+    if (paths.appearance / "clusters.json").exists():
+        extra.append(f"{_log_appearance_entities(stream, out_dir)} appearance clusters")
     if paths.changes_json.exists():
         extra.append(f"{_log_changes_entities(stream, out_dir)} changes")
     stream.flush()

@@ -108,6 +108,7 @@ class Dinov3Featurizer:
         from transformers import AutoImageProcessor, AutoModel
 
         self.device = _device(device)
+        self.model_id = model_id
         proc = AutoImageProcessor.from_pretrained(model_id)
         self.mean = torch.tensor(proc.image_mean, device=self.device).view(1, 3, 1, 1)
         self.std = torch.tensor(proc.image_std, device=self.device).view(1, 3, 1, 1)

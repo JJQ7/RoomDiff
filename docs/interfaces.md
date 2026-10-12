@@ -100,6 +100,71 @@ counts (raw / after opening / in blobs), blobs per type, runtime, peak VRAM.
 `visibility.rrd`: blobs as Rerun boxes. Projection helpers for later stages:
 `roomdiff/projection.py` (`project_to_pixels`, `project_aabb`, `score_views`, `best_views`).
 
+## Appearance channel -> `<out>/appearance/`
+Implemented (`roomdiff/appearance.py`, command `roomdiff appearance`, run between
+visibility and instances; parameters in `configs/default.yaml: appearance`, models / device
+/ `lift_voxel` from `instances`; `enabled: false` skips the stage and the instance stage
+then ignores any old output). Finds changes that M3 cannot see because they lie within
+`visibility.dist_margin` of a surface (a wallet on a table, a jumper on a bed, an object
+replaced in place):
+
+1. Co-visible pairs: directional share of a stride-`covis_stride` (8) subsample of keyframe
+   i's valid pixels that projects inside keyframe j onto a valid pixel with |z - depth_j| <
+   max(`covis_depth_abs`, `covis_depth_rel` z) (0.05 m, 0.03); score = min of both
+   directions; per keyframe the `pairs_per_frame` (2) best partners of the other recording
+   with score >= `min_covisibility` (0.3), for before -> after and after -> before.
+2. DINOv3 ViT-L/16 patch tokens of every keyframe (the `Featurizer.patch_tokens` grid,
+   24 x 42 at 384 x 672 for a 378 x 672 image), L2-normalised.
+3. Per pair i -> j, each patch centre of i with valid depth is reprojected into j
+   (u, v, z). *Observed*: inside j, valid pixel, depth_j(u, v) > z - tol (tol as in 1; a
+   point behind j's surface or outside j gets no vote). On observed patches `feat` = 1 -
+   cos(F_i(p), F_j(u, v)) (bilinear in j's grid, renormalised) and `geom` = 1 if
+   depth_j(u, v) - z > `geom_tol_abs` + `geom_tol_rel` z (0.03 + 0.02 z: j sees through
+   the place, the surface seen in i is gone; asymmetric, an object that appeared in j is
+   found from j's side).
+4. Per keyframe: score = mean over the observing partners of (geom + `w_feat` feat), 0
+   with fewer than `min_votes` (2) observing partners; bilinearly upsampled, thresholded
+   at `score_threshold` (0.60; `threshold_mode: max_entropy` uses Kapur's threshold of
+   all scores instead, always reported); 8-connected regions of `min_region_frac` (0.2 %)
+   .. `max_region_frac` (25 %) of the image, at most `max_regions_per_frame` (10) by
+   mean score.
+5. Per region: SAM 2.1 prompted with the region box enlarged by `box_enlarge` and up to
+   `n_prompt_points` (5) highest-scoring patch centres inside it; the best-scoring mask
+   with IoU > `min_mask_iou` (0.3) with the region; its valid-depth pixels lifted (1 cm
+   voxels, outliers removed), >= `min_points` (30). Static-surface rule: a candidate
+   whose mean feature term is at most half its score (depth-driven) and whose points lie
+   more than `static_frac` (50 %) within `static_dist` (2 cm) of the other recording's
+   points (1 cm voxels) is dropped; feature-driven candidates are kept. Candidates of one
+   recording are clustered (union-find: more than `cluster_frac` (0.3) of the points of
+   one within `cluster_dist` (3 cm) of the other); clusters need candidates in
+   `min_frames` (2) keyframes. Cluster points = union of the candidates' points, minus
+   those that fewer than half of the cluster's keyframes seeing them (depth-consistent, or
+   inside that keyframe's mask) put inside their mask (voted only with >= 3 keyframes).
+
+Files: `feats_<rec>.npy` (n, gh, gw, D) float16 tokens of the recording's keyframes in
+recon order + `feats_<rec>.json` (model, files, image size: the cache is reused only if
+all match); `pairs.json` (`frames` per recording, `covisibility` (n_before, n_after),
+`partners` per recording: keyframe -> partner keyframes, recon indices);
+`scores_<rec>.npz` (`frames` (n,), `partners` (n, pairs_per_frame) -1 padded, `score`,
+`feat` (w_feat x mean dissimilarity), `geom` (share of see-through votes) (n, gh, gw)
+float16, `votes` uint8, `threshold`); `regions.json` (per region: recording, frame, file,
+box, area, mean score / feat / geom, partners, SAM score, mask IoU, static fraction,
+`outcome`: candidate / no SAM mask overlapping the region / too few points / static
+surface); `clusters.json` (`image_size`, `threshold`, `clusters`: `id` (1..N over both
+recordings), `recording`, `kind` (disappeared for before, appeared for after),
+`candidates`, `n_points`, `consensus_dropped`, `centroid`, `aabb`, `extents`, `obb`,
+`views` (per keyframe: `frame`, `file`, prompt `box`, `mask_box`, SAM `score`,
+`region_score`, `feature_share`), `evidence` {`frames_supporting`, `mean_score`,
+`feat_term`, `geom_term` (means over the cluster's regions), `partners_visible` (distinct
+partner keyframes that observed its regions), `observing_views` (keyframes of the other
+recording seeing >= 15 % of the points unoccluded, 5 cm), `free_rays` / `free_frames_mean`
+(other recording's M3 free counts summed / averaged over the voxels holding the points),
+`min_camera_distance`, `static_fraction`}); `clusters_points.npz` (`points`, `colors`,
+`cluster`); `clusters_masks.npz` (`cluster`, `frame`, `rle` (COCO counts), `size`);
+`meta.json` (params, models, token grid, cache hits, keyframes with partners, threshold
+{used, fixed, max_entropy, mode}, score stats, regions / candidates / clusters per
+recording, region outcomes, dropped clusters, runtime, `peak_vram_gb`, `peak_ram_gb`).
+
 ## M4 instances + changes -> `<out>/instances/`, `<out>/changes.json`, `<out>/crops/`
 Implemented (`roomdiff/instances.py`, `roomdiff/changes.py`, model wrappers in
 `roomdiff/models.py`; parameters in `configs/default.yaml: instances, changes`).
@@ -131,7 +196,13 @@ in a shared keyframe, or more than `merge_point_frac` of one's points within
 and its base): at least `merge_gap_frac` of the smaller one's points within `merge_gap_m`
 (0.05 m) of the other's, if no side of the union's oriented box reaches
 `merge_max_extent_m` (1.5 m); greedy, largest near fraction first. Instance ids are 1..N
-per recording (verified kinds first, then by point count).
+per recording (verified kinds first, then by point count). Then the appearance clusters
+(with `appearance.enabled` and `<out>/appearance/clusters.json`) are appended: a cluster
+with more than `appearance.covered_frac` (50 %) of its points within
+`appearance.covered_dist` (3 cm) of the points of one instance of its recording is
+already covered (listed in meta.json), the others become instances with ids N+1.. (by
+point count), `source` "appearance", kind disappeared (before) / appeared (after), the
+cluster's views and masks, no blobs.
 
 `instances/<rec>.json`: `{recording, image_size [W, H], instances: [...]}`; per instance:
 `id`, `recording`, `kind` (disappeared / appeared / unverified), `label` ("object" until
@@ -147,10 +218,15 @@ prompted keyframe: `frame` index into recon.npz, `file`, prompt `box`, `mask_box
 `view_consistency` (mean pairwise cosine of the per-view features, null for one view),
 `feature_index` (row in the feature files = id - 1), `n_frame_masks`, `merged_from`
 (blob ids of each part joined by the gap rule, e.g. [[7, 18], [11]]; empty if none),
-`lift_fallback` (some view of a part used the bounded lifting), `evidence`
+`lift_fallback` (some view of a part used the bounded lifting), `source` ("geometry" for
+M3 blobs, "appearance" for appearance clusters), `evidence`
 (aggregated over the source blobs, verified ones if any: `voxels`, `volume_m3`,
 `free_rays` = sum over blob voxels of the other recording's free count, voxel-weighted
-`free_frames_mean`, max `observing_views`, summed `occ_points`, `min_camera_distance`).
+`free_frames_mean`, max `observing_views`, summed `occ_points`, `min_camera_distance`;
+appearance instances: `voxels` 0, `volume_m3` of the `obb`, the cluster's `free_rays`,
+`free_frames_mean`, `observing_views` and `min_camera_distance`, `occ_points` = points,
+and `appearance` {`cluster`, `frames_supporting`, `mean_score`, `feat_term`, `geom_term`,
+`partners_visible`}).
 `instances/<rec>_feats.npy` (N, 1024) float32: L2-normalised DINOv3 ViT-L/16 patch tokens
 pooled inside the eroded masks, averaged over views. `instances/<rec>_cls.npy` (N, 1024):
 CLS token of the best view's mask box crop. `instances/<rec>_points.npz`: `points` (M, 3)
@@ -163,13 +239,20 @@ follow the grown instance): `keyframe` (file name),
 resolution); read with `roomdiff.instances.load_masks` / `decode_rle`.
 `instances/meta.json`: parameters, selected / dropped blobs with the reason (small or
 too large unverified, hidden surface, no clear view, no mask, too few points), fragment
-and instance counts, `lift_fallbacks` (per recording: blob ids whose lifting fell back),
+and instance counts, `sources` (per recording: geometry / appearance instances),
+`appearance` (null without clusters, else `clusters`, `covered` [{cluster, recording,
+instance, overlap}], `added` [{cluster, recording, overlap}]), `lift_fallbacks` (per recording: blob ids whose lifting fell back),
 `lift_growth` (per blob id: the growth ratio of each prompted view, null without a
 connected part), `gap_merges` (per gap-rule merge: `recording`, `kind`, `parts` (blob
 ids of both), `near_fraction`, `union_obb_extents`), runtime, peak VRAM. `instances/matching.json`: cosine and cost
 matrices of the moved candidates and the accepted pairs (cost = 1 - cosine +
 `lambda_size` |log volume ratio|; volumes and the extent-ratio test use the `obb`
-extents, which do not change when the world frame turns about +Y).
+extents, which do not change when the world frame turns about +Y), and `replaced`
+[[before id, after id, overlap]]: candidate in-place replacements, i.e. a before and an
+after appearance instance whose `obb`s, each grown by 2 cm, overlap by more than
+`appearance.replace_overlap` (0.3) of the smaller grown volume (greedy one-to-one,
+largest overlap first). These pairs skip the moved matching (no 0 m "moves"); every
+other appearance instance is matched and typed like a geometric one.
 
 `changes.json`:
 ```json
@@ -195,7 +278,13 @@ extents, which do not change when the world frame turns about +Y).
 }
 ```
 Every change has all keys; `obb` is the instance's oriented box (`aabb` / `extents` are
-kept for compatibility); `before` / `after` is null on the side where the object does
+kept for compatibility); each side also carries the instance's `source` ("geometry" |
+"appearance"). A candidate in-place replacement (`matching.json: replaced`) is written as
+a `removed` change with `"replaced_by": <id of the added change>` and an `added` change
+with `"replaces": <id of the removed change>` (optional keys, only on such pairs; after M5
+the linked change may be in `rejected` or merged away), both with
+`evidence.replace_overlap`. Removed / added changes of appearance instances also have
+`evidence.appearance` (the instance's appearance terms); `before` / `after` is null on the side where the object does
 not exist (removed: after, added: before, unverified: the recording that never observed
 it) and `transform` is null unless moved. `R`, `t` map before points to after points
 (`x_after = R x_before + t`); `translation_m` = displacement of the before centroid;
@@ -242,6 +331,21 @@ to refresh it). Steps: naming -> fragment merging -> re-pairing -> judge -> desc
 
 Changes keep the M4 schema and ids (stable, so ids have gaps where entries were rejected
 or merged); M5 sets or adds:
+* In-place question (`JUDGE_REPLACED`, answer `change` = same | different | removed |
+  added | unclear, logged as `judge_replaced:<r>+<a>` / `judge_in_place:<id>`): a linked
+  replaced pair (both still removed / added and pointing at each other) is asked once with
+  the removed object's crop (image 1) and the added object's crop (image 2): same (only
+  lighting / exposure / viewpoint / a slight shift or fold differ) -> both rejected;
+  different -> both confirmed; removed / added -> that one confirmed, the other rejected;
+  unclear -> both unclear. A single removed / added appearance change is asked with its owner crop
+  and the other recording's view of the place (in time order): same -> rejected; its own
+  type or different -> confirmed; the other type -> rejected; unclear -> unclear. `evidence.vlm_replace_answer` keeps the answer, `vlm_reason` = "in place:
+  <answer>; <reason>". An appearance change whose label names part of the room or a bare
+  surface (background nouns, or head noun sheet / bedsheet / mattress / tabletop /
+  countertop / worktop / surface / floorboard / tile / plank) is rejected whatever the
+  answer (the bed sheet where a hairbrush was later put). Re-pairing never pairs the two
+  sides of one replaced pair. Kept pairs get "replaced by a <label>" / "took the place of
+  the <label>" descriptions.
 * `label`: VLM name, normalised (lowercase, no article, cut at a preposition, <= 3 words);
   `attributes` (colour / material), `object_description` (the VLM's sentence about the
   object).
@@ -309,7 +413,8 @@ out, rejected (id, type, label, reason), merges (every VLM pair check: kind, ids
 labels, distance or box gap, verdict, reason; fragment checks also the VLM's `label`),
 splits (rejected moved changes: `id`, `label`,
 `into` [removed id, added id], `labels`, `reason`, `verdicts` of the two halves), verdict
-per id, polished /
+per id, `replacements` (per in-place pair question: `ids`, `labels`, `answer`, `reason`),
+polished /
 template-kept counts, scene frame (up vector: +Y in a levelled frame, else the camera
 estimate; floor height), `peak_vram_gb`, `peak_ram_gb`.
 `semantics/log.jsonl`: one line per VLM call `{tag, images, prompt, answer, seconds}`.
@@ -320,7 +425,10 @@ images), collapsible rejected list with the VLM reasons, coverage note from
 
 ## M6 outputs
 `scene.rrd` (Rerun; written by `roomdiff viz`: reconstruction, M3 candidate blobs,
-changes), `viewer/` (`roomdiff viewer`: static web viewer assets: downsampled clouds,
+appearance score maps (`world/<rec>/cam/<i>/appearance`: the keyframe dimmed with a
+black-red-yellow-white heat map of the score, for the cameras logged with their image)
+and clusters (`world/appearance/<rec>/<id>`, oriented boxes, "covered" if an M4 instance
+already held them), changes), `viewer/` (`roomdiff viewer`: static web viewer assets: downsampled clouds,
 boxes, crops, changes.json; `scene.json: up_axis` = [0, 1, 0] for a levelled
 reconstruction, else the camera-based estimate). The viewer draws each change's `obb`
 when present (else its `aabb`) and the moved arrow between the box centres.

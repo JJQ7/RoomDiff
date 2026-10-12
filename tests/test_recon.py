@@ -495,6 +495,7 @@ def test_log_recon_writes_rrd(scene_dir):
 
 
 def test_cli_run_chains_ingest_recon_visibility_viz(tmp_path, monkeypatch):
+    import roomdiff.appearance
     import roomdiff.changes
     import roomdiff.ingest
     import roomdiff.instances
@@ -509,6 +510,8 @@ def test_cli_run_chains_ingest_recon_visibility_viz(tmp_path, monkeypatch):
     monkeypatch.setattr(recon_mod, "run_recon", lambda *a: calls.append("recon"))
     monkeypatch.setattr(roomdiff.visibility, "run_visibility",
                         lambda *a: calls.append("visibility"))
+    monkeypatch.setattr(roomdiff.appearance, "run_appearance",
+                        lambda *a: calls.append("appearance"))
     monkeypatch.setattr(roomdiff.instances, "run_instances", lambda *a: calls.append("instances"))
     monkeypatch.setattr(roomdiff.changes, "run_changes", lambda *a: calls.append("changes"))
     monkeypatch.setattr(roomdiff.semantics, "run_semantics", lambda *a: calls.append("semantics"))
@@ -521,7 +524,7 @@ def test_cli_run_chains_ingest_recon_visibility_viz(tmp_path, monkeypatch):
     args = ["run", "--before", str(video), "--after", str(video), "--out", str(tmp_path)]
     result = CliRunner().invoke(app, args)
     assert result.exit_code == 0, result.output
-    assert calls == ["ingest", "recon", "visibility", "log_visibility", "instances", "changes",
-                     "log_changes", "semantics", "report", "log_changes", "log_scene",
-                     "log_recon", "viewer"]
+    assert calls == ["ingest", "recon", "visibility", "log_visibility", "appearance",
+                     "instances", "changes", "log_changes", "semantics", "report", "log_changes",
+                     "log_scene", "log_recon", "viewer"]
     assert "[run] wall time: ingest" in result.output and "visibility" in result.output

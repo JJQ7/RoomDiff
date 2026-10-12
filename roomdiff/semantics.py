@@ -18,7 +18,14 @@ the stage can be re-run):
    whose box lies within `merge_max_distance` of the moved after-box (gap between the
    boxes; a spread-out quilt is one object) if the VLM says both are parts of one object.
 4. Judge: type-specific paired-crop questions -> `evidence.vlm_verdict` ("confirmed" /
-   "rejected" / "unclear") and `evidence.vlm_reason`; moved also `motion_kind` ("rigid" /
+   "rejected" / "unclear") and `evidence.vlm_reason`. A candidate in-place replacement (a
+   removed change `replaced_by` an added one at the same place, from the appearance
+   channel) is judged once on both owner crops: "same" (lighting / viewpoint only) rejects
+   both, "different" keeps both, "removed" / "added" keeps only that one, "unclear" keeps
+   both as unclear; a single appearance-channel removed / added change gets the same
+   question with the other recording's view of the place (same or the other type:
+   rejected; different or its own type: confirmed), and one named like a bare surface or
+   part of the room is rejected; moved also `motion_kind` ("rigid" /
    "deformed" / "unknown"). Rejected changes move to the `rejected` list; unclear ones keep
    `confidence * unclear_factor`. A rejected `moved` change keeps its geometry: it is split
    back into a `removed` (before side) and an `added` change (after side), each named
@@ -207,6 +214,34 @@ JUDGE_FRAGMENTS = (
     'Answer with JSON only, reason first: {"reason": "one short sentence", "verdict": '
     '"confirmed" | "rejected" | "unclear", "label": "short lowercase noun phrase of 1-3 '
     'words naming the whole object, e.g. office chair"}')
+JUDGE_REPLACED = (
+    "Image 1 is from an earlier video of a room and image 2 from a later video of the same "
+    "room; both look at the same place (the viewpoints differ). A coloured box marks that "
+    "place in each image ({labels}). The two videos may have been filmed under different "
+    "lighting. What changed at this place between the two videos?\n"
+    f"{OUTLINE}\n"
+    "A bare surface (a bed sheet, mattress, table top, shelf, floor, rug or wall with "
+    "nothing on it) counts as an empty place, not as an object.\n"
+    'Answer "same" if both images show the same thing at that place (the same object, or '
+    "the same empty surface) and only the lighting, brightness, exposure, shadows, "
+    "viewpoint or a slight shift or fold differ; \"different\" if the object of image 1 was "
+    "replaced by a different object; \"removed\" if image 1 shows an object there and image "
+    "2 only the empty place; \"added\" if image 1 shows only the empty place and image 2 an "
+    'object there; "unclear" if you cannot tell.\n'
+    'Answer with JSON only, reason first: {"reason": "one short sentence", "change": '
+    '"same" | "different" | "removed" | "added" | "unclear"}')
+# answer of JUDGE_REPLACED -> (verdict of the removed change, verdict of the added change)
+REPLACE_VERDICTS = {
+    "same": ("rejected", "rejected"),
+    "different": ("confirmed", "confirmed"),
+    "removed": ("confirmed", "rejected"),
+    "added": ("rejected", "confirmed"),
+    "unclear": ("unclear", "unclear"),
+}
+# head nouns naming a bare surface: an appearance-channel change named like this is the
+# place where something lies or lay (a bed sheet under a hairbrush), not an object
+SURFACE_NOUNS = {"sheet", "bedsheet", "mattress", "tabletop", "countertop", "worktop",
+                 "surface", "floorboard", "tile", "plank"}
 POLISH = (
     "Rewrite each numbered sentence below in plain, fluent English for a non-expert reader; "
     "rephrase them, do not copy them word for word. Keep every number exactly as written "
@@ -460,6 +495,75 @@ def judge_change(vlm: BaseVLM, crops: Crops, change: dict[str, Any]) -> tuple[st
     return verdict_of(ask_images(vlm, pair, prompt, f"judge_{kind}:{cid}"))
 
 
+def linked_partner(change: Mapping[str, Any], by_id: Mapping[int, dict[str, Any]]
+                   ) -> dict[str, Any] | None:
+    """The other change of a candidate in-place replacement (a removed change
+    `replaced_by` an added one that `replaces` it), if both are in `by_id` with these
+    types; else None."""
+    if change["type"] == "removed":
+        other = by_id.get(change.get("replaced_by"))
+        if other is not None and other["type"] == "added" and \
+                other.get("replaces") == change["id"]:
+            return other
+    elif change["type"] == "added":
+        other = by_id.get(change.get("replaces"))
+        if other is not None and other["type"] == "removed" and \
+                other.get("replaced_by") == change["id"]:
+            return other
+    return None
+
+
+def from_appearance(change: Mapping[str, Any]) -> bool:
+    """The change's object was found by the appearance channel (`source` of its side)."""
+    side = change.get(owner_side(change)) or {}
+    return side.get("source") == "appearance"
+
+
+def in_place_answer(vlm: BaseVLM, shown: Sequence[tuple[Image.Image, str] | None],
+                    labels: str, tag: str) -> tuple[str, str] | None:
+    """(answer, reason) of `JUDGE_REPLACED` on a before / after crop pair; anything
+    unparsable is "unclear"; None if a crop is missing."""
+    if None in shown:
+        return None
+    data = ask_images(vlm, shown, JUDGE_REPLACED.replace("{labels}", labels), tag) or {}
+    answer = str(data.get("change", "")).strip().lower()
+    reason = str(data.get("reason") or "").strip()
+    if answer not in REPLACE_VERDICTS:
+        answer, reason = "unclear", reason or f"unparsable answer: {data!r}"[:200]
+    return answer, reason
+
+
+def judge_replaced(vlm: BaseVLM, crops: Crops, removed: Mapping[str, Any],
+                   added: Mapping[str, Any]) -> tuple[str, str] | None:
+    """In-place question on the owner crops of a candidate replacement pair (removed
+    object in image 1, added object in image 2); None if a crop is missing."""
+    labels = (f"the region is probably a {removed['label']} in image 1 and a "
+              f"{added['label']} in image 2; a coloured outline traces it")
+    return in_place_answer(vlm, [crops.get(removed, "before"), crops.get(added, "after")],
+                           labels, f"judge_replaced:{removed['id']}+{added['id']}")
+
+
+def judge_in_place(vlm: BaseVLM, crops: Crops, change: Mapping[str, Any]
+                   ) -> tuple[str, str] | None:
+    """In-place question for a single removed / added appearance change: its owner crop
+    and the other recording's view of the place, in time order; None if one is missing."""
+    owner = "before" if change["type"] == "removed" else "after"
+    image = 1 if owner == "before" else 2
+    labels = (f"the region in image {image} is probably a {change['label']}, traced by a "
+              f"coloured outline; image {3 - image} shows the same place")
+    shown = [crops.get(change, "before"), crops.get(change, "after")]
+    return in_place_answer(vlm, shown, labels, f"judge_in_place:{change['id']}")
+
+
+def surface_rejection(change: Mapping[str, Any]) -> str | None:
+    """Reason to reject an appearance-channel change whose label names part of the room
+    or a bare surface (`is_background`, `SURFACE_NOUNS`), else None."""
+    label = change["label"]
+    if from_appearance(change) and (is_background(label) or head_noun(label) in SURFACE_NOUNS):
+        return f"named '{label}' (part of the room or a bare surface)"
+    return None
+
+
 def apply_verdict(change: dict[str, Any], verdict: str, reason: str,
                   unclear_factor: float) -> bool:
     """Store the verdict in `change`; returns False if the change is rejected."""
@@ -663,7 +767,8 @@ def repair(vlm: BaseVLM, crops: Crops, changes: list[dict[str, Any]],
                or (c["type"] == "unverified" and c["evidence"].get("seen_in") == "after")]
     pairs = sorted((centroid_distance(r["before"], a["after"]), r["id"], a["id"])
                    for r in removed for a in targets
-                   if labels_match(r["label"], a["label"]) and wanted(r, a))
+                   if labels_match(r["label"], a["label"]) and wanted(r, a)
+                   and r.get("replaced_by") != a["id"])  # not the two sides of one place
     used: set[int] = set()
     for dist, rid, aid in pairs:
         if dist >= params["repair_max_distance"] or rid in used or aid in used:
@@ -783,8 +888,10 @@ def article(label: str) -> str:
 
 
 def template_description(change: Mapping[str, Any], frame: SceneFrame | None,
-                         points: Mapping[str, Mapping[int, np.ndarray]]) -> str:
-    """One templated sentence: label, type, geometry and evidence."""
+                         points: Mapping[str, Mapping[int, np.ndarray]],
+                         partner: Mapping[str, Any] | None = None) -> str:
+    """One templated sentence: label, type, geometry and evidence. `partner`: the kept
+    other change of an in-place replacement (the removed object was replaced by it)."""
     label, kind, ev = change["label"], change["type"], change["evidence"]
     attrs = change.get("attributes") or ""
 
@@ -830,6 +937,15 @@ def template_description(change: Mapping[str, Any], frame: SceneFrame | None,
     side = owner_side(change)
     size = size_text(side_extents(change[side]))
     what = f"{label}" + (f" ({attrs}; {size})" if attrs else f" ({size})")
+    if kind == "removed" and partner is not None:
+        return (f"The {what}, which was {joined('before')}, was replaced by "
+                f"{article(partner['label']).lower()} {partner['label']}: the after recording "
+                f"looked at that spot from {views(ev.get('observing_views'))} and saw the "
+                f"{partner['label']} there instead.")
+    if kind == "added" and partner is not None:
+        return (f"{article(label)} {what} took the place of the {partner['label']} "
+                f"{joined('after')}: the before recording looked at that spot from "
+                f"{views(ev.get('observing_views'))} and saw the {partner['label']} there.")
     if kind == "removed":
         return (f"The {what}, which was {joined('before')}, was removed: the after recording "
                 f"looked at that spot from {views(ev.get('observing_views'))} and saw it empty.")
@@ -980,14 +1096,46 @@ def run_semantics(out_dir: str | Path, cfg: Mapping[str, Any],
     times["repair"] = time.perf_counter() - t0
 
     t0 = time.perf_counter()
-    kept, rejected, splits = [], [], []
+    kept, rejected, splits, replacements = [], [], [], []
     records = instance_records(paths)
     next_id = max([c["id"] for c in doc["changes"]], default=0) + 1
+    by_id = {c["id"]: c for c in changes}
+    replace_verdicts: dict[int, tuple[str, str, str]] = {}  # id -> answer, verdict, reason
     for c in changes:
         if not params["enable_judge"]:
             kept.append(c)
             continue
+        partner = linked_partner(c, by_id)
+        if partner is not None and c["id"] not in replace_verdicts:
+            removed, added = (c, partner) if c["type"] == "removed" else (partner, c)
+            judged = judge_replaced(vlm, crops, removed, added)
+            if judged is not None:  # else each side is judged on its own
+                answer, why = judged
+                replacements.append({"ids": [removed["id"], added["id"]],
+                                     "labels": [removed["label"], added["label"]],
+                                     "answer": answer, "reason": why})
+                for side, verdict in zip((removed, added), REPLACE_VERDICTS[answer]):
+                    replace_verdicts[side["id"]] = (answer, verdict, f"in place: {answer}; {why}")
+        if c["id"] not in replace_verdicts and partner is None and \
+                c["type"] in ("removed", "added") and from_appearance(c):
+            judged = judge_in_place(vlm, crops, c)
+            if judged is not None:  # else the usual removed / added question
+                answer, why = judged
+                verdict = REPLACE_VERDICTS[answer][0 if c["type"] == "removed" else 1]
+                replace_verdicts[c["id"]] = (answer, verdict, f"in place: {answer}; {why}")
+        if c["id"] in replace_verdicts:
+            answer, verdict, reason = replace_verdicts[c["id"]]
+            c["evidence"]["vlm_replace_answer"] = answer
+            surface = surface_rejection(c)
+            if surface is not None and verdict != "rejected":
+                verdict, reason = "rejected", f"{surface}: {reason}"
+            keep = apply_verdict(c, verdict, reason, params["unclear_factor"])
+            (kept if keep else rejected).append(c)
+            continue
         verdict, reason = judge_change(vlm, crops, c)
+        surface = surface_rejection(c)
+        if surface is not None and verdict != "rejected":
+            verdict, reason = "rejected", f"{surface}: {reason}"
         if c["type"] == "moved" and verdict == "rejected":  # keep the geometry, unpaired
             halves = split_moved(c, reason, next_id, records)
             if halves[1]["id"] == next_id:
@@ -1018,7 +1166,9 @@ def run_semantics(out_dir: str | Path, cfg: Mapping[str, Any],
     times["judge"] = time.perf_counter() - t0
 
     t0 = time.perf_counter()
-    templates = [template_description(c, frame, points) for c in kept]
+    kept_by_id = {c["id"]: c for c in kept}
+    templates = [template_description(c, frame, points, linked_partner(c, kept_by_id))
+                 for c in kept]
     polished = polish(vlm, templates, [c["label"] for c in kept]) if params["enable_polish"] \
         else [None] * len(kept)
     for c, tpl, new in zip(kept, templates, polished):
@@ -1053,6 +1203,7 @@ def run_semantics(out_dir: str | Path, cfg: Mapping[str, Any],
                       "reason": c["evidence"]["vlm_reason"]} for c in rejected],
         "merges": merges,
         "splits": splits,
+        "replacements": replacements,
         "verdicts": {str(c["id"]): c["evidence"]["vlm_verdict"] for c in kept + rejected},
         "polished": sum(p is not None for p in polished),
         "template_kept": sum(p is None for p in polished),

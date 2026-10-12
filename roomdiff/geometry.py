@@ -270,3 +270,62 @@ def obb_gap(a: dict[str, Any], b: dict[str, Any]) -> float:
     (a0, a1), (b0, b1) = y_range(a), y_range(b)
     dy = max(0.0, b0 - a1, a0 - b1)
     return float(np.hypot(dy, convex_polygon_distance(obb_footprint(a), obb_footprint(b))))
+
+
+def polygon_area(poly: np.ndarray) -> float:
+    """Area of a simple polygon (K, 2) with its corners in order (shoelace formula)."""
+    poly = np.asarray(poly, np.float64).reshape(-1, 2)
+    if len(poly) < 3:
+        return 0.0
+    x, y = poly[:, 0], poly[:, 1]
+    return float(abs(x @ np.roll(y, -1) - y @ np.roll(x, -1)) / 2)
+
+
+def clip_convex(subject: np.ndarray, clip: np.ndarray) -> np.ndarray:
+    """Intersection (K, 2) of two convex polygons with their corners in order
+    (Sutherland-Hodgman); empty (0, 2) if they do not overlap."""
+    clip = np.asarray(clip, np.float64)
+    x, y = clip[:, 0], clip[:, 1]
+    if x @ np.roll(y, -1) - y @ np.roll(x, -1) < 0:  # make the clip polygon counter-clockwise
+        clip = clip[::-1]
+    out = [np.asarray(p, np.float64) for p in subject]
+    for a, b in zip(clip, np.roll(clip, -1, axis=0)):
+        if not out:
+            break
+        edge = b - a
+
+        def inside(p: np.ndarray, a: np.ndarray = a, edge: np.ndarray = edge) -> bool:
+            return bool(edge[0] * (p[1] - a[1]) - edge[1] * (p[0] - a[0]) >= -1e-12)
+
+        def cut(p: np.ndarray, q: np.ndarray, a: np.ndarray = a, edge: np.ndarray = edge
+                ) -> np.ndarray:
+            d = q - p
+            denom = d[0] * edge[1] - d[1] * edge[0]
+            t = ((a[0] - p[0]) * edge[1] - (a[1] - p[1]) * edge[0]) / denom if denom else 0.0
+            return p + t * d
+
+        previous, out = out, []
+        for k, cur in enumerate(previous):
+            prev = previous[k - 1]
+            if inside(cur):
+                if not inside(prev):
+                    out.append(cut(prev, cur))
+                out.append(cur)
+            elif inside(prev):
+                out.append(cut(prev, cur))
+    return np.array(out).reshape(-1, 2)
+
+
+def obb_overlap(a: dict[str, Any], b: dict[str, Any], pad: float = 0.0) -> float:
+    """Overlap in [0, 1] of two `floor_obb` boxes, each grown by `pad` on every side:
+    intersection volume over the smaller grown volume (padding lets an object lying on a
+    surface overlap the surface patch it covered)."""
+    def grown(obb: dict[str, Any]) -> dict[str, Any]:
+        return {**obb, "extents": (np.asarray(obb["extents"], np.float64) + 2 * pad).tolist()}
+
+    ga, gb = grown(a), grown(b)
+    area = polygon_area(clip_convex(obb_footprint(ga), obb_footprint(gb)))
+    lo = max(ga["center"][1] - ga["extents"][1] / 2, gb["center"][1] - gb["extents"][1] / 2)
+    hi = min(ga["center"][1] + ga["extents"][1] / 2, gb["center"][1] + gb["extents"][1] / 2)
+    smaller = min(float(np.prod(ga["extents"])), float(np.prod(gb["extents"])))
+    return float(area * max(0.0, hi - lo) / max(smaller, 1e-12))

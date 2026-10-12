@@ -60,6 +60,17 @@ def evidence_line(change: Mapping[str, Any]) -> str:
         other = "after" if ev.get("seen_in") == "before" else "before"
         parts.append(f"seen only in the {ev.get('seen_in')} video; the {other} video never "
                      "observed the place")
+    app = ev.get("appearance")
+    if app:
+        parts.append(f"appearance channel: score {_fmt(app['mean_score'])} (feature "
+                     f"{_fmt(app['feat_term'])}, depth {_fmt(app['geom_term'])}) in "
+                     f"{app['frames_supporting']} keyframes")
+    if change.get("replaced_by") is not None:
+        parts.append(f"same place as added change {change['replaced_by']}")
+    if change.get("replaces") is not None:
+        parts.append(f"same place as removed change {change['replaces']}")
+    if ev.get("vlm_replace_answer"):
+        parts.append(f"in-place check: {ev['vlm_replace_answer']}")
     if len(ev.get("merged_from", [])) > 1:  # re-paired, or parts of one object
         parts.append("merged from candidates " + ", ".join(map(str, ev["merged_from"])))
     if ev.get("mask_score") is not None:
