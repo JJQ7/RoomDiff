@@ -9,7 +9,9 @@ handled in its *owner* recording (where it is occupied):
    centres; the best mask that stays inside the box is kept;
 3. the mask pixels are lifted to 3D with the reconstructed depth and filtered to the
    blob's neighbourhood (static surfaces shared with the other recording are dropped);
-4. fragments of one object are merged (shared-view mask IoU or 3D overlap);
+4. fragments of one object are merged (shared-view mask IoU or 3D overlap), then
+   touching fragments of the same kind (a chair seat and its base) if the union stays
+   object-sized (`merge_close_fragments`);
 5. each instance gets a DINOv3 feature (mask-pooled patch tokens, averaged over views)
    and a CLS token of its box crop, and SAM masks in every keyframe of its recording
    where its points are visible (COCO RLE, for the SceneDiff evaluation).
@@ -76,6 +78,7 @@ class Instance:
     cls: np.ndarray | None = None
     view_consistency: float | None = None
     frame_masks: list[tuple[int, dict[str, Any], float]] = field(default_factory=list)
+    merged_from: list[list[int]] = field(default_factory=list)  # blob ids per gap-merged part
 
     @property
     def blob_ids(self) -> list[int]:
@@ -433,6 +436,54 @@ def merge_instances(
     return [combine(g, voxel) for g in groups.values()]
 
 
+def near_fraction(a: np.ndarray, b: np.ndarray, gap: float) -> float:
+    """Fraction of the points of the smaller set lying within `gap` of the other set."""
+    if len(a) == 0 or len(b) == 0:
+        return 0.0
+    small, big = (a, b) if len(a) <= len(b) else (b, a)
+    return float(np.isfinite(cKDTree(big).query(small, distance_upper_bound=gap)[0]).mean())
+
+
+def merge_close_fragments(
+    instances: Sequence[Instance], gap: float, frac: float, max_extent: float, voxel: float
+) -> tuple[list[Instance], list[dict[str, Any]]]:
+    """Join fragments of one object that touch without overlapping (a chair seat and its
+    base, found by two blobs): two instances of the same recording and kind are merged
+    when at least `frac` of the points of the smaller one lie within `gap` m of the other's
+    points and every extent of the union's oriented box (`floor_obb`) is below
+    `max_extent`. Greedy: the pair with the largest near fraction first, re-evaluated after
+    every merge. The merged instance lists the blob ids of its parts in `merged_from`.
+    Returns the instances and one record per merge."""
+    current = list(instances)
+    records: list[dict[str, Any]] = []
+    while True:
+        best = None
+        for i, a in enumerate(current):
+            for j in range(i + 1, len(current)):
+                b = current[j]
+                if a.rec != b.rec or a.kind != b.kind or not len(a.points) or not len(b.points):
+                    continue
+                if np.any(a.points.min(0) - gap > b.points.max(0)) or \
+                        np.any(b.points.min(0) - gap > a.points.max(0)):
+                    continue  # boxes farther apart than the gap
+                near = near_fraction(a.points, b.points, gap)
+                if near < frac or (best is not None and near <= best[0]):
+                    continue
+                extents = floor_obb(np.vstack([a.points, b.points]))["extents"]
+                if max(extents) < max_extent:
+                    best = (near, i, j, extents)
+        if best is None:
+            return current, records
+        near, i, j, extents = best
+        a, b = current[i], current[j]
+        merged = combine([a, b], voxel)
+        merged.merged_from = (a.merged_from or [a.blob_ids]) + (b.merged_from or [b.blob_ids])
+        records.append({"recording": RECORDINGS[a.rec], "kind": a.kind,
+                        "parts": [a.blob_ids, b.blob_ids], "near_fraction": round(near, 4),
+                        "union_obb_extents": extents})
+        current = [x for k, x in enumerate(current) if k not in (i, j)] + [merged]
+
+
 # ------------------------------------------------------------------ features
 
 
@@ -584,6 +635,7 @@ def instance_record(inst: Instance, recon: Mapping[str, Any]) -> dict[str, Any]:
         else round(inst.view_consistency, 4),
         "feature_index": inst.id - 1,
         "n_frame_masks": len(inst.frame_masks),
+        "merged_from": inst.merged_from,
         "evidence": aggregate_evidence(inst.blobs),
     }
 
@@ -705,9 +757,14 @@ def run_instances(
 
     t0 = time.perf_counter()
     final: list[list[Instance]] = []
+    gap_merges: list[dict[str, Any]] = []
     for rec in range(len(RECORDINGS)):
         merged = merge_instances(raw[rec], params["merge_mask_iou"], params["merge_point_dist"],
                                  params["merge_point_frac"], params["lift_voxel"])
+        merged, joined = merge_close_fragments(merged, params["merge_gap_m"],
+                                               params["merge_gap_frac"],
+                                               params["merge_max_extent_m"], params["lift_voxel"])
+        gap_merges += joined
         merged.sort(key=lambda i: (i.kind == "unverified", -len(i.points)))
         for k, inst in enumerate(merged, start=1):
             inst.id = k
@@ -743,6 +800,7 @@ def run_instances(
         "blobs_selected": [b["id"] for b in selected],
         "blobs_dropped": dropped,
         "fragments": {name: len(raw[r]) for r, name in enumerate(RECORDINGS)},
+        "gap_merges": gap_merges,
         "instances": counts,
         "kinds": {name: {k: sum(i.kind == k for i in final[r])
                          for k in (*VERIFIED_TYPES, "unverified")}

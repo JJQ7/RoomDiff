@@ -24,7 +24,11 @@ recon:
   scale_factor: 1.0      # multiplies all metric outputs (e.g. from a tape-measure check)
   level_world: true      # rotate the result into a gravity-aligned frame: +Y up (camera up
                          # refined by a RANSAC floor plane), floor at y = 0, first before
-                         # camera looking along +Z
+                         # camera looking along +Z (unless the walls are snapped)
+  snap_to_walls: false    # levelled frame: turn about +Y so that the dominant wall direction
+                         # (histogram of the horizontal normals 0.3-2.0 m above the floor,
+                         # folded modulo 90 deg) lies along +X / +Z ...
+  wall_peak_fraction: 0.25  # ... if its peak (+-5 deg) holds at least this share of the votes
   n_anchor: 8            # separate mode: keyframes per recording in the anchor joint pass
   icp_refine: true       # separate mode: refine the Sim(3) with point-to-plane ICP
   voxel_size_diag: 0.02  # voxel size (m) for diagnostics, ICP and the .ply clouds
@@ -75,6 +79,10 @@ instances:
   merge_mask_iou: 0.5    # merge fragments whose masks overlap more than this in a shared view ...
   merge_point_dist: 0.03 # ... or when more than merge_point_frac of the points of one lie
   merge_point_frac: 0.3  # ... within merge_point_dist m of the other
+  merge_gap_m: 0.05      # then touching fragments of one kind (a chair seat and its base) are
+  merge_gap_frac: 0.05   # joined: >= merge_gap_frac of the smaller one's points within
+                         # merge_gap_m of the other's ...
+  merge_max_extent_m: 1.5  # ... if every side of the union's oriented box stays below this
   mask_erode_px: 3       # mask erosion before pooling DINOv3 patch tokens
   cls_box_enlarge: 0.20  # CLS feature crop = mask box enlarged by this fraction
   frame_visible_frac: 0.20  # per-keyframe masks where >= this fraction of the points ...
@@ -107,6 +115,8 @@ semantics:
   max_new_tokens: 256    # per answer (greedy decoding); the one polishing call gets 90 per change
   image_max_side: 768    # px, every crop is resized to at most this on its longer side
   enable_judge: true     # paired-crop verdicts: rejected changes move to "rejected"
+  enable_fragment_merge: true  # merge removed + removed / added + added parts of one object
+  fragment_gap_m: 0.15   # m, ... whose oriented boxes are at most this far apart (VLM: one object)
   enable_repair: true    # merge split changes of one object (removed + added -> moved, ...)
   enable_polish: true    # one text-only call rewrites the template descriptions
   repair_max_distance: 3.0  # m, removed + added/unverified centroids closer than this are re-paired ...

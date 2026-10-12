@@ -41,7 +41,8 @@ Blobs fragment (a removed chair became four blobs) and merge neighbours. We ther
 blobs only as *seeds*: each blob is projected into its best views, SAM 2.1 is prompted with
 the box and a few visible points, and the mask is lifted back to 3D and bounded by the
 blob's neighbourhood so floor and wall are not swept in. Masks that overlap across views
-are merged into one object. DINOv3 patch features pooled inside the masks give each object
+are merged into one object, and touching fragments of the same kind (a chair seat and its
+base, 5 cm apart) are joined if the union stays object-sized. DINOv3 patch features pooled inside the masks give each object
 an appearance vector; Hungarian matching between disappeared and appeared objects, gated by
 feature similarity and size, turns a pair into a *moved* object with an ICP-estimated
 rigid transform (distance in metres, rotation in degrees when the fit is reliable).
@@ -53,7 +54,9 @@ sees the object and the same place in the after video and must agree the object 
 for a *moved* pair it must agree the two crops show one physical object; for *unverified*
 regions it must say whether there is a distinct object at all (walls, door frames and
 mirror reflections are rejected). Same-label objects that geometry split into "removed
-here" and "appeared there" are re-paired into one *moved* object. No API keys are used;
+here" and "appeared there" are re-paired into one *moved* object, and same-label removed
+(or added) fragments a few centimetres apart are merged when the model sees parts of one
+object. No API keys are used;
 everything runs offline on one GPU.
 
 ## 5. Outputs

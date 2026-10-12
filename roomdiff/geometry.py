@@ -220,3 +220,53 @@ def obb_corners(obb: dict[str, Any]) -> np.ndarray:
     signs = np.array([[x, y, z] for x in (-1, 1) for y in (-1, 1) for z in (-1, 1)], float)
     local = signs * np.asarray(obb["extents"], np.float64) / 2
     return local @ rotation_y(obb["yaw_deg"]).T + np.asarray(obb["center"], np.float64)
+
+
+def obb_footprint(obb: dict[str, Any]) -> np.ndarray:
+    """The 4 floor-plane corners (x, z) (4, 2) of a `floor_obb` box, in order around it."""
+    w, _, d = np.asarray(obb["extents"], np.float64) / 2
+    local = np.array([[-w, 0.0, -d], [-w, 0.0, d], [w, 0.0, d], [w, 0.0, -d]])
+    return (local @ rotation_y(obb["yaw_deg"]).T)[:, [0, 2]] + \
+        np.asarray(obb["center"], np.float64)[[0, 2]]
+
+
+def convex_polygon_distance(P: np.ndarray, Q: np.ndarray) -> float:
+    """Distance between two convex polygons (K, 2) with their corners in order (0 if they
+    overlap): separating-axis test on the edge normals, else the closest corner-edge pair."""
+    def edges(poly: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        return poly, np.roll(poly, -1, axis=0) - poly
+
+    separated = False
+    for poly in (P, Q):
+        _, e = edges(poly)
+        for n in np.c_[-e[:, 1], e[:, 0]]:
+            if n @ n < 1e-18:  # degenerate edge of a flat box
+                continue
+            p, q = P @ n, Q @ n
+            if p.max() < q.min() or q.max() < p.min():
+                separated = True
+                break
+        if separated:
+            break
+    if not separated:
+        return 0.0
+    best = np.inf
+    for points, poly in ((P, Q), (Q, P)):
+        starts, e = edges(poly)
+        for a, ab in zip(starts, e):
+            t = np.clip((points - a) @ ab / max(float(ab @ ab), 1e-18), 0.0, 1.0)
+            best = min(best, float(np.linalg.norm(points - (a + t[:, None] * ab), axis=1).min()))
+    return best
+
+
+def obb_gap(a: dict[str, Any], b: dict[str, Any]) -> float:
+    """Euclidean gap between two `floor_obb` boxes (0 if they overlap). Both are vertical
+    prisms, so the gap of their y ranges and the distance of their footprints combine like
+    the legs of a right triangle."""
+    def y_range(obb: dict[str, Any]) -> tuple[float, float]:
+        y, h = float(obb["center"][1]), float(obb["extents"][1]) / 2
+        return y - h, y + h
+
+    (a0, a1), (b0, b1) = y_range(a), y_range(b)
+    dy = max(0.0, b0 - a1, a0 - b1)
+    return float(np.hypot(dy, convex_polygon_distance(obb_footprint(a), obb_footprint(b))))

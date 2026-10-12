@@ -14,6 +14,7 @@ from roomdiff.instances import (
     enlarge_box,
     keep_near_blob,
     mean_pairwise_cosine,
+    merge_close_fragments,
     merge_instances,
     pick_mask,
     pooled_feature,
@@ -232,6 +233,39 @@ def test_merge_reassembles_fragments_and_keeps_neighbours_apart():
     merged = merge_instances([fragment(seat, 3, mask), fragment(legs, 3, other)], 0.5, 0.03,
                              0.3, 0.01)
     assert len(merged) == 2
+
+
+def test_gap_merge_joins_touching_parts_of_one_object():
+    """A chair seat and its base (column + foot plate) 2.5 cm below it: too little overlap
+    for the mask / point rule, but 6 % of the seat points lie within 5 cm of the base."""
+    seat = grid_points([0, 0.40, 0], [0.4, 0.42, 0.4])
+    base = np.concatenate([grid_points([0.18, 0.445, 0.18], [0.22, 0.8, 0.22]),
+                           grid_points([0, 0.78, 0], [0.4, 0.8, 0.4])])
+    neighbour = grid_points([0.5, 0.40, 0], [0.9, 0.42, 0.4])  # 10 cm beside the seat
+    frags = merge_instances([fragment(seat), fragment(base), fragment(neighbour)], 0.5, 0.03,
+                            0.3, 0.01)
+    assert len(frags) == 3  # the overlap rule alone keeps the parts apart
+    merged, records = merge_close_fragments(frags, 0.05, 0.05, 1.5, 0.01)
+    assert len(merged) == 2
+    chair = max(merged, key=lambda i: len(i.points))
+    assert chair.kind == "disappeared" and len(chair.blobs) == 2
+    assert sorted(chair.merged_from) == sorted([[len(seat)], [len(base)]])
+    assert chair.points[:, 1].min() < 0.401 and chair.points[:, 1].max() > 0.79
+    assert len(records) == 1 and records[0]["recording"] == "before"
+    assert records[0]["near_fraction"] >= 0.05 and max(records[0]["union_obb_extents"]) < 0.5
+    other = next(i for i in merged if i is not chair)
+    assert other.merged_from == [] and len(other.points) == len(neighbour)
+    # different kinds (an unverified base) are never joined
+    merged, records = merge_close_fragments(
+        [fragment(seat), fragment(base, kind="unverified")], 0.05, 0.05, 1.5, 0.01)
+    assert len(merged) == 2 and records == []
+    # a union longer than merge_max_extent_m: two planks end to end, 3 cm apart
+    plank = grid_points([0, 0.40, 0], [1.4, 0.42, 0.04])
+    short = grid_points([1.43, 0.40, 0], [1.63, 0.42, 0.04])
+    assert len(merge_close_fragments([fragment(plank), fragment(short)], 0.05, 0.05, 1.5,
+                                     0.01)[0]) == 2
+    assert len(merge_close_fragments([fragment(plank), fragment(short)], 0.05, 0.05, 2.0,
+                                     0.01)[0]) == 1
 
 
 # ------------------------------------------------------------------ features, masks

@@ -12,7 +12,9 @@ by point-to-plane ICP.
 Levelling (`level_world`, default on): the model's frame is arbitrary (roughly the first
 camera), so the result is rotated into a gravity-aligned frame: +Y up (camera up estimate
 refined by a RANSAC floor plane), the floor at y = 0 and the first before-camera looking
-along +Z (projected onto the floor), see `level_transform`.
+along +Z (projected onto the floor), see `level_transform`. With `snap_to_walls` (default
+on) the frame is then turned about +Y so that the dominant wall direction lies along +X /
++Z (`wall_yaw`), which makes object boxes room-aligned.
 
 Writes `<out>/recon/recon.npz`, `meta.json`, `before.ply`, `after.ply`
 (docs/interfaces.md, M2) and prints a one-line alignment verdict.
@@ -39,6 +41,7 @@ from roomdiff.geometry import (
     se3_inverse,
     sim3_apply_to_poses,
     sim3_matrix,
+    transform_points,
     umeyama,
     unproject_depth,
     voxel_downsample,
@@ -61,6 +64,14 @@ FLOOR_MAX_TILT_DEG = 20.0  # a floor normal farther than this from the camera up
 FLOOR_INLIER_M = 0.02  # m, RANSAC inlier distance to the floor plane
 RANSAC_ITERATIONS = 500
 RANSAC_MAX_POINTS = 50_000  # floor candidates scored by RANSAC (random subset)
+# wall snapping (`wall_yaw`), in the levelled frame
+WALL_BAND_M = (0.3, 2.0)  # wall points: this high above the floor (no floor, few tabletops)
+WALL_VOXEL_M = 0.05  # m, the band is voxel-downsampled before the normals are estimated
+WALL_NEIGHBOURS = 16  # local PCA over this many nearest voxel centres
+WALL_PLANARITY = 0.1  # planar: smallest PCA eigenvalue below this times the middle one
+WALL_MAX_TILT_DEG = 15.0  # a wall normal lies within this angle of the horizontal plane
+WALL_PEAK_HALF_WIDTH = 5  # deg, histogram peak = the 1-degree bins within +-5 of the best one
+WALL_MIN_VOTES = 50  # fewer wall-like points: no snapping
 
 # recon.npz contract (docs/interfaces.md): key -> dtype
 RECON_DTYPES: dict[str, Any] = {
@@ -386,13 +397,53 @@ def fit_floor(
     return normal, offset, inliers
 
 
-def level_transform(recon: Mapping[str, Any]) -> tuple[np.ndarray, dict[str, Any]]:
+def wall_yaw(points: np.ndarray) -> tuple[float, float, int] | None:
+    """Dominant horizontal wall direction of a levelled cloud (M, 3) (+Y up, floor y = 0).
+
+    Points `WALL_BAND_M` above the floor are voxel-downsampled (`WALL_VOXEL_M`); each gets
+    a normal by local PCA over its `WALL_NEIGHBOURS` nearest neighbours. Planar
+    neighbourhoods (`WALL_PLANARITY`) whose normal is within `WALL_MAX_TILT_DEG` of the
+    horizontal vote with the normal's yaw folded modulo 90 degrees (opposite and
+    perpendicular walls agree) into a circular histogram of 1-degree bins. The peak is the
+    window of +-`WALL_PEAK_HALF_WIDTH` bins with the most votes; its yaw is the circular
+    mean (of 4 x angle) of the votes in it. Returns `(yaw_deg in (-45, 45], peak fraction =
+    votes in the window / all votes, votes)`, or None without votes. Yaw convention of
+    `rotation_y` / `floor_obb`: `rotation_y(-yaw_deg)` turns the walls onto the axes.
+    """
+    band = points[(points[:, 1] >= WALL_BAND_M[0]) & (points[:, 1] <= WALL_BAND_M[1])]
+    pts = voxel_downsample(band, None, WALL_VOXEL_M)[0].astype(np.float64)
+    if len(pts) <= WALL_NEIGHBOURS:
+        return None
+    _, idx = cKDTree(pts).query(pts, WALL_NEIGHBOURS)
+    local = pts[idx] - pts[idx].mean(1, keepdims=True)
+    eigval, eigvec = np.linalg.eigh(np.einsum("nki,nkj->nij", local, local))
+    normal = eigvec[:, :, 0]  # eigenvector of the smallest eigenvalue
+    wall = (eigval[:, 0] < WALL_PLANARITY * eigval[:, 1]) & (
+        np.abs(normal[:, 1]) < math.sin(math.radians(WALL_MAX_TILT_DEG)))
+    if not wall.any():
+        return None
+    angles = np.degrees(np.arctan2(-normal[wall, 2], normal[wall, 0])) % 90.0
+    hist = np.bincount(np.floor(angles).astype(int) % 90, minlength=90)
+    window = np.arange(-WALL_PEAK_HALF_WIDTH, WALL_PEAK_HALF_WIDTH + 1)
+    best = int(np.argmax([hist[(b + window) % 90].sum() for b in range(90)]))
+    offset = (angles - (best + 0.5) + 45.0) % 90.0 - 45.0  # signed, folded distance to the peak
+    inside = np.abs(offset) <= WALL_PEAK_HALF_WIDTH + 0.5
+    mean = np.exp(1j * np.radians(4 * angles[inside])).mean()
+    yaw = -((-math.degrees(np.angle(mean)) / 4 + 45.0) % 90.0 - 45.0)  # in (-45, 45]
+    return yaw + 0.0, float(inside.mean()), int(wall.sum())
+
+
+def level_transform(
+    recon: Mapping[str, Any], snap_to_walls: bool = False, wall_peak_fraction: float = 0.25
+) -> tuple[np.ndarray, dict[str, Any]]:
     """Rigid 4x4 transform from the model frame into the levelled world frame.
 
     Up: the camera estimate (`estimate_up`), replaced by the normal of the RANSAC floor
     plane (`fit_floor`) when there is one. The transform maps up to +Y, the floor plane
     to y = 0 (without a plane: the median height of the lowest 5 % of the points) and turns
-    about Y so that the first before-camera's optical axis projects onto +Z. Uses
+    about Y so that the first before-camera's optical axis projects onto +Z. With
+    `snap_to_walls` it then turns about Y by -`wall_yaw` (dominant wall direction onto
+    +X / +Z) if that peak holds at least `wall_peak_fraction` of the votes. Uses
     `cam2world`, `depth`, `K`, `valid`, `rec`. Returns the transform and a description.
     """
     cam2world = np.asarray(recon["cam2world"], np.float64)
@@ -417,7 +468,7 @@ def level_transform(recon: Mapping[str, Any]) -> tuple[np.ndarray, dict[str, Any
     T[:3, :3] = rotation_y(-yaw) @ R
     T[1, 3] = -offset
     tilt = math.degrees(math.acos(float(np.clip(camera_up @ up, -1.0, 1.0))))
-    info = {
+    info: dict[str, Any] = {
         "up_axis_original": np.round(up, 5).tolist(),
         "floor_inliers_fraction": None if inliers is None else round(inliers, 4),
         "method": method,
@@ -425,8 +476,20 @@ def level_transform(recon: Mapping[str, Any]) -> tuple[np.ndarray, dict[str, Any
         "floor_vs_camera_up_deg": round(tilt, 2),
         "floor_offset_m": round(offset, 4),
         "points_used": len(points),
-        "transform": T.round(6).tolist(),
     }
+    if snap_to_walls:
+        walls = wall_yaw(transform_points(T, points)) if len(points) else None
+        snapped = walls is not None and walls[2] >= WALL_MIN_VOTES and \
+            walls[1] >= wall_peak_fraction
+        if snapped:
+            turn = np.eye(4)
+            turn[:3, :3] = rotation_y(-walls[0])
+            T = turn @ T
+        info.update({"walls_snapped": snapped,
+                     "wall_yaw_deg": None if walls is None else round(walls[0], 2),
+                     "wall_peak_fraction": None if walls is None else round(walls[1], 4),
+                     "wall_votes": 0 if walls is None else walls[2]})
+    info["transform"] = T.round(6).tolist()
     return T, info
 
 
@@ -661,10 +724,14 @@ def run_recon(out_dir: str | Path, cfg: Mapping[str, Any]) -> dict[str, Any]:
     level: dict[str, Any] = {"levelled": False}
     if params["level_world"]:
         t0 = time.perf_counter()
-        T, info = level_transform({**pred, "rec": rec})
+        T, info = level_transform({**pred, "rec": rec}, params["snap_to_walls"],
+                                  params["wall_peak_fraction"])
         pred["cam2world"], _ = sim3_apply_to_poses(T, pred["cam2world"])
         level = {"levelled": True, "up_axis_original": info.pop("up_axis_original"),
-                 "floor_inliers_fraction": info.pop("floor_inliers_fraction"), "level": info}
+                 "floor_inliers_fraction": info.pop("floor_inliers_fraction"),
+                 **{k: info.pop(k) for k in ("walls_snapped", "wall_yaw_deg",
+                                             "wall_peak_fraction") if k in info},
+                 "level": info}
         times["level"] = time.perf_counter() - t0
     scale = params["scale_factor"]
     pred["cam2world"][:, :3, 3] *= scale
@@ -703,9 +770,15 @@ def run_recon(out_dir: str | Path, cfg: Mapping[str, Any]) -> dict[str, Any]:
     print(f"[recon] {verdict_line(diag)}")
     if level["levelled"]:
         info, fraction = level["level"], level["floor_inliers_fraction"]
+        walls = ""
+        if level.get("wall_yaw_deg") is not None:
+            walls = (f"; walls at {level['wall_yaw_deg']:+.1f} deg "
+                     f"({100 * level['wall_peak_fraction']:.0f}% of {info['wall_votes']} votes), "
+                     + ("snapped to the axes" if level["walls_snapped"] else "not snapped"))
         print(f"[recon] levelled: {info['method']}, "
               f"{info['floor_vs_camera_up_deg']:.1f} deg from the camera up"
-              + (f", {100 * fraction:.0f}% floor inliers" if fraction is not None else ""))
+              + (f", {100 * fraction:.0f}% floor inliers" if fraction is not None else "")
+              + walls)
     return meta
 
 

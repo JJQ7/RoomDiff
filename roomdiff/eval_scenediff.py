@@ -38,7 +38,9 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from roomdiff.instances import load_masks
+import numpy as np
+
+from roomdiff.instances import decode_rle, encode_rle, load_masks
 from roomdiff.paths import RECORDINGS, OutputPaths
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -152,6 +154,22 @@ def benchmark_frames(frames: Sequence[Mapping[str, Any]], time_tol: float) -> di
     return {file: k for k, (_, file) in best.items()}
 
 
+def side_masks(
+    per_instance: Mapping[int, Mapping[int, tuple[float, dict[str, Any]]]], ids: Sequence[int]
+) -> dict[int, tuple[float, dict[str, Any]]]:
+    """Masks `{frame k: (score, RLE)}` of a change side made of the instances `ids` (parts
+    of one object after a merge): per frame the union of their masks with the best score."""
+    out: dict[int, tuple[float, dict[str, Any]]] = {}
+    for k in sorted({k for i in ids for k in per_instance.get(i, {})}):
+        parts = [per_instance[i][k] for i in ids if k in per_instance.get(i, {})]
+        if len(parts) == 1:
+            out[k] = parts[0]
+            continue
+        mask = np.logical_or.reduce([decode_rle(rle) for _, rle in parts])
+        out[k] = (max(score for score, _ in parts), encode_rle(mask))
+    return out
+
+
 def write_prediction(
     out_dir: str | Path, pair_dir: str | Path, pred_dir: str | Path,
     include_unverified: bool = True, time_tol: float = 0.1,
@@ -193,7 +211,8 @@ def write_prediction(
         for rec in RECORDINGS:
             if change[rec] is None:
                 continue
-            frames = masks[rec].get(change[rec]["instance_id"], {})
+            frames = side_masks(masks[rec], change[rec].get("instance_ids")
+                                or [change[rec]["instance_id"]])
             obj[VIDEO_KEYS[rec]] = {
                 k: {"mask": {"size": list(rle["size"]), "counts": rle["counts"]},
                     "cost": float(change["confidence"]) * score}

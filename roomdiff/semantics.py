@@ -6,24 +6,29 @@ the stage can be re-run):
 1. Naming: the owner crop(s) of every change (moved: before and after) -> `label`
    (normalised: lowercase, no articles, at most 3 words), `attributes`,
    `object_description`.
-2. Re-pairing: a `removed` change and an `added` / after-only `unverified` change with a
+2. Fragments: two `removed` (or two `added`) changes with matching labels whose oriented
+   boxes are within `fragment_gap_m` of each other become one change if the VLM says both
+   owner crops show parts of one physical object (a chair seat and its base): geometry from
+   the union of their instance points, confidence = max, the larger fragment's id, crops
+   and evidence (+ `<side>_part` crop, summed free rays, `merged_from`).
+3. Re-pairing: a `removed` change and an `added` / after-only `unverified` change with a
    matching label (same label or head noun) whose centroids are closer than
    `repair_max_distance` become one `moved` change if the VLM says both crops show the
    same physical object. A `moved` change absorbs an `added` change with a matching label
    whose box lies within `merge_max_distance` of the moved after-box (gap between the
    boxes; a spread-out quilt is one object) if the VLM says both are parts of one object.
-3. Judge: type-specific paired-crop questions -> `evidence.vlm_verdict` ("confirmed" /
+4. Judge: type-specific paired-crop questions -> `evidence.vlm_verdict` ("confirmed" /
    "rejected" / "unclear") and `evidence.vlm_reason`; moved also `motion_kind` ("rigid" /
    "deformed" / "unknown"). Rejected changes move to the `rejected` list; unclear ones keep
    `confidence * unclear_factor`. A rejected `moved` change keeps its geometry: it is split
    back into a `removed` (before side) and an `added` change (after side), each named
    again, verdict "unclear" and `confidence * split_factor`; the halves then go through
-   re-pairing (step 2) once more, with the other changes only.
-4. Descriptions: a template sentence from label, type, geometry (distance, size, place in
+   re-pairing (step 3) once more, with the other changes only.
+5. Descriptions: a template sentence from label, type, geometry (distance, size, place in
    the room, height above the floor = lowest 5 % of all valid points) and evidence; one
    text-only VLM call polishes all of them, a sentence is kept only if every number and
    the label survived.
-5. Summary: "N changes: a moved, b added, c removed; d unverified" + a VLM paragraph.
+6. Summary: "N changes: a moved, b added, c removed; d unverified" + a VLM paragraph.
 
 Writes `<out>/changes.json`, `<out>/semantics/meta.json` and `<out>/semantics/log.jsonl`
 (every prompt and answer). Prompts are module constants.
@@ -47,7 +52,7 @@ import numpy as np
 from PIL import Image
 
 from roomdiff.changes import CHANGE_TYPES, instance_evidence
-from roomdiff.geometry import floor_obb, obb_corners
+from roomdiff.geometry import floor_obb, obb_corners, obb_gap
 from roomdiff.paths import RECORDINGS, OutputPaths
 from roomdiff.vlm import BaseVLM
 
@@ -186,6 +191,19 @@ JUDGE_PARTS = (
     f"objects?\n{OUTLINE}\n"
     'Answer "confirmed" if it is the same object; "rejected" if they are different '
     f'objects; "unclear" if you cannot tell.\n{VERDICT_JSON}')
+JUDGE_FRAGMENTS = (
+    "Image 1 and image 2 come from the same video of a room. Each has a coloured outline "
+    "and box around a region (probably a {label}); in 3D the two regions touch or are only "
+    "a few centimetres apart. Are they two parts of one physical object (for example the "
+    "seat and the base of one chair, or the top and the legs of one table), rather than two "
+    "separate objects close together (for example two chairs side by side, or the two "
+    "curtains of one window)?\n"
+    f"{OUTLINE}\n"
+    'Answer "confirmed" if they are parts of one object; "rejected" if they are separate '
+    'objects; "unclear" if you cannot tell.\n'
+    'Answer with JSON only, reason first: {"reason": "one short sentence", "verdict": '
+    '"confirmed" | "rejected" | "unclear", "label": "short lowercase noun phrase of 1-3 '
+    'words naming the whole object, e.g. office chair"}')
 POLISH = (
     "Rewrite each numbered sentence below in plain, fluent English for a non-expert reader; "
     "rephrase them, do not copy them word for word. Keep every number exactly as written "
@@ -487,22 +505,42 @@ def merge_removed_added(r: Mapping[str, Any], a: Mapping[str, Any], reason: str)
     }
 
 
+def side_instance_ids(side: Mapping[str, Any]) -> list[int]:
+    """Instance ids of a change side (several after a merge of parts)."""
+    return list(side.get("instance_ids") or [side["instance_id"]])
+
+
+def union_side(side: Mapping[str, Any], part: Mapping[str, Any],
+               points: np.ndarray | None = None) -> dict[str, Any]:
+    """`side` grown by `part` (two parts of one object in one recording): box, centroid
+    and oriented box of the union of their instance `points` if given, else the union of
+    the boxes with the point-weighted centroid (the oriented box encloses both `obb`s);
+    `n_points` and `blob_ids` merged, `instance_ids` of both."""
+    if points is not None and len(points):
+        pts = np.asarray(points, np.float64)
+        lo, hi, centroid, obb, n = pts.min(0), pts.max(0), pts.mean(0), floor_obb(pts), len(pts)
+    else:
+        lo = np.minimum(side["aabb"][0], part["aabb"][0])
+        hi = np.maximum(side["aabb"][1], part["aabb"][1])
+        n1, n2 = side.get("n_points", 1), part.get("n_points", 1)
+        centroid = (np.multiply(side["centroid"], n1) + np.multiply(part["centroid"], n2)) / (
+            n1 + n2)
+        obb = floor_obb(np.vstack([obb_corners(side["obb"]), obb_corners(part["obb"])])) \
+            if side.get("obb") and part.get("obb") else None
+        n = n1 + n2
+    return {**side, "centroid": np.round(centroid, 4).tolist(),
+            "aabb": [np.round(lo, 4).tolist(), np.round(hi, 4).tolist()],
+            "extents": np.round(np.subtract(hi, lo), 4).tolist(), "obb": obb, "n_points": int(n),
+            "blob_ids": sorted(set(side.get("blob_ids", [])) | set(part.get("blob_ids", []))),
+            "instance_ids": side_instance_ids(side) + side_instance_ids(part)}
+
+
 def absorb_part(m: dict[str, Any], a: Mapping[str, Any], reason: str) -> None:
     """Union the after side of the added change `a` into the moved change `m` (two parts
     of one deformable object; the oriented box encloses both boxes); the transform becomes
     the centroid translation."""
-    side, part = m["after"], a["after"]
-    lo = np.minimum(side["aabb"][0], part["aabb"][0])
-    hi = np.maximum(side["aabb"][1], part["aabb"][1])
-    n1, n2 = side.get("n_points", 1), part.get("n_points", 1)
-    centroid = (np.multiply(side["centroid"], n1) + np.multiply(part["centroid"], n2)) / (n1 + n2)
-    obb = floor_obb(np.vstack([obb_corners(side["obb"]), obb_corners(part["obb"])])) \
-        if side.get("obb") and part.get("obb") else None
-    m["after"] = {**side, "centroid": centroid.round(4).tolist(),
-                  "aabb": [lo.round(4).tolist(), hi.round(4).tolist()],
-                  "extents": (hi - lo).round(4).tolist(), "obb": obb, "n_points": n1 + n2,
-                  "blob_ids": sorted(set(side.get("blob_ids", [])) | set(part.get("blob_ids", []))),
-                  "instance_ids": [side["instance_id"], part["instance_id"]]}
+    m["after"] = union_side(m["after"], a["after"])
+    centroid = np.asarray(m["after"]["centroid"])
     t = centroid - np.asarray(m["before"]["centroid"])
     m["transform"] = {**m["transform"], "translation_m": round(float(np.linalg.norm(t)), 4),
                       "rotation_deg": None, "R": np.eye(3).tolist(), "t": t.round(5).tolist()}
@@ -512,6 +550,88 @@ def absorb_part(m: dict[str, Any], a: Mapping[str, Any], reason: str) -> None:
     ev["merged_from"] = [*ev.get("merged_from", [m["id"]]), a["id"]]
     ev["merged_part_reason"] = reason
     m["crops"] = {**m["crops"], "after_part": (a.get("crops") or {}).get("after")}
+
+
+def change_gap(a: Mapping[str, Any], b: Mapping[str, Any]) -> float:
+    """Gap between two change sides: between their oriented boxes, else their AABBs."""
+    if a.get("obb") and b.get("obb"):
+        return obb_gap(a["obb"], b["obb"])
+    return box_gap(a["aabb"], b["aabb"])
+
+
+def merge_fragment_pair(
+    x: Mapping[str, Any], y: Mapping[str, Any], name: str,
+    points: Mapping[str, Mapping[int, np.ndarray]], reason: str, label: str | None, gap: float,
+) -> dict[str, Any]:
+    """One change from two changes `x`, `y` of one type showing parts of one object (side
+    `name`: before for removed, after for added). The fragment with more points keeps its
+    id, label (unless the VLM named the whole object: `label`), attributes, crops (+ the
+    other's owner crop as `<name>_part`) and evidence (free rays and occupied points summed,
+    observing views max); geometry from the union of both fragments' instance `points`
+    (box union without them); confidence = max; description regenerated later."""
+    big, small = (x, y) if x[name].get("n_points", 0) >= y[name].get("n_points", 0) else (y, x)
+    own = [points.get(name, {}).get(i) for i in side_instance_ids(big[name])
+           + side_instance_ids(small[name])]
+    union = np.concatenate(own) if all(p is not None and len(p) for p in own) else None
+    merged = json.loads(json.dumps(big))  # deep copy
+    merged[name] = union_side(big[name], small[name], union)
+    merged["label"] = label or big["label"]
+    merged["confidence"] = max(big["confidence"], small["confidence"])
+    ev, other = merged["evidence"], small["evidence"]
+    for key in ("free_rays", "occ_points"):
+        if key in ev or key in other:
+            ev[key] = ev.get(key, 0) + other.get(key, 0)
+    ev["observing_views"] = max(ev.get("observing_views", 0), other.get("observing_views", 0))
+    ev["merged_from"] = [big["id"], small["id"]]
+    ev["merged_types"] = [big["type"], small["type"]]
+    ev["merged_part_reason"] = reason
+    ev["fragment_gap_m"] = round(gap, 3)
+    merged["crops"] = {**(big.get("crops") or {}),
+                       f"{name}_part": (small.get("crops") or {}).get(name)}
+    merged["description"] = ""
+    return merged
+
+
+def merge_fragments(vlm: BaseVLM, crops: Crops, changes: list[dict[str, Any]],
+                    params: Mapping[str, Any], points: Mapping[str, Mapping[int, np.ndarray]],
+                    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Merge the fragments of one object (module docstring, step 2): pairs of removed /
+    removed or added / added changes with matching labels whose oriented boxes are at
+    most `fragment_gap_m` apart, closest first, each change in at most one merge, if the
+    VLM says both owner crops show parts of one physical object. Returns the new change
+    list and one record per VLM pair check."""
+    by_id = {c["id"]: c for c in changes}
+    pairs = []
+    for kind, name in (("removed", "before"), ("added", "after")):
+        group = [c for c in changes if c["type"] == kind and c.get(name)]
+        for k, x in enumerate(group):
+            for y in group[k + 1:]:
+                if labels_match(x["label"], y["label"]):
+                    gap = change_gap(x[name], y[name])
+                    if gap <= params["fragment_gap_m"]:
+                        pairs.append((gap, x["id"], y["id"], name))
+    records: list[dict[str, Any]] = []
+    used: set[int] = set()
+    for gap, xid, yid, name in sorted(pairs):
+        x, y = by_id[xid], by_id[yid]
+        shown = [crops.get(x, name), crops.get(y, name)]
+        if xid in used or yid in used or None in shown:
+            continue
+        data = ask_images(vlm, shown, fill(JUDGE_FRAGMENTS, x["label"]),
+                          f"fragments:{xid}+{yid}")
+        verdict, reason = verdict_of(data)
+        label = normalise_label((data or {}).get("label"))
+        if not (labels_match(label, x["label"]) or labels_match(label, y["label"])):
+            label = None  # keep the larger fragment's name
+        records.append({"kind": f"{x['type']}+{y['type']}", "ids": [xid, yid],
+                        "labels": [x["label"], y["label"]], "obb_gap_m": round(gap, 3),
+                        "verdict": verdict, "reason": reason, "label": label})
+        if verdict == "confirmed":
+            merged = merge_fragment_pair(x, y, name, points, reason, label, gap)
+            by_id[merged["id"]] = merged
+            del by_id[merged["evidence"]["merged_from"][1]]
+            used |= {xid, yid}
+    return list(by_id.values()), records
 
 
 def repair(vlm: BaseVLM, crops: Crops, changes: list[dict[str, Any]],
@@ -839,8 +959,14 @@ def run_semantics(out_dir: str | Path, cfg: Mapping[str, Any],
 
     t0 = time.perf_counter()
     merges: list[dict[str, Any]] = []
+    if params["enable_fragment_merge"]:
+        changes, merges = merge_fragments(vlm, crops, changes, params, points)
+    times["fragments"] = time.perf_counter() - t0
+
+    t0 = time.perf_counter()
     if params["enable_repair"]:
-        changes, merges = repair(vlm, crops, changes, params)
+        changes, more = repair(vlm, crops, changes, params)
+        merges += more
     times["repair"] = time.perf_counter() - t0
 
     t0 = time.perf_counter()

@@ -4,8 +4,11 @@ All stages read/write under one output directory `<out>` (see `roomdiff/paths.py
 Coordinates: OpenCV camera convention (x right, y down, z forward); world frame = the
 shared frame produced by the joint reconstruction, levelled by M2 (`recon.level_world`,
 default on; `levelled` in `recon/meta.json`): +Y up (against gravity), the floor plane at
-y = 0 and the first before-camera's optical axis projected onto +Z (so +X is to its left).
-Without levelling the frame is Pi3X's (roughly the first camera). Units = metres as
+y = 0 and the first before-camera's optical axis projected onto +Z (so +X is to its left),
+then, with `recon.snap_to_walls` (default on) and a clear wall direction, turned about +Y
+so that the dominant wall direction lies along +X / +Z (`walls_snapped`; the first camera
+then looks within 45 degrees of +Z). Without levelling the frame is Pi3X's (roughly the
+first camera). Units = metres as
 estimated by the reconstruction model (approximately metric; a `scale_factor` override
 exists).
 
@@ -35,7 +38,16 @@ when true also `up_axis_original` (the up direction in the model frame that beca
 plane, null if no plane was found) and `level` {`method` ("ransac floor plane" | "camera
 up (no floor plane)"), `camera_up` (initial estimate: mean camera down axis without its
 components along the camera x axes), `floor_vs_camera_up_deg`, `floor_offset_m`,
-`points_used`, `transform` (4x4, model frame -> levelled frame)}. Up = camera estimate
+`points_used`, `wall_votes`, `transform` (4x4, model frame -> levelled frame)}; with
+`snap_to_walls` also `walls_snapped` (bool), `wall_yaw_deg` (dominant wall direction in
+the camera-levelled frame, in (-45, 45], `rotation_y` / `obb.yaw_deg` convention; the
+snapped frame is that one turned by `rotation_y(-wall_yaw_deg)`) and `wall_peak_fraction`
+(share of the wall votes in the histogram peak; snapped only if >= `wall_peak_fraction`
+of the config and >= 50 votes; null without votes). Walls: valid points (every 4th
+pixel) 0.3-2.0 m above the floor, 5 cm voxels, normals by local PCA over 16 neighbours;
+planar neighbourhoods (smallest eigenvalue < 0.1 x the middle one) with a normal within
+15 degrees of horizontal vote with the normal's yaw modulo 90 degrees into 1-degree bins;
+peak = the +-5 degree window with the most votes, yaw = circular mean of its votes. Up = camera estimate
 refined by the floor plane: MSAC (RANSAC with truncated squared residuals, 2 cm cap;
 points clearly below a candidate plane cost double) on the lowest 10 % of the valid
 points (every 4th pixel) along the camera up, planes within 20 degrees of it only, then
@@ -79,8 +91,13 @@ Implemented (`roomdiff/instances.py`, `roomdiff/changes.py`, model wrappers in
 
 Instances are built per recording `<rec>` from the M3 blobs occupied in it (disappeared
 -> before, appeared -> after, unverified_<rec> -> <rec>): SAM 2.1 masks in up to `n_views`
-keyframes, lifted to 3D, fragments merged. Instance ids are 1..N per recording (verified
-kinds first, then by point count).
+keyframes, lifted to 3D, fragments merged: first by overlap (mask IoU > `merge_mask_iou`
+in a shared keyframe, or more than `merge_point_frac` of one's points within
+`merge_point_dist` of the other), then touching fragments of the same kind (a chair seat
+and its base): at least `merge_gap_frac` of the smaller one's points within `merge_gap_m`
+(0.05 m) of the other's, if no side of the union's oriented box reaches
+`merge_max_extent_m` (1.5 m); greedy, largest near fraction first. Instance ids are 1..N
+per recording (verified kinds first, then by point count).
 
 `instances/<rec>.json`: `{recording, image_size [W, H], instances: [...]}`; per instance:
 `id`, `recording`, `kind` (disappeared / appeared / unverified), `label` ("object" until
@@ -94,7 +111,9 @@ gravity-aligned when the recon frame is levelled), `views` (per
 prompted keyframe: `frame` index into recon.npz, `file`, prompt `box`, `mask_box`
 [x0,y0,x1,y1] at recon resolution, SAM `score`), `mask_scores`, `mask_score_mean`,
 `view_consistency` (mean pairwise cosine of the per-view features, null for one view),
-`feature_index` (row in the feature files = id - 1), `n_frame_masks`, `evidence`
+`feature_index` (row in the feature files = id - 1), `n_frame_masks`, `merged_from`
+(blob ids of each part joined by the gap rule, e.g. [[7, 18], [11]]; empty if none),
+`evidence`
 (aggregated over the source blobs, verified ones if any: `voxels`, `volume_m3`,
 `free_rays` = sum over blob voxels of the other recording's free count, voxel-weighted
 `free_frames_mean`, max `observing_views`, summed `occ_points`, `min_camera_distance`).
@@ -108,7 +127,8 @@ visible (>= `frame_visible_frac` of its points depth-consistent): `keyframe` (fi
 resolution); read with `roomdiff.instances.load_masks` / `decode_rle`.
 `instances/meta.json`: parameters, selected / dropped blobs with the reason (small or
 too large unverified, hidden surface, no clear view, no mask, too few points), fragment
-and instance counts, runtime, peak VRAM. `instances/matching.json`: cosine and cost
+and instance counts, `gap_merges` (per gap-rule merge: `recording`, `kind`, `parts` (blob
+ids of both), `near_fraction`, `union_obb_extents`), runtime, peak VRAM. `instances/matching.json`: cosine and cost
 matrices of the moved candidates and the accepted pairs.
 
 `changes.json`:
@@ -168,7 +188,8 @@ Implemented (`roomdiff/semantics.py`, `roomdiff/vlm.py`, `roomdiff/report.py`, c
 constants in `roomdiff/semantics.py`). Qwen3-VL-8B-Instruct, bf16, greedy decoding, every
 crop resized to <= `image_max_side` px. The first run backs the M4 document up to
 `semantics/changes_m4.json`; later runs start from that backup (re-run `roomdiff changes`
-to refresh it). Steps: naming -> re-pairing -> judge -> descriptions -> summary.
+to refresh it). Steps: naming -> fragment merging -> re-pairing -> judge -> descriptions
+-> summary.
 
 Changes keep the M4 schema and ids (stable, so ids have gaps where entries were rejected
 or merged); M5 sets or adds:
@@ -194,6 +215,21 @@ or merged); M5 sets or adds:
   (both steps below), only in pairs with another change, never with each other: a
   wrong M4 match can so become the right one (office_1: wrong chair pair split, the small
   chair's halves re-paired).
+* Fragments of one object (`enable_fragment_merge`): two `removed` (or two `added`)
+  changes with matching labels whose oriented boxes are at most `fragment_gap_m` (0.15 m)
+  apart (exact gap of the two vertical prisms) are shown to the VLM with both owner crops
+  ("two parts of one physical object, e.g. the seat and the base of one chair, rather than
+  two separate objects?"); closest pair first, each change in at most one merge. If
+  confirmed they become one change: the fragment with more points keeps its id, type,
+  label (replaced by the VLM's name of the whole object if that matches one of the two
+  labels), attributes, crops (+ `crops.<side>_part` = the other's owner crop) and evidence,
+  with `free_rays` / `occ_points` summed, `observing_views` = max, `merged_from` [kept,
+  absorbed], `merged_types`, `merged_part_reason`, `fragment_gap_m`; the side becomes the
+  union: centroid, `aabb`, `extents` and `obb` of the union of both instances' points
+  (`instance_ids` [both], `n_points` summed, `blob_ids` united; box union without the
+  points); confidence = max; the description is regenerated (step below). Then judged
+  like any other change. The masks of all `instance_ids` are united per frame for the
+  SceneDiff evaluation.
 * Re-paired removed R + added or after-only unverified A (matching labels: same label,
   head noun or synonym group; centroids < `repair_max_distance`; VLM: same object) -> one
   `moved` change with R's id: `before` = R's side, `after` = A's, `transform` from the
@@ -216,8 +252,9 @@ or merged); M5 sets or adds:
 Top level: `rejected` (same schema, `vlm_verdict` "rejected" + reason), `summary` =
 "N changes: a moved, b added, c removed; d unverified." + a VLM paragraph.
 `semantics/meta.json`: model, params, runtime per step, VLM calls and seconds, counts in /
-out, rejected (id, type, label, reason), merges (every VLM pair check: ids, labels,
-distance or box gap, verdict, reason), splits (rejected moved changes: `id`, `label`,
+out, rejected (id, type, label, reason), merges (every VLM pair check: kind, ids,
+labels, distance or box gap, verdict, reason; fragment checks also the VLM's `label`),
+splits (rejected moved changes: `id`, `label`,
 `into` [removed id, added id], `labels`, `reason`), verdict per id, polished /
 template-kept counts, scene frame (up vector: +Y in a levelled frame, else the camera
 estimate; floor height), `peak_vram_gb`, `peak_ram_gb`.

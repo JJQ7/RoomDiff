@@ -12,7 +12,7 @@ import pytest
 from PIL import Image
 
 from roomdiff.config import load_config
-from roomdiff.geometry import rotation_y
+from roomdiff.geometry import floor_obb, obb_gap, rotation_y
 from roomdiff.semantics import (
     SceneFrame,
     head_noun,
@@ -347,6 +347,134 @@ def test_split_half_is_re_paired_with_another_change(tmp_path):
     assert [x["ids"] for x in meta["merges"]] == [[7, 8]]  # never the two halves 3 + 8
     assert sum("same physical object" in p and "already matched" not in p
                for p in vlm.prompts) == 1  # one strict same-object check: 7 + 8
+
+
+CHAIR_PARTS = {"red": "Office Chair", "green": "office chair base", "grey": "wall"}
+
+
+def chair_scene(root):
+    """Two removed fragments of one chair (upper part 1, base 2, 5 cm below it), a second
+    removed chair 1 m away (3) and an added chair (4); instance points on disk."""
+    rng = np.random.default_rng(0)
+    pts = {1: rng.uniform([-0.25, 0.40, 1.75], [0.25, 1.00, 2.25], (3000, 3)),
+           2: rng.uniform([-0.30, 0.00, 1.70], [0.30, 0.35, 2.30], (800, 3)),
+           3: rng.uniform([1.30, 0.00, 1.75], [1.80, 1.00, 2.25], (3000, 3))}
+
+    def side_of(iid):
+        p = pts[iid]
+        return {"instance_id": iid, "centroid": p.mean(0).tolist(),
+                "aabb": [p.min(0).tolist(), p.max(0).tolist()], "extents": np.ptp(p, 0).tolist(),
+                "obb": floor_obb(p), "n_points": len(p), "blob_ids": [10 + iid]}
+
+    write_doc(root, [
+        change(1, "removed", before=side_of(1), conf=0.56,
+               crops={"before": crop(root, "1_before", "red"),
+                      "after": crop(root, "1_after", "grey")}),
+        change(2, "removed", before=side_of(2), conf=0.93, views=8,
+               crops={"before": crop(root, "2_before", "green"),
+                      "after": crop(root, "2_after", "grey")}),
+        change(3, "removed", before=side_of(3), conf=0.8,
+               crops={"before": crop(root, "3_before", "red"),
+                      "after": crop(root, "3_after", "grey")}),
+        change(4, "added", after=side(1, [5, 0.5, 2], 0.25), conf=0.7,
+               crops={"after": crop(root, "4_after", "green"),
+                      "before": crop(root, "4_before", "grey")}),
+    ])
+    (root / "instances").mkdir()
+    np.savez_compressed(root / "instances" / "before_points.npz",
+                        points=np.concatenate(list(pts.values())).astype(np.float32),
+                        colors=np.zeros((sum(map(len, pts.values())), 3), np.uint8),
+                        instance=np.concatenate([np.full(len(p), i) for i, p in pts.items()]))
+    return pts
+
+
+def chair_responder(parts_answer):
+    def answer(images, prompt):
+        if '"label"' in prompt and "parts of one physical object" not in prompt:
+            label = CHAIR_PARTS[colour(images[0])]
+            return json.dumps({"label": label, "attributes": "grey fabric",
+                               "description": "A chair part."})
+        if "parts of one physical object" in prompt:
+            return parts_answer
+        return responder(images, prompt)
+    return answer
+
+
+def test_fragments_of_one_object_are_merged(tmp_path):
+    pts = chair_scene(tmp_path)
+    vlm = FakeVLM(chair_responder(
+        '{"reason": "seat and base of one chair", "verdict": "confirmed", '
+        '"label": "an office chair"}'))
+    doc = run_semantics(tmp_path, load_config(), vlm)
+
+    asked = [p for p in vlm.prompts if "parts of one physical object" in p]
+    assert len(asked) == 1  # only 1 + 2: chair 3 is 1 m away, the added chair 4 is alone
+    assert "probably a office chair" in asked[0]
+    by_id = {c["id"]: c for c in doc["changes"]}
+    assert sorted(by_id) == [1, 3, 4] and doc["rejected"] == []
+    m = by_id[1]  # the fragment with more points keeps its id
+    assert m["type"] == "removed" and m["label"] == "office chair"
+    assert m["confidence"] == 0.93  # max of both, then confirmed by the judge
+    assert m["evidence"]["merged_from"] == [1, 2]
+    assert m["evidence"]["merged_types"] == ["removed", "removed"]
+    assert m["evidence"]["merged_part_reason"] == "seat and base of one chair"
+    assert m["evidence"]["fragment_gap_m"] == pytest.approx(0.05, abs=0.01)
+    assert m["evidence"]["free_rays"] == 200 and m["evidence"]["observing_views"] == 8
+    assert m["evidence"]["vlm_verdict"] == "confirmed"
+    union = np.concatenate([pts[1], pts[2]])
+    b = m["before"]
+    assert b["instance_ids"] == [1, 2] and b["n_points"] == 3800 and b["blob_ids"] == [11, 12]
+    assert np.allclose(b["centroid"], union.mean(0), atol=1e-4)
+    assert np.allclose(b["aabb"], [union.min(0), union.max(0)], atol=1e-4)
+    assert b["obb"] == floor_obb(union) and b["obb"]["extents"][1] == pytest.approx(1.0, abs=0.01)
+    assert m["crops"] == {"before": "crops/1_before.jpg", "after": "crops/1_after.jpg",
+                          "before_part": "crops/2_before.jpg"}
+    assert m["description"].startswith("The office chair (grey fabric; about 1.0 x 0.6 x 0.6 m)")
+    frame = SceneFrame(up=np.array([0.0, 1.0, 0.0]), right=np.array([1.0, 0.0, 0.0]),
+                       forward=np.array([0.0, 0.0, 1.0]), floor=0.0,
+                       lo=np.array([-3.0, 0.0]), hi=np.array([3.0, 6.0]))
+    text = template_description(m, frame, {"before": {1: pts[1], 2: pts[2]}})
+    assert "which was on the floor" in text  # the base's points count for the height
+    assert "0.4 m above the floor" in template_description(by_id[3] | {"before": {
+        **m["before"], "instance_ids": [1]}}, frame, {"before": {1: pts[1]}})
+    assert by_id[3]["label"] == "office chair" and "merged_from" not in by_id[3]["evidence"]
+    meta = json.loads((tmp_path / "semantics" / "meta.json").read_text())
+    assert meta["merges"] == [{"kind": "removed+removed", "ids": [1, 2],
+                               "labels": ["office chair", "office chair base"],
+                               "obb_gap_m": m["evidence"]["fragment_gap_m"],
+                               "verdict": "confirmed", "reason": "seat and base of one chair",
+                               "label": "office chair"}]
+    assert meta["counts_out"] == {"removed": 2, "added": 1}
+
+
+def test_fragments_stay_apart_when_the_vlm_refuses(tmp_path):
+    chair_scene(tmp_path)
+    vlm = FakeVLM(chair_responder(
+        '{"reason": "two different chairs", "verdict": "rejected", "label": "chairs"}'))
+    doc = run_semantics(tmp_path, load_config(), vlm)
+    by_id = {c["id"]: c for c in doc["changes"]}
+    assert sorted(by_id) == [1, 2, 3, 4]
+    assert by_id[2]["label"] == "office chair base" and by_id[1]["before"]["instance_id"] == 1
+    assert "instance_ids" not in by_id[1]["before"] and by_id[1]["confidence"] == 0.56
+    meta = json.loads((tmp_path / "semantics" / "meta.json").read_text())
+    assert [(x["ids"], x["verdict"]) for x in meta["merges"]] == [([1, 2], "rejected")]
+    # the switch turns the step off: no question asked
+    vlm = FakeVLM(chair_responder('{"verdict": "confirmed"}'))
+    doc = run_semantics(tmp_path, load_config(overrides=["semantics.enable_fragment_merge=false"]),
+                        vlm)
+    assert len(doc["changes"]) == 4
+    assert not any("parts of one physical object" in p for p in vlm.prompts)
+
+
+def test_obb_gap():
+    a = {"center": [0.0, 0.5, 0.0], "extents": [1.0, 1.0, 1.0], "yaw_deg": 0.0}
+    assert obb_gap(a, a) == 0.0
+    assert obb_gap(a, {**a, "center": [2.0, 0.5, 0.0]}) == pytest.approx(1.0)
+    turned = {**a, "center": [2.0, 0.5, 0.0], "yaw_deg": 45.0}  # a corner points at a
+    assert obb_gap(a, turned) == pytest.approx(1.5 - np.sqrt(0.5))
+    above = {**a, "center": [2.0, 2.5, 0.0]}
+    assert obb_gap(a, above) == pytest.approx(np.sqrt(2.0))
+    assert obb_gap(a, {**a, "center": [0.2, 1.6, 0.1]}) == pytest.approx(0.1)
 
 
 # ------------------------------------------------------------------ descriptions

@@ -24,6 +24,7 @@ CROP_TITLES = {
     "after": "after",
     "before_place": "after video, old place",
     "after_place": "before video, new place",
+    "before_part": "before, merged part",
     "after_part": "after, merged part",
 }
 
@@ -49,8 +50,6 @@ def evidence_line(change: Mapping[str, Any]) -> str:
             parts.append(f"rotation {tf['rotation_deg']:.0f} deg")
         if change.get("motion_kind"):
             parts.append(f"motion {change['motion_kind']}")
-        if len(ev.get("merged_from", [])) > 1:
-            parts.append("merged from candidates " + ", ".join(map(str, ev["merged_from"])))
     elif kind in ("removed", "added"):
         other = "after" if kind == "removed" else "before"
         rays = f" ({ev['free_rays']} free-space rays)" if ev.get("free_rays") is not None else ""
@@ -60,6 +59,8 @@ def evidence_line(change: Mapping[str, Any]) -> str:
         other = "after" if ev.get("seen_in") == "before" else "before"
         parts.append(f"seen only in the {ev.get('seen_in')} video; the {other} video never "
                      "observed the place")
+    if len(ev.get("merged_from", [])) > 1:  # re-paired, or parts of one object
+        parts.append("merged from candidates " + ", ".join(map(str, ev["merged_from"])))
     if ev.get("mask_score") is not None:
         parts.append(f"mask score {_fmt(ev['mask_score'])}")
     if ev.get("vlm_verdict"):

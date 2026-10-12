@@ -360,6 +360,9 @@ def test_run_recon_levels_the_world(scene_dir):
     assert abs(forward[0]) < 1e-3 and forward[2] > 0.99
     assert meta["levelled"] and meta["level"]["method"] == "ransac floor plane"
     assert meta["floor_inliers_fraction"] > 0.1 and len(meta["up_axis_original"]) == 3
+    # the first camera already faces a wall: snapping keeps the frame (within 0.06 deg)
+    assert meta["walls_snapped"] and abs(meta["wall_yaw_deg"]) < 0.06
+    assert meta["wall_peak_fraction"] > 0.9 and meta["level"]["wall_votes"] > 100
 
     fake_run_pi3x.calls -= 1  # same gauge, levelling off: the floor stays tilted
     meta = run_recon(scene_dir, load_config(
@@ -386,6 +389,47 @@ def test_floor_plane_corrects_the_camera_up():
     assert np.degrees(np.arccos(up[1])) < 1.0
     assert abs((T[:3, :3] @ [0.0, ROOM_HI[1], 0.0] + T[:3, 3])[1]) < 0.01
     assert info["floor_inliers_fraction"] > 0.5
+
+
+def wall_axis_yaws(T: np.ndarray, M: np.ndarray) -> list[float]:
+    """Yaw (deg, folded into [-45, 45)) of the room's x and z axes (the wall normals) after
+    the ground-truth -> model similarity `M` and the levelling transform `T`."""
+    yaws = []
+    for axis in (np.array([1.0, 0.0, 0.0]), np.array([0.0, 0.0, 1.0])):
+        d = T[:3, :3] @ M[:3, :3] @ axis
+        d /= np.linalg.norm(d)
+        assert abs(d[1]) < 0.02  # levelled: the wall normals are horizontal
+        yaws.append(float((np.degrees(np.arctan2(-d[2], d[0])) + 45) % 90 - 45))
+    return yaws
+
+
+@pytest.mark.parametrize("seed", [0, 1, 2])
+def test_snap_to_walls_aligns_a_rotated_room(seed):
+    """The first camera looks 20 degrees off the walls, so levelling alone leaves the walls
+    at 20 degrees to the axes; snapping turns them onto the axes (within 1 degree)."""
+    rng = np.random.default_rng(seed)
+    gt = np.stack([yaw_pose(y + 20) for y in YAWS["before"]])
+    s = rng.uniform(0.7, 1.5)
+    M = sim3_matrix(s, Rotation.random(random_state=rng).as_matrix(), rng.normal(size=3))
+    poses, _ = sim3_apply_to_poses(M, gt)
+    n = len(poses)
+    recon = {"cam2world": poses, "K": np.repeat(K_TRUE[None], n, 0),
+             "depth": s * np.stack([render_depth(T) for T in gt]),
+             "valid": np.ones((n, H, W), bool), "rec": np.zeros(n, int)}
+    plain, info = level_transform(recon)
+    assert "wall_yaw_deg" not in info
+    assert all(abs(abs(a) - 20) < 1 for a in wall_axis_yaws(plain, M))
+
+    T, info = level_transform(recon, snap_to_walls=True)
+    assert info["walls_snapped"] and abs(abs(info["wall_yaw_deg"]) - 20) < 1
+    assert info["wall_peak_fraction"] > 0.5 and info["wall_votes"] > 100
+    assert all(abs(a) < 1 for a in wall_axis_yaws(T, M))
+    assert np.allclose(T[1], plain[1])  # a turn about +Y: heights (floor at y = 0) unchanged
+
+    # a peak below wall_peak_fraction leaves the frame as it is (the yaw is still reported)
+    T, info = level_transform(recon, snap_to_walls=True, wall_peak_fraction=1.01)
+    assert not info["walls_snapped"] and abs(abs(info["wall_yaw_deg"]) - 20) < 1
+    assert np.allclose(T, plain)
 
 
 def test_fit_floor_ignores_steep_planes():

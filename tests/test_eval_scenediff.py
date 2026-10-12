@@ -12,6 +12,7 @@ import pickle
 import shutil
 import subprocess
 
+import numpy as np
 import pytest
 from pycocotools import mask as mask_utils
 from test_changes import SETTINGS, make_scene
@@ -28,9 +29,10 @@ from roomdiff.eval_scenediff import (
     evaluate,
     load_segments,
     run_pairs,
+    side_masks,
     write_prediction,
 )
-from roomdiff.instances import encode_rle, run_instances
+from roomdiff.instances import decode_rle, encode_rle, run_instances
 from roomdiff.models import FakeFeaturizer, FakeSegmenter
 from roomdiff.visibility import run_visibility
 
@@ -104,6 +106,19 @@ def test_benchmark_frames_mapping():
     # b and c both round to 1: the closer one (c) wins; d, e are too far from a second;
     # fixed-mode keyframes use benchmark_frame whatever their timestamp, null = none.
     assert benchmark_frames(frames, 0.1) == {"a": 0, "c": 1, "f": 3}
+
+
+def test_side_masks_unite_the_parts_of_a_merged_object():
+    seat, base = np.zeros((20, 30), bool), np.zeros((20, 30), bool)
+    seat[2:8, 5:20] = True
+    base[10:18, 8:12] = True
+    per_instance = {1: {0: (0.9, encode_rle(seat)), 3: (0.8, encode_rle(seat))},
+                    2: {0: (0.7, encode_rle(base)), 5: (0.6, encode_rle(base))}}
+    out = side_masks(per_instance, [1, 2])
+    assert sorted(out) == [0, 3, 5]
+    assert out[0][0] == 0.9 and np.array_equal(decode_rle(out[0][1]), seat | base)
+    assert out[3] == per_instance[1][3] and out[5] == per_instance[2][5]
+    assert side_masks(per_instance, [1]) == per_instance[1] and side_masks(per_instance, [9]) == {}
 
 
 def test_load_segments_refuses_globals(tmp_path):

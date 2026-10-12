@@ -207,7 +207,7 @@ def _log_changes_entities(stream: rr.RecordingStream, out_dir: Path,
                        static=True)
             if name in clouds:
                 points, owner = clouds[name]
-                pts = points[owner == side["instance_id"]]
+                pts = points[np.isin(owner, side.get("instance_ids") or [side["instance_id"]])]
                 if len(pts) > max_points:
                     pts = pts[rng.choice(len(pts), max_points, replace=False)]
                 stream.log(f"{base}/{name}/points",
