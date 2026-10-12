@@ -35,7 +35,7 @@ visibility:
   carve_rel: 0.03        # rays carve up to depth * (1 - carve_rel) - carve_abs ...
   carve_abs: 0.04        # ... metres, in steps of voxel_size / 2
   n_free_min: 2          # free: seen empty by at least this many keyframes
-  dist_margin: 0.06      # m, candidates must be farther than this from the other recording's surfaces
+  dist_margin: 0.04      # m, candidates must be farther than this from the other recording's surfaces
   opening_size: 2        # binary opening (cube edge, voxels) of disappeared / appeared; 1 = off.
                          # 3 (a 3x3x3 cube) erased every real change on the SceneDiff test scenes:
                          # surfaces are only 2-3 voxels thick
@@ -45,11 +45,53 @@ visibility:
   occlusion_tol: 0.10    # m, a debug view may see a surface at most this far in front of the centroid
   max_debug_blobs: 200   # debug crops for the largest blobs only
 
-# M4: SAM 3 instances, 3D lifting, cross-recording matching
-instances: {}
+# M4: object instances from the change blobs (SAM 2.1 masks lifted to 3D, DINOv3 features)
+instances:
+  device: cuda           # torch device for SAM 2.1 and DINOv3 (cpu if no GPU)
+  sam_model: facebook/sam2.1-hiera-large
+  dino_model: facebook/dinov3-vitl16-pretrain-lvd1689m
+  min_unverified_volume: 0.004  # m^3, smaller unverified blobs are ignored ...
+  max_unverified_extent: 1.5    # m, ... as are larger ones (longest box side): room regions
+                                # that only one video filmed, not objects
+  hidden_surface_margin: 0.20   # m, unverified blobs this close to a disappeared / appeared
+                                # box are the surface that object hid or uncovered: dropped
+  n_views: 4             # keyframes of the owner recording prompted per blob
+  min_view_angle: 15.0   # deg, preferred minimum angle between the chosen viewing directions
+  occlusion_tol: 0.05    # m, a point is occluded if the observed depth is this much closer;
+                         # also the on-surface tolerance of the positive prompt points
+  box_enlarge: 0.10      # SAM box prompt = projected blob box enlarged by this fraction
+  n_prompt_points: 5     # positive prompt points (projected depth-visible blob voxels)
+  expand_m: 0.15         # m, lifted points must lie in the blob box expanded by this ...
+  near_voxel_m: 0.10     # ... and not on a static surface, unless this close to a blob voxel
+  drop_static: true      # drop lifted points on surfaces the other recording also has
+  lift_voxel: 0.01       # m, voxel size of the lifted instance points
+  min_points: 150        # instances with fewer lifted points are dropped
+  merge_mask_iou: 0.5    # merge fragments whose masks overlap more than this in a shared view ...
+  merge_point_dist: 0.03 # ... or when more than merge_point_frac of the points of one lie
+  merge_point_frac: 0.3  # ... within merge_point_dist m of the other
+  mask_erode_px: 3       # mask erosion before pooling DINOv3 patch tokens
+  cls_box_enlarge: 0.20  # CLS feature crop = mask box enlarged by this fraction
+  frame_visible_frac: 0.20  # per-keyframe masks where >= this fraction of the points ...
+  frame_depth_tol: 0.05     # ... is depth-consistent within this many metres
+  frame_prompt_points: 8    # positive points of the per-keyframe SAM prompts
 
-# M4: change classification (added / removed / moved / unverified) and rigid transforms
-changes: {}
+# M4: matching across recordings, change typing (added / removed / moved / unverified)
+changes:
+  lambda_size: 0.3       # cost = (1 - cos(feature)) + lambda_size * |log(volume ratio)|
+  tau_feat: 0.65         # accept a match only if the feature cosine is at least this ...
+                         # (0.55 matched a black jacket to a cream quilt at 0.60; true pairs
+                         # on the SceneDiff test scenes scored 0.68-0.92)
+  extent_ratio_min: 0.5  # ... and every sorted extent ratio lies in [min, max]
+  extent_ratio_max: 2.0
+  icp_max_dist: 0.10     # m, max correspondence distance of the moved-object ICP
+  icp_min_fitness: 0.4   # rotation reported only if both point sets fit within 3 cm at least this
+                         # well (0.3 let a 64 deg fit of two partial ladder fragments through)
+  free_views_full: 5     # observing views of the other recording that give full free-space evidence
+  w_mask: 0.3            # confidence = w_mask * SAM score + w_free * free-space evidence
+  w_free: 0.4            #   + w_consistency * view consistency (weights sum to 1);
+  w_consistency: 0.3     #   unverified: half the mask/consistency part only (<= 0.5)
+  crop_min_px: 256       # crops are at least this many pixels per side (keyframe resolution) ...
+  crop_context: 1.6      # ... and this many times the object box
 
 # M5: Qwen3-VL naming, description and paired-crop judge
 semantics: {}

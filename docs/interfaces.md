@@ -57,10 +57,37 @@ counts (raw / after opening / in blobs), blobs per type, runtime, peak VRAM.
 `visibility.rrd`: blobs as Rerun boxes. Projection helpers for later stages:
 `roomdiff/projection.py` (`project_to_pixels`, `project_aabb`, `best_views`).
 
-## M4 instances + changes -> `<out>/instances/`, `<out>/changes.json`
-`instances/<rec>.json`: per object: id, label votes, point count, centroid, aabb, best
-views (keyframe + 2D box), feature vector index. `instances/<rec>_masks.npz`: per-keyframe
-RLE masks with object ids. `instances/<rec>_feats.npy`: L2-normalised features.
+## M4 instances + changes -> `<out>/instances/`, `<out>/changes.json`, `<out>/crops/`
+Implemented (`roomdiff/instances.py`, `roomdiff/changes.py`, model wrappers in
+`roomdiff/models.py`; parameters in `configs/default.yaml: instances, changes`).
+
+Instances are built per recording `<rec>` from the M3 blobs occupied in it (disappeared
+-> before, appeared -> after, unverified_<rec> -> <rec>): SAM 2.1 masks in up to `n_views`
+keyframes, lifted to 3D, fragments merged. Instance ids are 1..N per recording (verified
+kinds first, then by point count).
+
+`instances/<rec>.json`: `{recording, image_size [W, H], instances: [...]}`; per instance:
+`id`, `recording`, `kind` (disappeared / appeared / unverified), `label` ("object" until
+M5), `blob_ids`, `n_points`, `centroid`, `aabb [[min], [max]]`, `extents`, `views` (per
+prompted keyframe: `frame` index into recon.npz, `file`, prompt `box`, `mask_box`
+[x0,y0,x1,y1] at recon resolution, SAM `score`), `mask_scores`, `mask_score_mean`,
+`view_consistency` (mean pairwise cosine of the per-view features, null for one view),
+`feature_index` (row in the feature files = id - 1), `n_frame_masks`, `evidence`
+(aggregated over the source blobs, verified ones if any: `voxels`, `volume_m3`,
+`free_rays` = sum over blob voxels of the other recording's free count, voxel-weighted
+`free_frames_mean`, max `observing_views`, summed `occ_points`, `min_camera_distance`).
+`instances/<rec>_feats.npy` (N, 1024) float32: L2-normalised DINOv3 ViT-L/16 patch tokens
+pooled inside the eroded masks, averaged over views. `instances/<rec>_cls.npy` (N, 1024):
+CLS token of the best view's mask box crop. `instances/<rec>_points.npz`: `points` (M, 3)
+float32 (1 cm voxels), `colors` (M, 3) uint8, `instance` (M,) int32 id.
+`instances/<rec>_masks.npz`: one row per (keyframe, instance) where the instance is
+visible (>= `frame_visible_frac` of its points depth-consistent): `keyframe` (file name),
+`instance_id`, `score` (SAM), `rle` (COCO RLE counts string), `size` [H, W] (recon
+resolution); read with `roomdiff.instances.load_masks` / `decode_rle`.
+`instances/meta.json`: parameters, selected / dropped blobs with the reason (small or
+too large unverified, hidden surface, no clear view, no mask, too few points), fragment
+and instance counts, runtime, peak VRAM. `instances/matching.json`: cosine and cost
+matrices of the moved candidates and the accepted pairs.
 
 `changes.json`:
 ```json
@@ -69,9 +96,11 @@ RLE masks with object ids. `instances/<rec>_feats.npy`: L2-normalised features.
   "changes": [
     {"id": 1, "type": "moved|added|removed|unverified", "label": "office chair",
      "confidence": 0.86,
-     "before": {"instance_id": 3, "centroid": [x,y,z], "aabb": [[x0,y0,z0],[x1,y1,z1]]},
-     "after":  {"instance_id": 7, "centroid": [x,y,z], "aabb": [[...],[...]]},
-     "transform": {"translation_m": 0.92, "rotation_deg": 31.0, "R": [[...]], "t": [...]},
+     "before": {"instance_id": 3, "centroid": [x,y,z], "aabb": [[x0,y0,z0],[x1,y1,z1]],
+                "extents": [dx,dy,dz], "n_points": 5120, "blob_ids": [9, 14]},
+     "after":  {"instance_id": 7, "centroid": [x,y,z], "aabb": [[...],[...]], ...},
+     "transform": {"translation_m": 0.92, "rotation_deg": 31.0, "R": [[...]], "t": [...],
+                   "icp_fitness": 0.82, "icp_rmse": 0.012},
      "evidence": {"free_rays": 412, "observing_views": 9, "appearance_similarity": 0.81,
                   "vlm_verdict": "same object, moved"},
      "description": "The office chair moved about 0.9 m from the desk towards the window.",
@@ -80,8 +109,33 @@ RLE masks with object ids. `instances/<rec>_feats.npy`: L2-normalised features.
   "summary": "3 changes detected: 1 moved, 1 added, 1 removed; 1 region unverified."
 }
 ```
+Every change has all keys; `before` / `after` is null on the side where the object does
+not exist (removed: after, added: before, unverified: the recording that never observed
+it) and `transform` is null unless moved. `R`, `t` map before points to after points
+(`x_after = R x_before + t`); `translation_m` = displacement of the before centroid;
+`rotation_deg` is null when the ICP fit is not trusted (symmetric 3 cm fitness below
+`icp_min_fitness`). Order: moved, removed, added, unverified; by confidence within a type.
+M4 writes `label: "object"`, a templated `description` and `vlm_verdict: null` (M5 fills
+them). Evidence keys: removed / added / unverified: `free_rays`, `free_frames_mean`,
+`observing_views` (keyframes of the other recording that saw through the place),
+`occ_points`, `mask_score`, `view_consistency` (+ `seen_in` for unverified); moved:
+`free_rays` (both places), `observing_views` (mean), `observing_views_before_place`,
+`observing_views_after_place`, `appearance_similarity` (DINOv3 cosine), `cls_similarity`,
+`mask_score`, `icp_fitness`.
+Confidence = (w_mask S_mask + w_free S_free + w_consistency S_cons) / (sum of weights):
+S_mask = mean SAM score, S_free = min(observing_views / free_views_full, 1) (moved: mean of
+both places), S_cons = view consistency (0.5 if unknown; moved: mean of both);
+unverified: 0.5 (w_mask S_mask + w_consistency S_cons) / (w_mask + w_consistency) <= 0.5.
+Crops (paths relative to `<out>`; JPEG from the full-resolution keyframes, object box
+x `crop_context`, at least `crop_min_px` per side): `<id>_<rec>.jpg` shows the object in its
+own recording with mask outline and box; the other side shows the other recording looking
+at the same 3D box (the empty place or the new object). Moved objects have both object
+crops plus `<id>_before_place.jpg` / `<id>_after_place.jpg` (the other recording at the old
+/ new place). A side is missing if no keyframe of that recording sees the box.
+`changes.rrd` / `scene.rrd`: boxes per change coloured by type, instance points, moved
+arrows (`roomdiff/viz_rerun.py`).
 
 ## M5/M6 outputs
 `report.md` (summary + per-change sections with crops), `scene.rrd` (Rerun; written by
-`roomdiff viz` since M3: reconstruction + candidate blobs),
+`roomdiff viz`: reconstruction, M3 candidate blobs, M4 changes),
 `viewer/` (static web viewer assets: downsampled clouds, boxes, crops, changes.json).

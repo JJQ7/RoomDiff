@@ -65,6 +65,18 @@ def visibility(out: OutOpt, config: ConfigOpt = None, set_: SetOpt = None) -> No
 
 
 @app.command()
+def instances(out: OutOpt, config: ConfigOpt = None, set_: SetOpt = None) -> None:
+    """Object instances of the change blobs, SAM 2.1 + DINOv3 (<out>/instances/)."""
+    _instances_stage(out, _load_config(config, set_))
+
+
+@app.command()
+def changes(out: OutOpt, config: ConfigOpt = None, set_: SetOpt = None) -> None:
+    """Match instances across recordings and write <out>/changes.json and <out>/crops/."""
+    _changes_stage(out, _load_config(config, set_))
+
+
+@app.command()
 def run(
     before: BeforeOpt,
     after: AfterOpt,
@@ -72,7 +84,7 @@ def run(
     config: ConfigOpt = None,
     set_: SetOpt = None,
 ) -> None:
-    """Run the pipeline; implemented so far: ingest -> recon -> visibility -> viz."""
+    """Run ingest -> recon -> visibility -> instances -> changes -> viz."""
     from roomdiff.ingest import ingest_pair
     from roomdiff.recon import run_recon
 
@@ -81,6 +93,8 @@ def run(
         "ingest": lambda: ingest_pair(before, after, out, cfg),
         "recon": lambda: run_recon(out, cfg),
         "visibility": lambda: _visibility_stage(out, cfg),
+        "instances": lambda: _instances_stage(out, cfg),
+        "changes": lambda: _changes_stage(out, cfg),
         "viz": lambda: _viz_stage(out),
     }
     seconds = {}
@@ -93,8 +107,7 @@ def run(
 
 @app.command()
 def viz(out: OutOpt) -> None:
-    """Write the Rerun recording <out>/scene.rrd (reconstruction + change candidates)
-    and <out>/recon/recon.rrd (reconstruction only)."""
+    """Write the Rerun recordings <out>/scene.rrd (everything) and <out>/recon/recon.rrd."""
     _viz_stage(out)
 
 
@@ -110,6 +123,20 @@ def _visibility_stage(out: Path, cfg: Config) -> None:
 
     run_visibility(out, cfg)
     log_visibility(out)
+
+
+def _instances_stage(out: Path, cfg: Config) -> None:
+    from roomdiff.instances import run_instances  # models load only when needed
+
+    run_instances(out, cfg)
+
+
+def _changes_stage(out: Path, cfg: Config) -> None:
+    from roomdiff.changes import run_changes
+    from roomdiff.viz_rerun import log_changes
+
+    run_changes(out, cfg)
+    log_changes(out)
 
 
 def _viz_stage(out: Path) -> None:
