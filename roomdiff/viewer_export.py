@@ -166,8 +166,11 @@ def copy_crops(changes: dict[str, Any], src_root: Path, viewer: Path) -> None:
     for change in changes["changes"]:
         crops = change.get("crops") or {}
         for side, rel in crops.items():
-            src = src_root / rel if rel else None
-            if src is None or not src.is_file():
+            if not rel:  # unverified changes have no crop on the side never observed
+                crops[side] = None
+                continue
+            src = src_root / rel
+            if not src.is_file():
                 print(f"[viewer] warning: crop {rel!r} of change {change.get('id')} not found")
                 crops[side] = None
                 continue

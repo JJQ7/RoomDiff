@@ -339,3 +339,14 @@ def test_rerun_boxes_use_the_oriented_box():
     args = box_args(side)
     assert np.allclose(args["centers"], [[0, 0.5, 0]]) and "rotation_axis_angles" not in args
     assert np.allclose(box_centre(side), [0, 0, 0])
+
+
+def test_appearance_support_factor():
+    from roomdiff.changes import appearance_support
+    params = {"appearance_frames_full": 4}
+    assert appearance_support({"evidence": {}}, params) == 1.0
+    assert appearance_support({"evidence": {"appearance": None}}, params) == 1.0
+    few = {"evidence": {"appearance": {"frames_supporting": 2}}}
+    many = {"evidence": {"appearance": {"frames_supporting": 8}}}
+    assert appearance_support(few, params) == 0.75
+    assert appearance_support(many, params) == 1.0

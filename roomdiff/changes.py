@@ -22,7 +22,10 @@
   min(observing_views / free_views_full, 1) of the other recording (moved: mean of both
   sides), S_cons = mean pairwise cosine of the per-view features (0.5 if only one view;
   moved: mean of both). Unverified: 0.5 * (w_mask * S_mask + w_consistency * S_cons) /
-  (w_mask + w_consistency), so at most 0.5.
+  (w_mask + w_consistency), so at most 0.5. An appearance instance scales its change's
+  confidence by 0.5 + 0.5 min(frames_supporting / appearance_frames_full, 1) (moved: the
+  smaller factor of both sides): a region found in a couple of keyframes ranks below one
+  seen in many.
 * Crops `<out>/crops/<id>_before.jpg` / `<id>_after.jpg` (moved also `_before_place` /
   `_after_place`): the object in its own recording with mask outline and box, and the
   other recording looking at the same place; both views are ranked by
@@ -190,6 +193,16 @@ def confidence(
     s_free = float(np.mean([min(v / params["free_views_full"], 1.0) for v in observing_views]))
     total = w_mask * s_mask + w_free * s_free + w_cons * s_cons
     return round(total / max(w_mask + w_free + w_cons, 1e-9), 3)
+
+
+def appearance_support(record: Mapping[str, Any], params: Mapping[str, Any]) -> float:
+    """Confidence factor of an instance record: 1 for a geometry instance, else 0.5 + 0.5
+    min(frames_supporting / `appearance_frames_full`, 1) (module docstring)."""
+    app = record["evidence"].get("appearance")
+    if app is None:
+        return 1.0
+    full = max(float(params.get("appearance_frames_full", 4)), 1.0)
+    return 0.5 + 0.5 * min(float(app.get("frames_supporting", 0)) / full, 1.0)
 
 
 def replaced_pairs(
@@ -446,6 +459,7 @@ def run_changes(out_dir: str | Path, cfg: Mapping[str, Any]) -> dict[str, Any]:
                           [rb["view_consistency"], ra["view_consistency"]],
                           [rb["evidence"]["observing_views"], ra["evidence"]["observing_views"]],
                           params)
+        conf = round(conf * min(appearance_support(rb, params), appearance_support(ra, params)), 3)
         entries.append(("moved", {"before": side_record(rb), "after": side_record(ra),
                                   "transform": transform, "evidence": evidence,
                                   "confidence": conf}))
@@ -459,6 +473,7 @@ def run_changes(out_dir: str | Path, cfg: Mapping[str, Any]) -> dict[str, Any]:
                 continue
             conf = confidence([r["mask_score_mean"]], [r["view_consistency"]],
                               [r["evidence"]["observing_views"]], params)
+            conf = round(conf * appearance_support(r, params), 3)
             body = {side: side_record(r), "evidence": instance_evidence(r), "confidence": conf}
             if (side, k) in links:
                 body["link"], overlap = links[(side, k)]
@@ -469,6 +484,7 @@ def run_changes(out_dir: str | Path, cfg: Mapping[str, Any]) -> dict[str, Any]:
             if r["kind"] != "unverified":
                 continue
             conf = confidence([r["mask_score_mean"]], [r["view_consistency"]], None, params)
+            conf = round(conf * appearance_support(r, params), 3)
             entries.append(("unverified", {name: side_record(r),
                                            "evidence": {**instance_evidence(r), "seen_in": name},
                                            "confidence": conf}))

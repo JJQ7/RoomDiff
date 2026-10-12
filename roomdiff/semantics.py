@@ -101,7 +101,8 @@ VERDICT_JSON = ('Answer with JSON only, reason first: {"reason": "one short sent
 
 # ------------------------------------------------------------------ prompts
 
-OUTLINE = ("The thin coloured contour traces the exact region; the rectangle only frames it. "
+OUTLINE = ("The thin coloured contour and the rectangle are drawn on the photo, they are not "
+           "part of the room. The contour traces the exact region; the rectangle only frames it. "
            "Judge only what lies inside the contour, not other objects that merely fall "
            "inside the rectangle (if there is no contour, judge what the rectangle mainly "
            "contains).")

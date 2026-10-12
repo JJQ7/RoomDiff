@@ -295,6 +295,9 @@ is then shown as "rotation (unreliable)" in the report and viewer and never quot
 description); below `icp_min_fitness` `R` = I, `t` = centroid difference,
 `rotation_deg` null and `rotation_reliable` false (also for transforms built by M5
 re-pairing / merging). Order: moved, removed, added, unverified; by confidence within a type.
+Changes of appearance instances have their confidence scaled by 0.5 + 0.5
+min(`frames_supporting` / `changes.appearance_frames_full` (4), 1) (moved: the smaller
+factor of both sides).
 M4 writes `label: "object"`, a templated `description` and `vlm_verdict: null` (M5 fills
 them, see below). Evidence keys: removed / added / unverified: `free_rays`, `free_frames_mean`,
 `observing_views` (keyframes of the other recording that saw through the place),

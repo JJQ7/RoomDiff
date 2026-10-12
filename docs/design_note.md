@@ -34,7 +34,27 @@ the thin shells that remain.
 On three benchmark scenes every disappeared/appeared blob corresponded to a real change and
 there were no false positives. The price is recall on small or flat objects: a wallet on a
 table or a bag lying flat is within the margin of the surface it rests on and produces no
-blob. Those objects need an appearance cue, which we discuss under limitations.
+blob. Those objects need an appearance cue, which is the second channel below.
+
+## 2b. Appearance channel: what the voxels cannot see
+For every keyframe we pick the two best co-visible keyframes of the other recording (same
+surfaces, depth-consistent after reprojection). Each DINOv3 patch of a keyframe is
+reprojected into its partners; where the partner looks at the same place we compare the
+two patch features (1 - cosine), and where the partner sees *through* the place (its depth
+is clearly larger than ours) we add a depth vote. The per-keyframe score map is thresholded,
+each connected region prompts SAM 2.1, the masks are lifted to 3D and clustered across
+keyframes, and clusters that a geometric instance already covers are dropped. The rest
+become instances tagged `source: appearance` and flow through the same matching, judge and
+description stages; a before/after pair of appearance instances in the same place is first
+asked a single in-place question (same thing, replaced, removed or added), which is how a
+jumper on a bed or a bottle swapped for another gets a verdict without a fake 0 m "move".
+
+On the same three scenes this recovered the wallet, the hairbrush and the tissue box, at
+the cost of one false positive (a bare wall patch that the judge read as a "wall
+decoration"); on 20 SceneDiff validation pairs it lifted per-view AP from 0.15 to 0.40 (see
+the README benchmark table). The judge is the weak point of this channel: a lighting-only
+region survives if the VLM over-reads the crop, and an object that moved a few centimetres
+may be judged "same".
 
 ## 3. Objects, not voxels
 Blobs fragment (a removed chair became four blobs) and merge neighbours. We therefore use
@@ -66,9 +86,11 @@ viewer (three.js) that shows both clouds in the shared frame, the change boxes, 
 natural-language report and the before/after crops, and runs on GitHub Pages.
 
 ## Limitations we know about
-- Small, flat or thin objects are missed by the geometric channel (recall, not precision).
+- Small, flat or thin objects are missed by the geometric channel; the appearance channel
+  recovers many of them but depends on co-visible keyframes (at about 1 keyframe per
+  second a scene can have none) and on the VLM judge.
 - Deformable changes (a curtain opened, a quilt spread out) get a "moved" verdict with an
   unreliable rotation; the judge marks them as deformed rather than rigid.
 - Mirrors create unverified regions behind the glass; a mirror mask would fix it.
 - Scale is approximately metric; distances are reported with that caveat.
-- Each run takes about 1.5–2.5 minutes on an RTX 5090, most of it model loading.
+- Each run takes about 2–2.5 minutes on an RTX 5090, a third of it model loading.

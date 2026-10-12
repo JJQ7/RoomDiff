@@ -72,6 +72,28 @@ Open `https://<user>.github.io/<repo>/viewer/?scene=scenes/<name>`. Without `?sc
 viewer loads `./scene.json` from its own folder. `*.ply` is gitignored except under
 `examples/`, so the scene PLYs under `docs/viewer/` need a `.gitignore` exception.
 
+## Benchmark (SceneDiff validation subset)
+
+`roomdiff eval` runs the pipeline on pairs of the public
+[SceneDiff](https://github.com/scenediff/scene_diff) benchmark and scores them with the
+official evaluator (`third_party/scene_diff`). 20 pairs of the `val` / `varied` split,
+fixed keyframes every 1 s, RTX 5090:
+
+| | per-view AP | per-scene AP | AP (typed) | global IoU | objects TP / FP / FN |
+|---|---|---|---|---|---|
+| geometry channel only (commit `ce23def`) | 0.151 | 0.083 | 0.078 | 0.187 | 7 / 42 / 68 |
+| + appearance channel (commit `c660672`) | **0.395** | **0.352** | **0.238** | **0.331** | 30 / 53 / 45 |
+| SceneDiff paper (full val set, for reference) | 0.496 | 0.463 | 0.255 | – | – |
+
+The paper numbers are on the whole validation set, ours on a 20-pair subset, so they are
+indicative only. The remaining gap is recall on small objects in recordings with few
+co-visible keyframes and the precision of the VLM judge; see `docs/design_note.md`.
+
+```bash
+python -m roomdiff.cli eval --split val --set varied --limit 20 --out-root outputs/scenediff_eval \
+    -o ingest.mode=fixed -o ingest.fixed_interval_s=1.0     # -o overrides config values here
+```
+
 ## Development
 
 ```bash
