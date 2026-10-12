@@ -8,6 +8,9 @@ ingest:
   sharpness_window: 5    # candidates evaluated per segment
   min_motion: 0.02       # drop a keyframe whose motion to the previous one is below this
   jpeg_quality: 95
+  mode: sharp            # sharp: sharpest frame per segment + motion filter (above);
+                         # fixed: the frame closest to every k * fixed_interval_s, no filtering
+  fixed_interval_s: 1.0  # fixed mode: seconds between keyframes (1.0 = SceneDiff GT frames)
 
 # M2: joint Pi3X reconstruction of both keyframe sets (poses, depth, points)
 recon:
@@ -93,8 +96,27 @@ changes:
   crop_min_px: 256       # crops are at least this many pixels per side (keyframe resolution) ...
   crop_context: 1.6      # ... and this many times the object box
 
-# M5: Qwen3-VL naming, description and paired-crop judge
-semantics: {}
+# M5: Qwen3-VL naming, paired-crop judge, re-pairing and descriptions (prompts are
+# constants in roomdiff/semantics.py)
+semantics:
+  model: Qwen/Qwen3-VL-8B-Instruct  # Hugging Face model id (weights from the local HF cache)
+  device: cuda           # bf16 on the GPU (16.3 GiB)
+  max_new_tokens: 256    # per answer (greedy decoding); the one polishing call gets 90 per change
+  image_max_side: 768    # px, every crop is resized to at most this on its longer side
+  enable_judge: true     # paired-crop verdicts: rejected changes move to "rejected"
+  enable_repair: true    # merge split changes of one object (removed + added -> moved, ...)
+  enable_polish: true    # one text-only call rewrites the template descriptions
+  repair_max_distance: 3.0  # m, removed + added/unverified centroids closer than this are re-paired ...
+  merge_max_distance: 1.0   # m, ... and a moved after-box absorbs an added box this close (box gap)
+  unclear_factor: 0.7    # confidence multiplier of an "unclear" verdict
 
 # M6: Rerun recording and static web viewer assets
 viz: {}
+
+# SceneDiff benchmark evaluation (`roomdiff eval`, roomdiff/eval_scenediff.py)
+eval:
+  data_root: data/scenediff/scenediff_benchmark  # pair folders in data/, splits in splits/
+  include_unverified: true  # also submit unverified changes (confidence <= 0.5, ranked last)
+  time_tol_s: 0.1        # sharp-mode keyframe -> benchmark frame round(t) if |t - round(t)| < this
+  run_mem: 10G           # memory cap of each `roomdiff run` (scripts/run_guarded.sh -g -m)
+  run_timeout_s: 1500    # timeout of each run in seconds (scripts/run_guarded.sh -t)

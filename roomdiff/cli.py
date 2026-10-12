@@ -10,6 +10,8 @@ import typer
 
 from roomdiff.config import Config, ConfigError, load_config
 
+TARGET_POINTS = 400_000  # viewer cloud size (roomdiff.viewer_export.TARGET_POINTS)
+
 app = typer.Typer(
     help="RoomDiff: what changed in the room between two phone videos?",
     no_args_is_help=True,
@@ -77,6 +79,12 @@ def changes(out: OutOpt, config: ConfigOpt = None, set_: SetOpt = None) -> None:
 
 
 @app.command()
+def describe(out: OutOpt, config: ConfigOpt = None, set_: SetOpt = None) -> None:
+    """Name, verify (VLM judge) and describe the changes with Qwen3-VL; write report.md."""
+    _describe_stage(out, _load_config(config, set_))
+
+
+@app.command()
 def run(
     before: BeforeOpt,
     after: AfterOpt,
@@ -84,7 +92,7 @@ def run(
     config: ConfigOpt = None,
     set_: SetOpt = None,
 ) -> None:
-    """Run ingest -> recon -> visibility -> instances -> changes -> viz."""
+    """Run ingest -> recon -> visibility -> instances -> changes -> describe -> viz -> viewer."""
     from roomdiff.ingest import ingest_pair
     from roomdiff.recon import run_recon
 
@@ -95,7 +103,9 @@ def run(
         "visibility": lambda: _visibility_stage(out, cfg),
         "instances": lambda: _instances_stage(out, cfg),
         "changes": lambda: _changes_stage(out, cfg),
+        "describe": lambda: _describe_stage(out, cfg),
         "viz": lambda: _viz_stage(out),
+        "viewer": lambda: _viewer_stage(out, TARGET_POINTS),
     }
     seconds = {}
     for name, stage in stages.items():
@@ -111,10 +121,56 @@ def viz(out: OutOpt) -> None:
     _viz_stage(out)
 
 
+@app.command()
+def viewer(
+    out: OutOpt,
+    target_points: Annotated[int, typer.Option(help="Max points per cloud.")] = TARGET_POINTS,
+) -> None:
+    """Export the static web viewer to <out>/viewer/ (serve it with python -m http.server)."""
+    _viewer_stage(out, target_points)
+
+
 @app.command("eval")
-def eval_(out: OutOpt) -> None:
-    """Evaluate a run against ground truth."""
-    _not_implemented("eval")
+def eval_(
+    pairs: Annotated[
+        str | None, typer.Option(help="Comma-separated SceneDiff pair folder names.")
+    ] = None,
+    split: Annotated[
+        str | None, typer.Option(help="Take the pairs of this split instead: val or test.")
+    ] = None,
+    subset: Annotated[
+        str, typer.Option("--set", help="Subset of --split: varied, kitchen or all.")
+    ] = "varied",
+    limit: Annotated[int | None, typer.Option(help="Only the first N pairs.")] = None,
+    out_root: Annotated[
+        Path, typer.Option(help="Runs, predictions and results are written here.")
+    ] = Path("outputs/scenediff_eval"),
+    skip_run: Annotated[
+        bool, typer.Option("--skip-run", help="Only reuse <out-root>/runs/<pair>/ outputs.")
+    ] = False,
+    config: ConfigOpt = None,
+    override: Annotated[
+        list[str] | None,
+        typer.Option("--override", "-o",
+                     help="Config override, also passed to every run, e.g. eval.time_tol_s=0.2."),
+    ] = None,
+) -> None:
+    """SceneDiff benchmark: run the pipeline with 1 s keyframes on each pair, write
+    object_masks.pkl and score it with the official evaluator (<out-root>/pred/summary.json)."""
+    from roomdiff.eval_scenediff import benchmark, data_root, select_pairs
+
+    cfg = _load_config(config, override)
+    if pairs:
+        names = [p.strip() for p in pairs.split(",") if p.strip()]
+    elif split in ("val", "test") and subset in ("varied", "kitchen", "all"):
+        names = select_pairs(data_root(cfg), split, subset)
+    else:
+        raise typer.BadParameter("give --pairs, or --split val|test with --set varied|kitchen|all")
+    names = names[:limit] if limit else names
+    missing = [p for p in names if not (data_root(cfg) / "data" / p).is_dir()]
+    if not names or missing:
+        raise typer.BadParameter(f"no such SceneDiff pair folder(s): {missing or names}")
+    benchmark(names, out_root, cfg, skip_run, config, override or [])
 
 
 def _visibility_stage(out: Path, cfg: Config) -> None:
@@ -137,6 +193,22 @@ def _changes_stage(out: Path, cfg: Config) -> None:
 
     run_changes(out, cfg)
     log_changes(out)
+
+
+def _describe_stage(out: Path, cfg: Config) -> None:
+    from roomdiff.report import write_report
+    from roomdiff.semantics import run_semantics  # the VLM loads only when needed
+    from roomdiff.viz_rerun import log_changes
+
+    run_semantics(out, cfg)
+    write_report(out)
+    log_changes(out)
+
+
+def _viewer_stage(out: Path, target_points: int) -> None:
+    from roomdiff.viewer_export import export_viewer
+
+    export_viewer(out, target_points)
 
 
 def _viz_stage(out: Path) -> None:

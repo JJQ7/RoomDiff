@@ -18,11 +18,13 @@ from roomdiff.cli import app
 from roomdiff.config import load_config
 from roomdiff.ingest import (
     candidate_stride,
+    fixed_targets,
     ingest_pair,
     iter_video_frames,
     motion_score,
     motion_thumbnail,
     probe_video,
+    select_fixed_keyframes,
     select_keyframes,
     sharpness,
 )
@@ -197,6 +199,50 @@ def test_select_resizes_to_max_side(pan_then_still_video):
     assert all(max(k.image.shape[:2]) == 64 for k in kfs)
 
 
+def grey_ramp_video(path: Path, n: int = 100) -> Path:
+    """`n` frames at 30 fps whose uniform grey level encodes the frame index (20 + 2 i)."""
+    return write_video(path, [np.full((48, 64, 3), 20 + 2 * i, np.uint8) for i in range(n)])
+
+
+def test_fixed_targets():
+    assert fixed_targets(3.0, 1.0) == [0.0, 1.0, 2.0, 3.0]
+    assert fixed_targets(2.99, 1.0) == [0.0, 1.0, 2.0]
+    assert fixed_targets(1.2, 0.5) == [0.0, 0.5, 1.0]
+    with pytest.raises(ValueError):
+        fixed_targets(3.0, 0.0)
+
+
+def test_select_fixed_keyframes_takes_the_frame_closest_to_each_target(tmp_path):
+    path = grey_ramp_video(tmp_path / "ramp.mp4")  # 100 frames = 3.33 s, static content
+    kfs = select_fixed_keyframes(path, 1.0, 1024)
+    assert [k.index for k in kfs] == [0, 30, 60, 90]  # no sharpness / motion filtering
+    assert [k.t_target for k in kfs] == [0.0, 1.0, 2.0, 3.0]
+    assert [k.benchmark_frame for k in kfs] == [0, 1, 2, 3]
+    for k in kfs:
+        assert k.timestamp == pytest.approx(k.t_target, abs=1 / 60)
+        assert k.image.shape == (48, 64, 3)
+        assert k.image.mean() == pytest.approx(20 + 2 * k.index, abs=2)
+
+    half = select_fixed_keyframes(path, 0.5, 32)
+    assert [k.index for k in half] == list(range(0, 91, 15))
+    assert [k.benchmark_frame for k in half] == [0, None, 1, None, 2, None, 3]
+    assert all(max(k.image.shape[:2]) == 32 for k in half)
+
+
+def test_ingest_pair_fixed_mode_records_benchmark_frames(tmp_path):
+    video = grey_ramp_video(tmp_path / "ramp.mp4", n=70)  # 2.33 s
+    cfg = load_config(overrides=["ingest.mode=fixed", "ingest.fixed_interval_s=1.0"])
+    index = ingest_pair(video, video, tmp_path / "out", cfg)
+    for name in ("before", "after"):
+        frames = index[name]["frames"]
+        assert [f["frame_index"] for f in frames] == [0, 30, 60]
+        assert [f["benchmark_frame"] for f in frames] == [0, 1, 2]
+        assert [f["t_target"] for f in frames] == [0.0, 1.0, 2.0]
+        assert len(list((tmp_path / "out" / "keyframes" / name).glob("*.jpg"))) == 3
+    with pytest.raises(ValueError, match="ingest.mode"):
+        ingest_pair(video, video, tmp_path / "bad", load_config(overrides=["ingest.mode=every"]))
+
+
 # ------------------------------------------------------------------------- outputs
 
 
@@ -229,7 +275,7 @@ def test_ingest_pair_writes_jpegs_and_index(tmp_path, pan_then_still_video):
     assert video["fps"] == pytest.approx(30.0) and video["duration"] == pytest.approx(1.0)
 
 
-def test_cli_ingest_and_unimplemented_commands(tmp_path, pan_then_still_video):
+def test_cli_ingest_and_eval_arguments(tmp_path, pan_then_still_video):
     runner, video, out = CliRunner(), str(pan_then_still_video), tmp_path / "out"
     args = ["--before", video, "--after", video, "--out", str(out)]
     overrides = ["--set", "ingest.num_keyframes=4", "-s", "ingest.min_motion=0"]
@@ -241,5 +287,5 @@ def test_cli_ingest_and_unimplemented_commands(tmp_path, pan_then_still_video):
     result = runner.invoke(app, ["ingest", *args, "--set", "ingest.num_keyframe=4"])
     assert result.exit_code == 2 and "num_keyframe" in result.output  # typo is reported
 
-    result = runner.invoke(app, ["eval", "--out", str(out)])
-    assert result.exit_code == 1 and "not implemented yet" in result.output
+    result = runner.invoke(app, ["eval"])  # needs --pairs or --split
+    assert result.exit_code == 2 and "--pairs" in result.output

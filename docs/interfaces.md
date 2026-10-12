@@ -116,7 +116,7 @@ it) and `transform` is null unless moved. `R`, `t` map before points to after po
 `rotation_deg` is null when the ICP fit is not trusted (symmetric 3 cm fitness below
 `icp_min_fitness`). Order: moved, removed, added, unverified; by confidence within a type.
 M4 writes `label: "object"`, a templated `description` and `vlm_verdict: null` (M5 fills
-them). Evidence keys: removed / added / unverified: `free_rays`, `free_frames_mean`,
+them, see below). Evidence keys: removed / added / unverified: `free_rays`, `free_frames_mean`,
 `observing_views` (keyframes of the other recording that saw through the place),
 `occ_points`, `mask_score`, `view_consistency` (+ `seen_in` for unverified); moved:
 `free_rays` (both places), `observing_views` (mean), `observing_views_before_place`,
@@ -135,7 +135,116 @@ crops plus `<id>_before_place.jpg` / `<id>_after_place.jpg` (the other recording
 `changes.rrd` / `scene.rrd`: boxes per change coloured by type, instance points, moved
 arrows (`roomdiff/viz_rerun.py`).
 
-## M5/M6 outputs
-`report.md` (summary + per-change sections with crops), `scene.rrd` (Rerun; written by
-`roomdiff viz`: reconstruction, M3 candidate blobs, M4 changes),
-`viewer/` (static web viewer assets: downsampled clouds, boxes, crops, changes.json).
+## M5 semantics -> `<out>/changes.json` (rewritten), `<out>/semantics/`, `<out>/report.md`
+Implemented (`roomdiff/semantics.py`, `roomdiff/vlm.py`, `roomdiff/report.py`, command
+`roomdiff describe`; parameters in `configs/default.yaml: semantics`; the prompts are
+constants in `roomdiff/semantics.py`). Qwen3-VL-8B-Instruct, bf16, greedy decoding, every
+crop resized to <= `image_max_side` px. The first run backs the M4 document up to
+`semantics/changes_m4.json`; later runs start from that backup (re-run `roomdiff changes`
+to refresh it). Steps: naming -> re-pairing -> judge -> descriptions -> summary.
+
+Changes keep the M4 schema and ids (stable, so ids have gaps where entries were rejected
+or merged); M5 sets or adds:
+* `label`: VLM name, normalised (lowercase, no article, cut at a preposition, <= 3 words);
+  `attributes` (colour / material), `object_description` (the VLM's sentence about the
+  object).
+* `evidence.vlm_verdict` "confirmed" | "unclear" (rejected entries move to `rejected`),
+  `evidence.vlm_reason`; unclear: `confidence` x `unclear_factor`. Moved: `motion_kind`
+  "rigid" | "deformed" | "unknown" and `evidence.vlm_motion_reason` (`motion_kind` is null
+  for the other types). Unverified regions are rejected unless the VLM sees a distinct
+  object (not wall / floor / door frame / window / mirror reflection / shadow / lighting).
+* Re-paired removed R + added or after-only unverified A (matching labels: same label,
+  head noun or synonym group; centroids < `repair_max_distance`; VLM: same object) -> one
+  `moved` change with R's id: `before` = R's side, `after` = A's, `transform` from the
+  centroids (`R` = I, `rotation_deg` / `icp_*` null), confidence = mean, `crops`
+  `before` = R's, `after` = A's, `before_place` = R's after view, `after_place` = A's
+  before view, `evidence.merged_from` [R, A] and `merged_types`.
+* A moved change M absorbing an added change P (matching labels, gap between the after
+  boxes <= `merge_max_distance`, VLM: parts of one object, e.g. a spread-out quilt):
+  `after` = union box (`instance_ids` [M's, P's], `n_points` summed, point-weighted
+  centroid), transform = centroid translation (rotation null), confidence = mean,
+  `evidence.merged_from` [M, P], `evidence.merged_part_reason`, `crops.after_part`.
+* `description`: one sentence (label, type, distance in m with one decimal, size, coarse
+  place "far left part of the room" along the mean camera direction, height of the lowest
+  observed part above the floor = median of the lowest 5 % of all valid points, evidence
+  counts), polished by one text-only VLM call if every number and the label survived;
+  `description_template` keeps the template sentence.
+
+Top level: `rejected` (same schema, `vlm_verdict` "rejected" + reason), `summary` =
+"N changes: a moved, b added, c removed; d unverified." + a VLM paragraph.
+`semantics/meta.json`: model, params, runtime per step, VLM calls and seconds, counts in /
+out, rejected (id, type, label, reason), merges (every VLM pair check: ids, labels,
+distance or box gap, verdict, reason), verdict per id, polished / template-kept counts,
+scene frame (up vector, floor height), `peak_vram_gb`, `peak_ram_gb`.
+`semantics/log.jsonl`: one line per VLM call `{tag, images, prompt, answer, seconds}`.
+`report.md`: title, summary, counts table, one section per change (type badge, label,
+confidence, verdict, motion, description, evidence line, crops as relative markdown
+images), collapsible rejected list with the VLM reasons, coverage note from
+`recon/meta.json`.
+
+## M6 outputs
+`scene.rrd` (Rerun; written by `roomdiff viz`: reconstruction, M3 candidate blobs,
+changes), `viewer/` (`roomdiff viewer`: static web viewer assets: downsampled clouds,
+boxes, crops, changes.json).
+
+## Evaluation (SceneDiff) -> `<out-root>/`
+Implemented (`roomdiff/eval_scenediff.py`, `roomdiff eval`, parameters in
+`configs/default.yaml: eval`). Scoring is done by the official, unmodified
+`third_party/scene_diff/scripts/evaluate_multiview.py` (MIT).
+
+Layout: `runs/<pair>/` (one `roomdiff run` per pair with `ingest.mode=fixed`, GPU-locked
+through `scripts/run_guarded.sh -g`; pairs that already have `changes.json` are skipped),
+`logs/<pair>.log`, `pred/<pair>/object_masks.pkl` + `prediction.json` (objects per type,
+masks per video, mapped benchmark frames, mask / GT / target sizes, aspect check),
+`pred/result_frame_dup_1_obj_dup_1.txt` (the evaluator appends the suffix),
+`pred/evaluator_log.txt`, `pred/summary.json` (`metrics`: `per_view_ap` = obj/im AP,
+`per_scene_ap` = obj/sc AP, `per_scene_ap_type` = obj/sc AP with type, `global_iou` =
+px/im IoU with pixel TP/FP/FN, object TP/FP/FN, `scenes`; plus `not_predicted`,
+`evaluator_errors` and the per-pair prediction stats).
+
+Pairs: folder names under `<eval.data_root>/data/`; `before` = `original_video1.*`,
+`after` = `original_video2.*` (raw phone videos; the `video{1,2}.mp4` re-encodes carry
+painted mask overlays and are never used). `write_prediction` refuses a run whose
+`keyframes/index.json` has the videos the other way round.
+
+Frames: the evaluator keeps GT frames whose index in the 30 fps re-encode is a multiple of
+30 and renumbers them k = index // 30, so GT frame k is time k s of the original video
+(time, not index: the originals run at e.g. 29.92 fps). Fixed ingest mode
+(`ingest.fixed_interval_s`, default 1.0) takes the decoded frame closest to every
+t = k * interval (no sharpness / motion filtering) and adds `t_target` and
+`benchmark_frame` (= round(t_target) when t_target is a whole second, else null) to each
+keyframe entry of `keyframes/index.json`. Sharp-mode keyframes (no `benchmark_frame`) map
+to k = round(timestamp) only if |timestamp - k| < `eval.time_tol_s` (0.1 s). Keyframes
+mapped to the same k: the closest in time is used.
+
+`object_masks.pkl` (pickle protocol 4, one per pair):
+```
+{"H": int, "W": int,                     # GT size scaled to max side 1024 (upright)
+ <change id>: {"video_1": {k: {"mask": {"size": [h, w], "counts": str}, "cost": float}},
+               "video_2": {...},
+               "label": 1 | 0}}          # 1 = moved, 0 = added / removed / unverified
+```
+One object per change of `changes.json` (`rejected` entries are not used): the
+before-instance masks of `instances/before_masks.npz` at mapped keyframes go to `video_1`,
+the after-instance masks to `video_2`; moved changes keep both keys (the evaluator derives
+the type from their presence), others have one. Unverified changes are included when
+`eval.include_unverified` (default true; their confidence is <= 0.5, so they rank after
+the verified changes and can only add recall to AP, but their pixels count in the global
+IoU). `cost` = change confidence x SAM mask score (the evaluator ranks per-view
+detections by it and objects by its mean). Changes without a mask at any mapped frame are
+left out. Masks are COCO RLE at the reconstruction resolution (upright, same aspect as
+the GT, e.g. 672 x 378 for 1920 x 1080 portrait GT; checked in `prediction.json:
+aspect_ok`); the evaluator resizes them with nearest neighbour. A failed run gets an
+empty prediction (`{"H", "W"}` only) so its GT objects count as misses: the evaluator
+silently drops scenes without `object_masks.pkl`.
+
+Evaluator quirks: (1) it imports `faiss` (not installed) through `utils.py`, used only for
+`--visualize True`; the launcher stubs that module. (2) It reads the split lists from the
+cwd-relative path `data/scenediff_benchmark/splits/`; it is run in `pred/_evaluator/` with
+split files listing exactly the requested pairs (`--splits val --sets all`). (3) It loads
+`segments.pkl` with plain `pickle.load`; it is given data-only copies
+(`pred/_evaluator/gt/`) made with a no-globals unpickler. (4) `get_target_hw_from_gt`
+reads the COCO size `[H, W]` as `(W, H)`, so portrait GT is scored on a landscape canvas
+(1920 x 1080 -> 576 x 1024); GT and predictions are stretched alike. (5) A scene that
+fails to load is printed as `Error loading scene ...` and skipped but still counted in
+`Scenes:`; such lines are collected in `summary.json: evaluator_errors`.

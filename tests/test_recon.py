@@ -384,6 +384,9 @@ def test_cli_run_chains_ingest_recon_visibility_viz(tmp_path, monkeypatch):
     import roomdiff.changes
     import roomdiff.ingest
     import roomdiff.instances
+    import roomdiff.report
+    import roomdiff.semantics
+    import roomdiff.viewer_export
     import roomdiff.visibility
     import roomdiff.viz_rerun
 
@@ -394,6 +397,9 @@ def test_cli_run_chains_ingest_recon_visibility_viz(tmp_path, monkeypatch):
                         lambda *a: calls.append("visibility"))
     monkeypatch.setattr(roomdiff.instances, "run_instances", lambda *a: calls.append("instances"))
     monkeypatch.setattr(roomdiff.changes, "run_changes", lambda *a: calls.append("changes"))
+    monkeypatch.setattr(roomdiff.semantics, "run_semantics", lambda *a: calls.append("semantics"))
+    monkeypatch.setattr(roomdiff.report, "write_report", lambda *a: calls.append("report"))
+    monkeypatch.setattr(roomdiff.viewer_export, "export_viewer", lambda *a: calls.append("viewer"))
     for name in ("log_visibility", "log_changes", "log_scene", "log_recon"):
         monkeypatch.setattr(roomdiff.viz_rerun, name, lambda *a, n=name: calls.append(n))
     video = tmp_path / "v.mp4"
@@ -402,5 +408,6 @@ def test_cli_run_chains_ingest_recon_visibility_viz(tmp_path, monkeypatch):
     result = CliRunner().invoke(app, args)
     assert result.exit_code == 0, result.output
     assert calls == ["ingest", "recon", "visibility", "log_visibility", "instances", "changes",
-                     "log_changes", "log_scene", "log_recon"]
+                     "log_changes", "semantics", "report", "log_changes", "log_scene",
+                     "log_recon", "viewer"]
     assert "[run] wall time: ingest" in result.output and "visibility" in result.output

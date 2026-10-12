@@ -13,6 +13,10 @@ Checked on a real portrait HEVC phone video with a -90 degree matrix (SceneDiff
 `living_room_1_living_room_2`): the frames match the ffmpeg CLI, OpenCV and the
 benchmark's own upright re-encode. The tests cover 0/90/180/270 degrees written with
 `ffmpeg -display_rotation`. Mirroring in the matrix is ignored (phones do not write it).
+
+Two keyframe modes (`ingest.mode`): `sharp` (default, `select_keyframes`) and `fixed`
+(`select_fixed_keyframes`): the decoded frame closest to every multiple of
+`ingest.fixed_interval_s`, as needed for the SceneDiff benchmark (ground truth at 1 fps).
 """
 
 from __future__ import annotations
@@ -59,6 +63,8 @@ class Keyframe:
     timestamp: float  # seconds from the start of the video
     image: np.ndarray = field(repr=False)  # upright RGB uint8, longer side <= max_side
     sharpness: float
+    t_target: float | None = None  # fixed mode: intended time k * interval (s)
+    benchmark_frame: int | None = None  # fixed mode: SceneDiff frame k (t_target = k s)
 
 
 # --------------------------------------------------------------------------- decoding
@@ -265,6 +271,48 @@ def select_keyframes(
     return _drop_static(picks, min_motion, min_keep)
 
 
+def fixed_targets(duration: float, interval_s: float) -> list[float]:
+    """Target times `k * interval_s` for k = 0, 1, 2, ... while `k * interval_s <= duration`."""
+    if interval_s <= 0:
+        raise ValueError("fixed_interval_s must be positive")
+    count = math.floor(max(duration, 0.0) / interval_s + 1e-6) + 1
+    return [k * interval_s for k in range(count)]
+
+
+def select_fixed_keyframes(
+    video_path: str | Path, interval_s: float = 1.0, max_side: int = 1024
+) -> list[Keyframe]:
+    """One keyframe per target time `t_k = k * interval_s` (k = 0, 1, ... while `t_k <=`
+    duration): the decoded frame whose timestamp is closest to `t_k` (ties: the earlier
+    one), with no sharpness or motion filtering. Images are resized to `max_side`.
+
+    `benchmark_frame` is `round(t_k)` when `t_k` is a whole second (every keyframe for
+    `interval_s = 1`, then it equals k) and None otherwise: the SceneDiff evaluator keeps
+    every 30th frame of its 30 fps re-encode, so its frame k shows time k s.
+    """
+    targets = fixed_targets(probe_video(video_path).duration, interval_s)
+    picks: list[Keyframe] = []
+    prev: tuple[int, float, np.ndarray] | None = None
+    for frame in iter_video_frames(video_path):
+        while len(picks) < len(targets) and targets[len(picks)] <= frame[1]:
+            target = targets[len(picks)]
+            use_prev = prev is not None and target - prev[1] <= frame[1] - target
+            picks.append(_fixed_keyframe(prev if use_prev else frame, target, max_side))
+        prev = frame
+    while prev is not None and len(picks) < len(targets):  # targets after the last frame
+        picks.append(_fixed_keyframe(prev, targets[len(picks)], max_side))
+    return picks
+
+
+def _fixed_keyframe(
+    frame: tuple[int, float, np.ndarray], target: float, max_side: int
+) -> Keyframe:
+    index, t, rgb = frame
+    whole = abs(target - round(target)) < 1e-6
+    return Keyframe(index, t, _downscale(rgb, max_side), sharpness(rgb), target,
+                    round(target) if whole else None)
+
+
 def _drop_static(
     picks: list[tuple[Keyframe, np.ndarray]], min_motion: float, min_keep: int
 ) -> list[Keyframe]:
@@ -310,16 +358,18 @@ def write_keyframes(
         name = f"{prefix}_{i:05d}.jpg"
         Image.fromarray(kf.image).save(out_dir / name, quality=jpeg_quality)
         height, width = kf.image.shape[:2]
-        frames.append(
-            {
-                "file": name,
-                "frame_index": kf.index,
-                "timestamp": round(kf.timestamp, 4),
-                "sharpness": round(kf.sharpness, 2),
-                "width": width,
-                "height": height,
-            }
-        )
+        entry = {
+            "file": name,
+            "frame_index": kf.index,
+            "timestamp": round(kf.timestamp, 4),
+            "sharpness": round(kf.sharpness, 2),
+            "width": width,
+            "height": height,
+        }
+        if kf.t_target is not None:  # fixed mode
+            entry["t_target"] = round(kf.t_target, 4)
+            entry["benchmark_frame"] = kf.benchmark_frame
+        frames.append(entry)
     record = {"video": asdict(video) if video else None, "frames": frames}
     (out_dir / "index.json").write_text(json.dumps(record, indent=2))
     return record
@@ -333,9 +383,13 @@ def ingest_pair(
 ) -> dict[str, Any]:
     """Select and write keyframes of both videos; write `<out>/keyframes/index.json`.
 
-    `cfg` is the full config; only its `ingest` section is used. Returns the index.
+    `cfg` is the full config; only its `ingest` section is used (`mode`: "sharp", the
+    default, or "fixed"). Returns the index.
     """
     params = cfg["ingest"]
+    mode = params.get("mode", "sharp")
+    if mode not in ("sharp", "fixed"):
+        raise ValueError(f"ingest.mode must be 'sharp' or 'fixed', got {mode!r}")
     paths = OutputPaths(out_dir)
     start = time.perf_counter()
     index: dict[str, Any] = {"params": dict(params)}
@@ -343,28 +397,36 @@ def ingest_pair(
     for name, video_path in zip(RECORDINGS, (before_path, after_path)):
         t0 = time.perf_counter()
         info = probe_video(video_path)
-        keyframes = select_keyframes(
-            video_path,
-            num_keyframes=params["num_keyframes"],
-            max_side=params["max_side"],
-            sharpness_window=params["sharpness_window"],
-            min_motion=params["min_motion"],
-        )
+        if mode == "fixed":
+            keyframes = select_fixed_keyframes(
+                video_path, params["fixed_interval_s"], params["max_side"]
+            )
+        else:
+            keyframes = select_keyframes(
+                video_path,
+                num_keyframes=params["num_keyframes"],
+                max_side=params["max_side"],
+                sharpness_window=params["sharpness_window"],
+                min_motion=params["min_motion"],
+            )
         record = write_keyframes(
             keyframes, paths.keyframes_of(name), name, info, params["jpeg_quality"]
         )
         seconds = time.perf_counter() - t0
         index[name] = {"dir": name, "wall_time_s": round(seconds, 2), **record}
 
-        stride = candidate_stride(
-            max(info.num_frames, 1), params["num_keyframes"], params["sharpness_window"]
-        )
+        if mode == "fixed":
+            selection = f"one frame every {params['fixed_interval_s']} s"
+        else:
+            stride = candidate_stride(
+                max(info.num_frames, 1), params["num_keyframes"], params["sharpness_window"]
+            )
+            selection = f"{math.ceil(info.num_frames / stride)} candidates"
         mean_sharpness = float(np.mean([k.sharpness for k in keyframes]))
         print(
             f"[ingest] {name}: {info.num_frames} frames decoded "
             f"({info.width}x{info.height}, {info.fps:.2f} fps, {info.duration:.1f} s, "
-            f"rotation {info.rotation} deg, {info.backend}), "
-            f"{math.ceil(info.num_frames / stride)} candidates, "
+            f"rotation {info.rotation} deg, {info.backend}), {selection}, "
             f"{len(keyframes)} keyframes kept, mean sharpness {mean_sharpness:.1f}, "
             f"{seconds:.1f} s"
         )
