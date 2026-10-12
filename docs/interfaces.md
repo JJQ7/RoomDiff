@@ -5,7 +5,7 @@ Coordinates: OpenCV camera convention (x right, y down, z forward); world frame 
 shared frame produced by the joint reconstruction, levelled by M2 (`recon.level_world`,
 default on; `levelled` in `recon/meta.json`): +Y up (against gravity), the floor plane at
 y = 0 and the first before-camera's optical axis projected onto +Z (so +X is to its left),
-then, with `recon.snap_to_walls` (default on) and a clear wall direction, turned about +Y
+then, with `recon.snap_to_walls` (default off) and a clear wall direction, turned about +Y
 so that the dominant wall direction lies along +X / +Z (`walls_snapped`; the first camera
 then looks within 45 degrees of +Z). Without levelling the frame is Pi3X's (roughly the
 first camera). Units = metres as
@@ -76,14 +76,29 @@ excluded. Per blob: `id, type, voxels, volume_m3, centroid, aabb [[min], [max]]`
 `evidence {free_frames_mean` (mean free_count of the other recording over the blob),
 `occ_points` (points of the own recording), `observing_views` (keyframes of the other
 recording that saw past the centroid), `min_camera_distance` (centroid to the nearest
-camera of the other recording)`}`, `views {before, after}`: best keyframes of the centroid
-(`frame` index into recon.npz, `file`, `occluded`, projected `box` [x0,y0,x1,y1],
+camera of the other recording)`}`, `views {before, after}`: the `debug_views` best
+keyframes of the blob's voxel centres by the view scorer below (own recording: voxels
+depth-consistent within `occlusion_tol`; other recording: not occluded) (`frame` index
+into recon.npz, `file`, `occluded` (fewer than 15 % of the voxels visible),
+`visible_fraction`, `box` [x0,y0,x1,y1] = 2D box of the projected voxel centres,
 `crop` = `debug/blob_<id>_<type>_<rec>_<k>.jpg`).
+
+View scorer (`roomdiff.projection.score_views`, used for the M3 debug crops, the M4 SAM
+prompting views and the M4 crops): per keyframe, the object's points (blob voxel centres
+or instance points; a fixed subset of at most 2000) are projected; a point is visible if
+it lands on a valid pixel whose depth is within the tolerance of its own (object views),
+or not more than the tolerance in front of it (views of the place in the other
+recording). Score = area of the 2D box of the visible points x visible fraction x 0.8
+if the projected object touches the image border x (1 - 0.2 e cos^2 a), e = elongation of
+the object's footprint (1 - minor / major variance of x-z), a = angle between the
+horizontal viewing ray and its long horizontal axis. Everything is measured in the
+images, so the ranking does not change when the world frame is turned about +Y
+(`tests/test_visibility.py`); the previous ranking by the projected axis-aligned box did.
 
 `meta.json`: parameters used, voxel size source, grid, voxels per state, candidate voxel
 counts (raw / after opening / in blobs), blobs per type, runtime, peak VRAM.
 `visibility.rrd`: blobs as Rerun boxes. Projection helpers for later stages:
-`roomdiff/projection.py` (`project_to_pixels`, `project_aabb`, `best_views`).
+`roomdiff/projection.py` (`project_to_pixels`, `project_aabb`, `score_views`, `best_views`).
 
 ## M4 instances + changes -> `<out>/instances/`, `<out>/changes.json`, `<out>/crops/`
 Implemented (`roomdiff/instances.py`, `roomdiff/changes.py`, model wrappers in
@@ -91,7 +106,26 @@ Implemented (`roomdiff/instances.py`, `roomdiff/changes.py`, model wrappers in
 
 Instances are built per recording `<rec>` from the M3 blobs occupied in it (disappeared
 -> before, appeared -> after, unverified_<rec> -> <rec>): SAM 2.1 masks in up to `n_views`
-keyframes, lifted to 3D, fragments merged: first by overlap (mask IoU > `merge_mask_iou`
+keyframes (best by the view scorer on the blob voxels, at least 15 % of them visible,
+viewing directions `min_view_angle` apart; prompt = box of the projected voxels enlarged
+by `box_enlarge` + up to `n_prompt_points` depth-visible voxels; the best-scoring mask
+with >= 50 % of its pixels in the box; up to `mask_grow_rounds` (3) times, a mask that
+reaches a side of the prompt box not on the image border (pixels within 2 px spanning
+>= 25 % of the mask's extent along it) is re-prompted with the box extended by its own
+size on those sides, keeping the new mask only if it contains >= 80 % of the old one:
+the object continues beyond the blob, e.g. the top of a ladder whose blob is its lower
+half; the view's `box` is the final prompt box), lifted to 3D per view:
+all valid-depth mask pixels, binned into `lift_cell_m` (1.5 cm) cells linked when at most
+`lift_link_m` (3 cm) apart; the connected components holding at least 10 % of the blob
+voxels that touch a cell (within half a voxel diagonal + one cell) are kept, minus points
+on static surfaces (`drop_static`: inside a voxel, dilated by one, that the other
+recording occupies) unless within `near_voxel_m` of a blob voxel. If the outlier-filtered
+rest spans an oriented box more than `max_growth` (6) times the blob's (`floor_obb` of the
+voxel centres grown by one voxel on every side: M3 trims blobs near the other recording's
+surfaces), misses the blob or is empty, that view falls back to
+the bounded rule (points in the blob box expanded by `expand_m` and not static, or within
+`near_voxel_m` of a blob voxel) and the instance gets `lift_fallback` true. Then the
+fragments are merged: first by overlap (mask IoU > `merge_mask_iou`
 in a shared keyframe, or more than `merge_point_frac` of one's points within
 `merge_point_dist` of the other), then touching fragments of the same kind (a chair seat
 and its base): at least `merge_gap_frac` of the smaller one's points within `merge_gap_m`
@@ -113,7 +147,7 @@ prompted keyframe: `frame` index into recon.npz, `file`, prompt `box`, `mask_box
 `view_consistency` (mean pairwise cosine of the per-view features, null for one view),
 `feature_index` (row in the feature files = id - 1), `n_frame_masks`, `merged_from`
 (blob ids of each part joined by the gap rule, e.g. [[7, 18], [11]]; empty if none),
-`evidence`
+`lift_fallback` (some view of a part used the bounded lifting), `evidence`
 (aggregated over the source blobs, verified ones if any: `voxels`, `volume_m3`,
 `free_rays` = sum over blob voxels of the other recording's free count, voxel-weighted
 `free_frames_mean`, max `observing_views`, summed `occ_points`, `min_camera_distance`).
@@ -122,14 +156,20 @@ pooled inside the eroded masks, averaged over views. `instances/<rec>_cls.npy` (
 CLS token of the best view's mask box crop. `instances/<rec>_points.npz`: `points` (M, 3)
 float32 (1 cm voxels), `colors` (M, 3) uint8, `instance` (M,) int32 id.
 `instances/<rec>_masks.npz`: one row per (keyframe, instance) where the instance is
-visible (>= `frame_visible_frac` of its points depth-consistent): `keyframe` (file name),
+visible (>= `frame_visible_frac` of its points depth-consistent; SAM prompted with the
+box and up to `frame_prompt_points` of those projected instance points, so the masks
+follow the grown instance): `keyframe` (file name),
 `instance_id`, `score` (SAM), `rle` (COCO RLE counts string), `size` [H, W] (recon
 resolution); read with `roomdiff.instances.load_masks` / `decode_rle`.
 `instances/meta.json`: parameters, selected / dropped blobs with the reason (small or
 too large unverified, hidden surface, no clear view, no mask, too few points), fragment
-and instance counts, `gap_merges` (per gap-rule merge: `recording`, `kind`, `parts` (blob
+and instance counts, `lift_fallbacks` (per recording: blob ids whose lifting fell back),
+`lift_growth` (per blob id: the growth ratio of each prompted view, null without a
+connected part), `gap_merges` (per gap-rule merge: `recording`, `kind`, `parts` (blob
 ids of both), `near_fraction`, `union_obb_extents`), runtime, peak VRAM. `instances/matching.json`: cosine and cost
-matrices of the moved candidates and the accepted pairs.
+matrices of the moved candidates and the accepted pairs (cost = 1 - cosine +
+`lambda_size` |log volume ratio|; volumes and the extent-ratio test use the `obb`
+extents, which do not change when the world frame turns about +Y).
 
 `changes.json`:
 ```json
@@ -143,7 +183,8 @@ matrices of the moved candidates and the accepted pairs.
                 "obb": {"center": [x,y,z], "extents": [w,h,d], "yaw_deg": 12.5},
                 "n_points": 5120, "blob_ids": [9, 14]},
      "after":  {"instance_id": 7, "centroid": [x,y,z], "aabb": [[...],[...]], ...},
-     "transform": {"translation_m": 0.92, "rotation_deg": 31.0, "R": [[...]], "t": [...],
+     "transform": {"translation_m": 0.92, "rotation_deg": 31.0, "rotation_reliable": true,
+                   "R": [[...]], "t": [...],
                    "icp_fitness": 0.82, "icp_rmse": 0.012},
      "evidence": {"free_rays": 412, "observing_views": 9, "appearance_similarity": 0.81,
                   "vlm_verdict": "same object, moved"},
@@ -158,8 +199,13 @@ kept for compatibility); `before` / `after` is null on the side where the object
 not exist (removed: after, added: before, unverified: the recording that never observed
 it) and `transform` is null unless moved. `R`, `t` map before points to after points
 (`x_after = R x_before + t`); `translation_m` = displacement of the before centroid;
-`rotation_deg` is null when the ICP fit is not trusted (symmetric 3 cm fitness below
-`icp_min_fitness`). Order: moved, removed, added, unverified; by confidence within a type.
+`icp_fitness` = symmetric 3 cm fitness (smaller of the two inlier fractions); from
+`icp_min_fitness` (0.3) on the ICP motion is used and `rotation_deg` reported, with
+`rotation_reliable` true from `icp_reliable_fitness` (0.5) on and false below (the angle
+is then shown as "rotation (unreliable)" in the report and viewer and never quoted in a
+description); below `icp_min_fitness` `R` = I, `t` = centroid difference,
+`rotation_deg` null and `rotation_reliable` false (also for transforms built by M5
+re-pairing / merging). Order: moved, removed, added, unverified; by confidence within a type.
 M4 writes `label: "object"`, a templated `description` and `vlm_verdict: null` (M5 fills
 them, see below). Evidence keys: removed / added / unverified: `free_rays`, `free_frames_mean`,
 `observing_views` (keyframes of the other recording that saw through the place),
@@ -173,10 +219,13 @@ both places), S_cons = view consistency (0.5 if unknown; moved: mean of both);
 unverified: 0.5 (w_mask S_mask + w_consistency S_cons) / (w_mask + w_consistency) <= 0.5.
 Crops (paths relative to `<out>`; JPEG from the full-resolution keyframes, object box
 x `crop_context`, at least `crop_min_px` per side): `<id>_<rec>.jpg` shows the object in its
-own recording with mask outline and box; the other side shows the other recording looking
-at the same 3D box (the empty place or the new object). Moved objects have both object
-crops plus `<id>_before_place.jpg` / `<id>_after_place.jpg` (the other recording at the old
-/ new place). A side is missing if no keyframe of that recording sees the box.
+own recording with mask outline and box (keyframe = best by the view scorer on the
+instance points, depth-consistent within 5 cm; keyframes with a stored per-keyframe mask
+first, ranked by score x SAM score); the other side shows the other recording looking at
+the same place (best by the view scorer, points not occluded, at least 15 % visible; box
+= the projected points), i.e. the empty place or the new object. Moved objects have both
+object crops plus `<id>_before_place.jpg` / `<id>_after_place.jpg` (the other recording at
+the old / new place). A side is missing if no keyframe of that recording sees the place.
 `changes.rrd` / `scene.rrd`: boxes per change coloured by type (the `obb` when present,
 else the AABB), labelled "<id> <type>: <label>", instance points, moved arrows from the
 before to the after box centre (`roomdiff/viz_rerun.py`); world view coordinates LUF
@@ -204,17 +253,21 @@ or merged); M5 sets or adds:
 * A `moved` change (M4 geometric match or re-pairing) whose match the judge rejects is not
   dropped: it is split into a `removed` change (its `before` side; id = the moved id, or
   the first merged candidate's) and an `added` change (its `after` side; id = the second
-  merged candidate's, else the next unused id), each named again from its own crop, with
-  `confidence` = moved confidence x `split_factor` (0.6), `vlm_verdict` "unclear",
-  `vlm_reason` "appearance judge did not confirm the match: <judge reason>",
-  `evidence.split_from` = the moved id, `transform` / `motion_kind` null, crops: removed
-  `before` / `after` = moved `before` / `before_place`, added `after` / `before` = moved
-  `after` / `after_place`; the other evidence keys come from the instance record (as M4
-  writes them for removed / added) or, without it, from the moved per-place evidence
-  (`observing_views`, `mask_score`). The halves then go through re-pairing once more
-  (both steps below), only in pairs with another change, never with each other: a
-  wrong M4 match can so become the right one (office_1: wrong chair pair split, the small
-  chair's halves re-paired).
+  merged candidate's, else the next unused id), each named again from its own crop and
+  judged like any removed / added change (the removed / added prompt with the object
+  crop and the other recording's view of the place; the object test without one):
+  "confirmed" keeps the moved confidence, "unclear" gives confidence x `split_factor`
+  (0.6), "rejected" (e.g. the half is a wall region) moves the half to `rejected`;
+  `vlm_verdict` / `vlm_reason` are the half's own, `evidence.split_from` = the moved id,
+  `evidence.split_reason` "appearance judge did not confirm the match: <judge reason>",
+  `transform` / `motion_kind` null, crops: removed `before` / `after` = moved `before` /
+  `before_place`, added `after` / `before` = moved `after` / `after_place`; the other
+  evidence keys come from the instance record (as M4 writes them for removed / added) or,
+  without it, from the moved per-place evidence (`observing_views`, `mask_score`). The
+  kept halves then go through fragment merging and re-pairing once more (the steps
+  below), only in pairs with another change, never with each other: a wrong M4 match can
+  so become the right one (office_1: wrong chair pair split, the small chair's halves
+  re-paired, the large chair's upper half joined with its separately found base).
 * Fragments of one object (`enable_fragment_merge`): two `removed` (or two `added`)
   changes with matching labels whose oriented boxes are at most `fragment_gap_m` (0.15 m)
   apart (exact gap of the two vertical prisms) are shown to the VLM with both owner crops
@@ -237,7 +290,7 @@ or merged); M5 sets or adds:
   `before` = R's, `after` = A's, `before_place` = R's after view, `after_place` = A's
   before view, `evidence.merged_from` [R, A] and `merged_types`.
 * A moved change M absorbing an added change P (matching labels, gap between the after
-  boxes <= `merge_max_distance`, VLM: parts of one object, e.g. a spread-out quilt):
+  boxes (oriented boxes if present) <= `merge_max_distance`, VLM: parts of one object, e.g. a spread-out quilt):
   `after` = union box (`instance_ids` [M's, P's], `n_points` summed, point-weighted
   centroid, `obb` = oriented box around the corners of both `obb`s), transform =
   centroid translation (rotation null), confidence = mean, `evidence.merged_from` [M, P],
@@ -255,7 +308,8 @@ Top level: `rejected` (same schema, `vlm_verdict` "rejected" + reason), `summary
 out, rejected (id, type, label, reason), merges (every VLM pair check: kind, ids,
 labels, distance or box gap, verdict, reason; fragment checks also the VLM's `label`),
 splits (rejected moved changes: `id`, `label`,
-`into` [removed id, added id], `labels`, `reason`), verdict per id, polished /
+`into` [removed id, added id], `labels`, `reason`, `verdicts` of the two halves), verdict
+per id, polished /
 template-kept counts, scene frame (up vector: +Y in a levelled frame, else the camera
 estimate; floor height), `peak_vram_gb`, `peak_ram_gb`.
 `semantics/log.jsonl`: one line per VLM call `{tag, images, prompt, answer, seconds}`.

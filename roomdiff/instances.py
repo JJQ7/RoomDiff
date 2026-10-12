@@ -3,12 +3,15 @@
 Each selected blob (all disappeared / appeared blobs and the large unverified ones) is
 handled in its *owner* recording (where it is occupied):
 
-1. keyframes that see the blob well are chosen (centroid in view, blob not occluded,
-   large projected box, varied viewpoints);
-2. SAM 2.1 is prompted there with the blob's projected box and its depth-visible voxel
-   centres; the best mask that stays inside the box is kept;
-3. the mask pixels are lifted to 3D with the reconstructed depth and filtered to the
-   blob's neighbourhood (static surfaces shared with the other recording are dropped);
+1. keyframes that see the blob well are chosen (`roomdiff.projection.score_views` on its
+   voxel centres: large, depth-consistent and uncut in the image; varied viewpoints);
+2. SAM 2.1 is prompted there with the box of the projected voxel centres and the
+   depth-visible ones; the best mask that stays inside the box is kept; a mask that
+   reaches a side of the box is re-prompted with the box extended on that side (the
+   object continues beyond the blob), as long as the new mask contains the old one;
+3. all valid-depth mask pixels are lifted to 3D; the connected component(s) holding the
+   blob are kept, minus static surfaces shared with the other recording (a mask that
+   grew far beyond the blob falls back to the blob's neighbourhood, `lift_fallback`);
 4. fragments of one object are merged (shared-view mask IoU or 3D overlap), then
    touching fragments of the same kind (a chair seat and its base) if the union stays
    object-sized (`merge_close_fragments`);
@@ -38,16 +41,19 @@ from scipy.spatial import cKDTree
 from roomdiff.geometry import floor_obb, unproject_depth, voxel_downsample
 from roomdiff.models import Featurizer, Segmenter
 from roomdiff.paths import RECORDINGS, OutputPaths
-from roomdiff.projection import best_views, project_aabb, project_to_pixels
+from roomdiff.projection import MIN_VISIBLE_FRAC, project_to_pixels, score_views, subsample
 from roomdiff.recon import load_recon
 from roomdiff.visibility import CANDIDATE_TYPES, OCCUPIED, load_grid
 
 VERIFIED_TYPES = ("disappeared", "appeared")
 MIN_MASK_IN_BOX = 0.5  # a SAM mask must have at least this fraction of its pixels in the box
-MIN_VISIBLE_FRAC = 0.15  # a view must see at least this fraction of the blob unoccluded
 MAX_PROJECTED = 2000  # points projected per view test (random subset)
 OUTLIER_RADIUS = 0.03  # m; lifted points with fewer than OUTLIER_MIN_NEIGHBOURS other ...
 OUTLIER_MIN_NEIGHBOURS = 3  # ... points within this radius are dropped
+SEED_SHARE = 0.1  # lifting keeps the components holding at least this share of the blob voxels
+GROW_EDGE_PX = 2  # a mask within this many px of a prompt box side reaches it ...
+GROW_TOUCH_SPAN = 0.25  # ... if those pixels span this share of the mask's extent along the side
+GROW_KEEP = 0.8  # a re-prompted (grown) mask must contain this share of the previous one
 
 PointTest = Callable[[np.ndarray], np.ndarray]  # world points (M, 3) -> bool (M,)
 
@@ -79,6 +85,8 @@ class Instance:
     view_consistency: float | None = None
     frame_masks: list[tuple[int, dict[str, Any], float]] = field(default_factory=list)
     merged_from: list[list[int]] = field(default_factory=list)  # blob ids per gap-merged part
+    lift_fallback: bool = False  # some view's mask grew too far: bounded lifting was used
+    lift_growth: list[float | None] = field(default_factory=list)  # per view (`growth`)
 
     @property
     def blob_ids(self) -> list[int]:
@@ -150,12 +158,6 @@ def static_surface_test(grid: Mapping[str, Any], other: int) -> PointTest:
 # ------------------------------------------------------------------ views and SAM
 
 
-def _subsample(points: np.ndarray, n: int, seed: int = 0) -> np.ndarray:
-    if len(points) <= n:
-        return points
-    return points[np.random.default_rng(seed).choice(len(points), n, replace=False)]
-
-
 def project_with_depth(
     points: np.ndarray, frame: int, recon: Mapping[str, Any]
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
@@ -171,50 +173,37 @@ def project_with_depth(
 
 def select_views(
     points: np.ndarray, frames: Sequence[int], recon: Mapping[str, Any], n_views: int,
-    occlusion_tol: float, min_angle_deg: float,
+    depth_tol: float, min_angle_deg: float, on_surface: bool = True,
 ) -> list[tuple[int, tuple[int, int, int, int]]]:
-    """Up to `n_views` keyframes `(frame, projected AABB box)` that see `points` well.
+    """Up to `n_views` keyframes `(frame, box)` that show the object `points` well; `box`
+    = 2D box of the points projecting inside the image.
 
-    Candidates come from `best_views` (centroid inside the image and not hidden behind a
-    surface farther than half the box diagonal in front of it). They are ranked by
-    projected box area x fraction of points not occluded (observed depth >= point depth -
-    `occlusion_tol`), then picked greedily so that the viewing directions differ by at
-    least `min_angle_deg`; remaining slots are filled by rank.
+    Views are ranked by `roomdiff.projection.score_views` (box area of the visible
+    points x visible fraction x border / frontal factors; visible = depth-consistent
+    within `depth_tol`, or with `on_surface` False not occluded) and need at least
+    `MIN_VISIBLE_FRAC` of the points visible; they are then picked greedily so that the
+    viewing directions differ by at least `min_angle_deg`, remaining slots by rank. All of
+    it is independent of the world frame.
     """
     if len(points) == 0 or len(frames) == 0:
         return []
-    height, width = recon["depth"].shape[1:]
-    lo, hi = points.min(0), points.max(0)
-    centroid = points.mean(0)
-    tol = occlusion_tol + 0.5 * float(np.linalg.norm(hi - lo))
-    seen = best_views(centroid, frames, recon["cam2world"], recon["K"], recon["depth"],
-                      len(frames), tol)
-    sample = _subsample(points, MAX_PROJECTED)
-    ranked = []
-    for frame, occluded in seen:
-        box = project_aabb(lo, hi, recon["K"][frame], recon["cam2world"][frame], width, height)
-        if occluded or box is None:
-            continue
-        _, _, z, inside, depth, _ = project_with_depth(sample, frame, recon)
-        visible = float((inside & (depth >= z - occlusion_tol)).mean())
-        if visible < MIN_VISIBLE_FRAC:
-            continue
-        area = (box[2] - box[0]) * (box[3] - box[1])
-        ranked.append((area * visible, frame, box))
-    ranked.sort(key=lambda r: -r[0])
+    ranked = [v for v in score_views(points, frames, recon["cam2world"], recon["K"],
+                                     recon["depth"], recon["valid"], depth_tol, on_surface)
+              if v.visible >= MIN_VISIBLE_FRAC]
+    centroid = np.asarray(points, np.float64).mean(0)
     directions = {}
-    for _, frame, _ in ranked:
-        d = recon["cam2world"][frame][:3, 3] - centroid
-        directions[frame] = d / max(np.linalg.norm(d), 1e-9)
+    for v in ranked:
+        d = recon["cam2world"][v.frame][:3, 3] - centroid
+        directions[v.frame] = d / max(np.linalg.norm(d), 1e-9)
     min_cos = np.cos(np.radians(min_angle_deg))
     chosen: list[tuple[int, tuple[int, int, int, int]]] = []
-    for _, frame, box in ranked:
-        if len(chosen) < n_views and all(directions[frame] @ directions[f] < min_cos
+    for v in ranked:
+        if len(chosen) < n_views and all(directions[v.frame] @ directions[f] < min_cos
                                          for f, _ in chosen):
-            chosen.append((frame, box))
-    for _, frame, box in ranked:
-        if len(chosen) < n_views and all(frame != f for f, _ in chosen):
-            chosen.append((frame, box))
+            chosen.append((v.frame, v.box))
+    for v in ranked:
+        if len(chosen) < n_views and all(v.frame != f for f, _ in chosen):
+            chosen.append((v.frame, v.box))
     return chosen
 
 
@@ -249,39 +238,88 @@ def prompt_points(cols: np.ndarray, rows: np.ndarray, k: int, seed: int = 0) -> 
 
 
 def pick_mask(
-    masks: np.ndarray, scores: np.ndarray, box: Sequence[int]
+    masks: np.ndarray, scores: np.ndarray, box: Sequence[int],
+    contain: np.ndarray | None = None,
 ) -> tuple[np.ndarray, float] | None:
     """Highest-scoring non-empty mask with at least `MIN_MASK_IN_BOX` of its pixels inside
-    `box`, or None."""
+    `box` (and, if given, `GROW_KEEP` of the pixels of the mask `contain`), or None."""
     x0, y0, x1, y1 = box
     best = None
     for mask, score in zip(masks, scores):
         area = int(mask.sum())
         if area == 0 or mask[y0:y1 + 1, x0:x1 + 1].sum() < MIN_MASK_IN_BOX * area:
             continue
+        if contain is not None and (mask & contain).sum() < GROW_KEEP * contain.sum():
+            continue
         if best is None or score > best[1]:
             best = (mask, float(score))
     return best
 
 
+def touched_sides(
+    mask: np.ndarray, box: Sequence[int], width: int, height: int
+) -> tuple[bool, bool, bool, bool]:
+    """(left, top, right, bottom): the mask reaches that side of `box` (pixels within
+    `GROW_EDGE_PX`, spanning at least `GROW_TOUCH_SPAN` of the mask's extent along it) and
+    the side is not on the image border, so the object may continue beyond the box."""
+    x0, y0, x1, y1 = box
+    rows, cols = np.nonzero(mask[y0:y1 + 1, x0:x1 + 1])
+    if len(rows) == 0:
+        return False, False, False, False
+    h, w = rows.max() - rows.min() + 1, cols.max() - cols.min() + 1
+
+    def reaches(values: np.ndarray, extent: int) -> bool:
+        return bool(len(values)) and values.max() - values.min() + 1 >= GROW_TOUCH_SPAN * extent
+
+    return (x0 > 0 and reaches(rows[cols <= GROW_EDGE_PX], h),
+            y0 > 0 and reaches(cols[rows <= GROW_EDGE_PX], w),
+            x1 < width - 1 and reaches(rows[cols >= x1 - x0 - GROW_EDGE_PX], h),
+            y1 < height - 1 and reaches(cols[rows >= y1 - y0 - GROW_EDGE_PX], w))
+
+
+def grow_box(
+    box: Sequence[int], sides: Sequence[bool], width: int, height: int
+) -> tuple[int, int, int, int]:
+    """`box` extended by its own width / height on each side in `sides` (left, top,
+    right, bottom), clipped to the image."""
+    x0, y0, x1, y1 = (int(v) for v in box)
+    bw, bh = x1 - x0 + 1, y1 - y0 + 1
+    left, top, right, bottom = sides
+    return (max(0, x0 - bw) if left else x0, max(0, y0 - bh) if top else y0,
+            min(width - 1, x1 + bw) if right else x1, min(height - 1, y1 + bh) if bottom else y1)
+
+
 def segment_view(
     segmenter: Segmenter, recon: Mapping[str, Any], frame: int, voxels: np.ndarray,
     box: Sequence[int], box_enlarge: float, n_points: int, depth_tol: float,
+    grow_rounds: int = 0,
 ) -> View | None:
     """SAM mask of the blob in one keyframe: prompt = projected box enlarged by
     `box_enlarge` plus up to `n_points` projected voxel centres lying on the observed
-    surface (|observed depth - depth| <= `depth_tol`)."""
+    surface (|observed depth - depth| <= `depth_tol`). Up to `grow_rounds` times, a mask
+    that reaches a side of the prompt box (`touched_sides`) is re-prompted with the box
+    grown on those sides (`grow_box`); the new mask must contain the old one."""
     height, width = recon["depth"].shape[1:]
     prompt_box = enlarge_box(box, box_enlarge, width, height)
     col, row, z, _, depth, valid = project_with_depth(voxels, frame, recon)
     on_surface = valid & (np.abs(depth - z) <= depth_tol)
     points = prompt_points(col[on_surface], row[on_surface], n_points) if on_surface.any() \
         else None
-    masks, scores = segmenter.segment(str(frame), recon["images"][frame], prompt_box, points)
-    picked = pick_mask(masks, scores, prompt_box)
+    image = recon["images"][frame]
+    picked = pick_mask(*segmenter.segment(str(frame), image, prompt_box, points), prompt_box)
     if picked is None:
         return None
-    return View(int(frame), prompt_box, picked[0], picked[1])
+    mask, score = picked
+    for _ in range(grow_rounds):
+        sides = touched_sides(mask, prompt_box, width, height)
+        if not any(sides):
+            break
+        bigger = grow_box(prompt_box, sides, width, height)
+        grown = pick_mask(*segmenter.segment(str(frame), image, bigger, points), bigger, mask)
+        if grown is None:
+            break
+        prompt_box, (mask, score) = bigger, grown
+    return View(int(frame), prompt_box, mask, score)
 
 
 # ------------------------------------------------------------------ lifting
@@ -331,26 +369,103 @@ def clean_points(
     return points[keep], colors[keep]
 
 
+def connected_to_blob(
+    points: np.ndarray, voxels: np.ndarray, seed_radius: float, cell: float, link: float
+) -> np.ndarray | None:
+    """Which `points` lie in a 3D connected component that holds the blob. Points are
+    binned into cubic cells of `cell` m; two cells are connected when their centres are
+    at most `link` m apart. Each blob voxel centre within `seed_radius` of a cell votes for
+    that cell's component; components with at least `SEED_SHARE` of the votes are kept.
+    None if no blob voxel is near any point (the mask missed the blob)."""
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import connected_components
+
+    if len(points) == 0 or len(voxels) == 0:
+        return None
+    ijk = np.floor(np.asarray(points, np.float64) / cell).astype(np.int64)
+    cells, owner = np.unique(ijk, axis=0, return_inverse=True)
+    owner = owner.ravel()
+    tree = cKDTree((cells + 0.5) * cell)
+    pairs = tree.query_pairs(link + 1e-9, output_type="ndarray")
+    graph = coo_matrix((np.ones(len(pairs), bool), (pairs[:, 0], pairs[:, 1])),
+                       shape=(len(cells), len(cells)))
+    _, comp = connected_components(graph, directed=False)
+    dist, nearest = tree.query(voxels, distance_upper_bound=seed_radius)
+    hit = comp[nearest[np.isfinite(dist)]]
+    if len(hit) == 0:
+        return None
+    votes = np.bincount(hit, minlength=comp.max() + 1)
+    keep = votes >= max(1.0, SEED_SHARE * len(hit))
+    return keep[comp[owner]]
+
+
+def growth(points: np.ndarray, voxels: np.ndarray, blob_voxel: float) -> float:
+    """Volume of the oriented box (`floor_obb`) of `points` over that of the blob: the
+    box of its voxel centres grown by one voxel on every side (M3 trims blobs where they
+    come within `dist_margin` of the other recording's surfaces, so they fall short of
+    the object by a voxel or two)."""
+    blob = np.prod(np.asarray(floor_obb(voxels)["extents"]) + 2 * blob_voxel)
+    return float(np.prod(floor_obb(points)["extents"]) / max(blob, 1e-12))
+
+
+def lift_view_points(
+    points: np.ndarray, voxels: np.ndarray, params: Mapping[str, Any],
+    on_static: PointTest | None = None, blob_voxel: float = 0.02,
+) -> tuple[np.ndarray, bool, float | None]:
+    """Which lifted mask points of one view belong to the object, whether the bounded
+    fallback was used, and the growth of the connected part (None if there was none).
+
+    Keeps the connected components that hold the blob (`connected_to_blob`, cells of
+    `lift_cell_m`, link `lift_link_m`), then drops points on static surfaces
+    (`on_static`) unless they lie within `near_voxel_m` of a blob voxel. If that leaves
+    nothing, misses the blob, or the outlier-filtered rest spans an oriented box of more
+    than `max_growth` x the blob's (the mask bled into a wall or the floor that the other
+    recording did not see), the old bounded rule `keep_near_blob` is used instead."""
+    seed_radius = 0.5 * np.sqrt(3.0) * blob_voxel + params["lift_cell_m"]
+    keep = connected_to_blob(points, voxels, seed_radius, params["lift_cell_m"],
+                             params["lift_link_m"])
+    if keep is not None and on_static is not None and keep.any():
+        idx = np.flatnonzero(keep)
+        static = idx[on_static(points[idx])]
+        if len(static):
+            dist, _ = cKDTree(voxels).query(points[static],
+                                            distance_upper_bound=params["near_voxel_m"])
+            keep[static[~np.isfinite(dist)]] = False
+    ratio = None
+    if keep is not None and keep.any():
+        kept, _ = clean_points(points[keep], np.zeros((int(keep.sum()), 3), np.uint8),
+                               params["lift_voxel"])
+        ratio = growth(kept, voxels, blob_voxel) if len(kept) else None
+        if ratio is not None and ratio <= params["max_growth"]:
+            return keep, False, ratio
+    return keep_near_blob(points, voxels, params["expand_m"], params["near_voxel_m"],
+                          on_static), True, ratio
+
+
 def build_instance(
     blob: Mapping[str, Any], voxels: np.ndarray, recon: Mapping[str, Any],
     frames: Sequence[int], segmenter: Segmenter, params: Mapping[str, Any],
-    on_static: PointTest | None = None,
+    on_static: PointTest | None = None, blob_voxel: float = 0.02,
 ) -> tuple[Instance | None, str]:
-    """Instance of one blob (views, masks, lifted points) or None with the reason."""
+    """Instance of one blob (views, masks, lifted points) or None with the reason.
+    `blob_voxel`: voxel size of the M3 grid."""
     own = CANDIDATE_TYPES[blob["type"]][0]
     kind = blob["type"] if blob["type"] in VERIFIED_TYPES else "unverified"
     chosen = select_views(voxels, frames, recon, params["n_views"], params["occlusion_tol"],
                           params["min_view_angle"])
     if not chosen:
         return None, "no clear view"
-    views, points, colors = [], [], []
+    views, points, colors, fallback, growths = [], [], [], False, []
     for frame, box in chosen:
         view = segment_view(segmenter, recon, frame, voxels, box, params["box_enlarge"],
-                            params["n_prompt_points"], params["occlusion_tol"])
+                            params["n_prompt_points"], params["occlusion_tol"],
+                            params["mask_grow_rounds"])
         if view is None:
             continue
         p, c = lift_mask(recon, frame, view.mask)
-        keep = keep_near_blob(p, voxels, params["expand_m"], params["near_voxel_m"], on_static)
+        keep, fell_back, ratio = lift_view_points(p, voxels, params, on_static, blob_voxel)
+        fallback |= fell_back
+        growths.append(None if ratio is None else round(ratio, 2))
         views.append(view)
         points.append(p[keep])
         colors.append(c[keep])
@@ -360,7 +475,9 @@ def build_instance(
                              params["lift_voxel"])
     if len(pts) < params["min_points"]:
         return None, f"{len(pts)} points < min_points"
-    return Instance(own, kind, [dict(blob)], voxels, pts, cols, views), "ok"
+    inst = Instance(own, kind, [dict(blob)], voxels, pts, cols, views)
+    inst.lift_fallback, inst.lift_growth = fallback, growths
+    return inst, "ok"
 
 
 # ------------------------------------------------------------------ merging
@@ -409,9 +526,11 @@ def combine(group: Sequence[Instance], voxel: float) -> Instance:
     assert colors is not None
     kinds = [i.kind for i in group]
     kind = next((k for k in VERIFIED_TYPES if k in kinds), "unverified")
-    return Instance(group[0].rec, kind, [b for i in group for b in i.blobs],
-                    np.concatenate([i.voxels for i in group]), points, colors,
-                    sorted(views.values(), key=lambda v: -v.score))
+    merged = Instance(group[0].rec, kind, [b for i in group for b in i.blobs],
+                      np.concatenate([i.voxels for i in group]), points, colors,
+                      sorted(views.values(), key=lambda v: -v.score))
+    merged.lift_fallback = any(i.lift_fallback for i in group)
+    return merged
 
 
 def merge_instances(
@@ -571,7 +690,7 @@ def frame_masks(
     `visible_frac` of its points are depth-consistent (|observed - projected depth| <=
     `depth_tol`); prompt = up to `n_points` of those pixels plus their box."""
     height, width = recon["depth"].shape[1:]
-    sample = _subsample(inst.points, MAX_PROJECTED)
+    sample = subsample(inst.points, MAX_PROJECTED)
     out = []
     for frame in frames:
         col, row, z, _, depth, valid = project_with_depth(sample, frame, recon)
@@ -636,6 +755,7 @@ def instance_record(inst: Instance, recon: Mapping[str, Any]) -> dict[str, Any]:
         "feature_index": inst.id - 1,
         "n_frame_masks": len(inst.frame_masks),
         "merged_from": inst.merged_from,
+        "lift_fallback": inst.lift_fallback,
         "evidence": aggregate_evidence(inst.blobs),
     }
 
@@ -748,7 +868,7 @@ def run_instances(
         own = CANDIDATE_TYPES[blob["type"]][0]
         voxels = blob_voxel_centres(grid, blob)
         inst, reason = build_instance(blob, voxels, recon, frames[own], segmenter, params,
-                                      static[own])
+                                      static[own], grid["voxel_size"])
         if inst is None:
             dropped.append({"blob": blob["id"], "reason": reason})
         else:
@@ -800,6 +920,9 @@ def run_instances(
         "blobs_selected": [b["id"] for b in selected],
         "blobs_dropped": dropped,
         "fragments": {name: len(raw[r]) for r, name in enumerate(RECORDINGS)},
+        "lift_fallbacks": {name: [b["id"] for i in raw[r] if i.lift_fallback for b in i.blobs]
+                           for r, name in enumerate(RECORDINGS)},
+        "lift_growth": {str(i.blobs[0]["id"]): i.lift_growth for r in raw for i in r},
         "gap_merges": gap_merges,
         "instances": counts,
         "kinds": {name: {k: sum(i.kind == k for i in final[r])

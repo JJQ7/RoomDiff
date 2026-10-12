@@ -62,6 +62,9 @@ def test_evidence_line():
     assert moved.startswith("old place seen empty from 4 views of the after video, new place "
                             "from 9 views of the before video; appearance similarity 0.77")
     assert "displacement 0.42 m; rotation 12 deg; motion rigid" in moved
+    shaky = {**DOC["changes"][0], "transform": {"translation_m": 0.42, "rotation_deg": 14.8,
+                                                "rotation_reliable": False}}
+    assert "displacement 0.42 m; rotation (unreliable) 15 deg; motion rigid" in evidence_line(shaky)
     assert moved.endswith("VLM confirmed (same ladder)")
     removed = evidence_line(DOC["changes"][1])
     assert removed.startswith("place seen empty from 7 views of the after video (120 free-space")

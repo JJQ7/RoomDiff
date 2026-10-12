@@ -275,8 +275,9 @@ def test_moved_absorbs_nearby_part(tmp_path, gap, merged):
 
 def test_rejected_moved_pair_is_split_into_removed_and_added(tmp_path):
     """The judge rejects an M4 moved pair (a red bag before, a green hairbrush after): both
-    sides are kept, as a removed and an added change, named again, confidence x 0.6,
-    verdict "unclear"."""
+    sides are kept, as a removed and an added change, named again and judged with the
+    removed / added prompts: the removed bag is confirmed (moved confidence), the added
+    hairbrush unclear (confidence x 0.6)."""
     moved = change(3, "moved", before=side(4, [0, 0, 2]), after=side(5, [1, 0, 2]), conf=0.8,
                    crops={"before": crop(tmp_path, "3_before", "red"),
                           "after": crop(tmp_path, "3_after", "green"),
@@ -294,7 +295,8 @@ def test_rejected_moved_pair_is_split_into_removed_and_added(tmp_path):
               "evidence": {"free_rays": 321, "free_frames_mean": 4.0, "observing_views": 6,
                            "occ_points": 800}}
     (tmp_path / "instances" / "before.json").write_text(json.dumps({"instances": [record]}))
-    doc = run_semantics(tmp_path, load_config(), FakeVLM(responder))
+    vlm = FakeVLM(responder)
+    doc = run_semantics(tmp_path, load_config(), vlm)
 
     assert doc["rejected"] == []
     by_id = {c["id"]: c for c in doc["changes"]}
@@ -304,10 +306,18 @@ def test_rejected_moved_pair_is_split_into_removed_and_added(tmp_path):
     assert removed["before"] == moved["before"] and removed["after"] is None
     assert added["after"] == moved["after"] and added["before"] is None
     assert removed["label"] == "red bag" and added["label"] == "hairbrush"  # named again
+    # each half gets the normal removed / added question (7 is judged as usual too)
+    assert sum("absent from that place in image 2" in p for p in vlm.prompts) == 2
+    assert sum("added between" in p for p in vlm.prompts) == 1
+    assert removed["evidence"]["vlm_verdict"] == "confirmed" and removed["confidence"] == 0.8
+    assert removed["evidence"]["vlm_reason"] == "gone"
+    assert added["evidence"]["vlm_verdict"] == "unclear"
+    assert added["confidence"] == pytest.approx(0.8 * 0.6)  # split factor only if unclear
+    assert added["evidence"]["vlm_reason"] == "the place is dark"
     for c in (removed, added):
-        assert c["confidence"] == pytest.approx(0.8 * 0.6)
-        assert c["evidence"]["vlm_verdict"] == "unclear" and c["evidence"]["split_from"] == 3
-        assert c["evidence"]["vlm_reason"] == "appearance judge did not confirm the match: colours"
+        assert c["evidence"]["split_from"] == 3
+        assert c["evidence"]["split_reason"] == \
+            "appearance judge did not confirm the match: colours"
         assert c["transform"] is None and c["motion_kind"] is None
         assert "viewpoint" in c["description"]
     assert removed["crops"] == {"before": "crops/3_before.jpg", "after": "crops/3_before_place.jpg"}
@@ -317,8 +327,43 @@ def test_rejected_moved_pair_is_split_into_removed_and_added(tmp_path):
     assert "free_rays" not in added["evidence"]  # no instance record: per-place evidence
     meta = json.loads((tmp_path / "semantics" / "meta.json").read_text())
     assert meta["splits"] == [{"id": 3, "label": "red bag", "into": [3, 8],
-                               "labels": ["red bag", "hairbrush"], "reason": "colours"}]
-    assert meta["verdicts"] == {"3": "unclear", "7": "confirmed", "8": "unclear"}
+                               "labels": ["red bag", "hairbrush"], "reason": "colours",
+                               "verdicts": ["confirmed", "unclear"]}]
+    assert meta["verdicts"] == {"3": "confirmed", "7": "confirmed", "8": "unclear"}
+
+
+def test_rejected_split_half_moves_to_rejected(tmp_path):
+    """A moved pair matched a red bag to a wall region: the judge rejects the match, the
+    removed bag half is confirmed and the added wall half is rejected by the added prompt
+    (it is part of the room), so it is listed under `rejected`, never re-paired."""
+    moved = change(3, "moved", before=side(4, [0, 0, 2]), after=side(5, [1, 0, 2]), conf=0.7,
+                   crops={"before": crop(tmp_path, "3_before", "red"),
+                          "after": crop(tmp_path, "3_after", "grey"),
+                          "before_place": crop(tmp_path, "3_before_place", "grey"),
+                          "after_place": crop(tmp_path, "3_after_place", "grey")})
+    bag = change(7, "added", after=side(6, [0.5, 0, 2]), conf=0.9,
+                 crops={"after": crop(tmp_path, "7_after", "red"),
+                        "before": crop(tmp_path, "7_before", "grey")})
+    write_doc(tmp_path, [moved, bag])
+
+    def wall_aware(images, prompt):
+        if "added between" in prompt and colour(images[1]) == "grey":
+            return '{"reason": "the outline covers a plain wall", "verdict": "rejected"}'
+        return responder(images, prompt)
+
+    doc = run_semantics(tmp_path, load_config(), FakeVLM(wall_aware))
+    assert [(c["id"], c["type"]) for c in doc["rejected"]] == [(8, "added")]
+    wall = doc["rejected"][0]
+    assert wall["label"] == "wall" and wall["evidence"]["vlm_verdict"] == "rejected"
+    assert wall["evidence"]["vlm_reason"] == "the outline covers a plain wall"
+    assert wall["evidence"]["split_from"] == 3
+    # the bag half is confirmed and re-paired with the added red bag 7 (not with the wall)
+    assert [(c["id"], c["type"], c["label"]) for c in doc["changes"]] == [(3, "moved", "red bag")]
+    assert doc["changes"][0]["evidence"]["merged_from"] == [3, 7]
+    # 7 was judged "unclear" before (x 0.7), the confirmed half keeps 0.7
+    assert doc["changes"][0]["confidence"] == pytest.approx((0.7 + 0.9 * 0.7) / 2, abs=1e-3)
+    meta = json.loads((tmp_path / "semantics" / "meta.json").read_text())
+    assert meta["splits"][0]["verdicts"] == ["confirmed", "rejected"]
 
 
 def test_split_half_is_re_paired_with_another_change(tmp_path):
@@ -447,6 +492,41 @@ def test_fragments_of_one_object_are_merged(tmp_path):
     assert meta["counts_out"] == {"removed": 2, "added": 1}
 
 
+def test_split_half_joins_its_other_fragment(tmp_path):
+    """M4 paired the upper part of a chair (1) with an unrelated grey region; the base of
+    that chair (2) was a separate removed change. The judge splits the pair; the removed
+    half is then merged with the base like any removed fragment."""
+    pts = chair_scene(tmp_path)
+    moved = change(1, "moved", before=chair_scene_side(pts, 1), after=side(9, [4, 0.5, 2]),
+                   conf=0.6, crops={"before": crop(tmp_path, "1_before", "red"),
+                                    "after": crop(tmp_path, "1_after", "grey"),
+                                    "before_place": crop(tmp_path, "1_before_place", "grey"),
+                                    "after_place": crop(tmp_path, "1_after_place", "grey")})
+    base = change(2, "removed", before=chair_scene_side(pts, 2), conf=0.93, views=8,
+                  crops={"before": crop(tmp_path, "2_before", "green"),
+                         "after": crop(tmp_path, "2_after", "grey")})
+    write_doc(tmp_path, [moved, base])
+    vlm = FakeVLM(chair_responder('{"reason": "seat and base of one chair", '
+                                  '"verdict": "confirmed", "label": "office chair"}'))
+    doc = run_semantics(tmp_path, load_config(), vlm)
+    by_id = {c["id"]: c for c in doc["changes"]}
+    chair = by_id[1]
+    assert chair["type"] == "removed" and chair["evidence"]["merged_from"] == [1, 2]
+    assert chair["evidence"]["split_from"] == 1 and chair["before"]["instance_ids"] == [1, 2]
+    assert chair["before"]["obb"]["extents"][1] == pytest.approx(1.0, abs=0.01)
+    assert 2 not in by_id and chair["label"] == "office chair"
+    meta = json.loads((tmp_path / "semantics" / "meta.json").read_text())
+    assert [(x["kind"], x["ids"], x["verdict"]) for x in meta["merges"]
+            if x["kind"] == "removed+removed"] == [("removed+removed", [1, 2], "confirmed")]
+
+
+def chair_scene_side(pts, iid):
+    p = pts[iid]
+    return {"instance_id": iid, "centroid": p.mean(0).tolist(),
+            "aabb": [p.min(0).tolist(), p.max(0).tolist()], "extents": np.ptp(p, 0).tolist(),
+            "obb": floor_obb(p), "n_points": len(p), "blob_ids": [10 + iid]}
+
+
 def test_fragments_stay_apart_when_the_vlm_refuses(tmp_path):
     chair_scene(tmp_path)
     vlm = FakeVLM(chair_responder(
@@ -498,12 +578,16 @@ def test_template_description_geometry():
                            "the near right part of the room, was seen only in the after")
     m = change(3, "moved", before=side(1, [0, 0.8, 3]), after=side(1, [0.9, 0.8, 3]))
     m["label"], m["motion_kind"] = "ladder", "rigid"
-    m["transform"] = {"translation_m": 0.93, "rotation_deg": 31.0}
+    m["transform"] = {"translation_m": 0.93, "rotation_deg": 31.0, "rotation_reliable": True}
     m["evidence"].update(observing_views_before_place=6, observing_views_after_place=1)
     text = template_description(m, frame, {})
     assert "moved 0.9 m within the middle of the room (on the floor both times) and turned by " \
         "about 31 degrees;" in text
     assert "from 6 viewpoints" in text and "from 1 viewpoint." in text
+    m["transform"]["rotation_reliable"] = False  # an unreliable angle is not quoted
+    text = template_description(m, frame, {})
+    assert "turned" not in text and "31" not in text
+    assert "moved 0.9 m within the middle of the room (on the floor both times);" in text
 
 
 def test_polish_keeps_only_sentences_with_all_numbers():

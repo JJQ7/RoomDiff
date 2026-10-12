@@ -47,7 +47,8 @@ def evidence_line(change: Mapping[str, Any]) -> str:
         if tf.get("translation_m") is not None:
             parts.append(f"displacement {tf['translation_m']:.2f} m")
         if tf.get("rotation_deg") is not None:
-            parts.append(f"rotation {tf['rotation_deg']:.0f} deg")
+            unreliable = "" if tf.get("rotation_reliable", True) else " (unreliable)"
+            parts.append(f"rotation{unreliable} {tf['rotation_deg']:.0f} deg")
         if change.get("motion_kind"):
             parts.append(f"motion {change['motion_kind']}")
     elif kind in ("removed", "added"):

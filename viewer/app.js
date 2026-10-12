@@ -322,7 +322,10 @@ function evidenceText(change) {
   const parts = [];
   const transform = change.transform || {};
   if (typeof transform.translation_m === 'number') parts.push(`moved ${fmt(transform.translation_m)} m`);
-  if (typeof transform.rotation_deg === 'number') parts.push(`rotated ${Math.round(transform.rotation_deg)}°`);
+  if (typeof transform.rotation_deg === 'number') {
+    const angle = `${Math.round(transform.rotation_deg)}°`;
+    parts.push(transform.rotation_reliable === false ? `rotation (unreliable) ${angle}` : `rotated ${angle}`);
+  }
   const evidence = change.evidence || {};
   const known = Object.keys(EVIDENCE_LABELS).filter((key) => key in evidence);
   const others = Object.keys(evidence).filter((key) => !(key in EVIDENCE_LABELS));

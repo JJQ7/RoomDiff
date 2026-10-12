@@ -22,8 +22,11 @@ the stage can be re-run):
    "deformed" / "unknown"). Rejected changes move to the `rejected` list; unclear ones keep
    `confidence * unclear_factor`. A rejected `moved` change keeps its geometry: it is split
    back into a `removed` (before side) and an `added` change (after side), each named
-   again, verdict "unclear" and `confidence * split_factor`; the halves then go through
-   re-pairing (step 3) once more, with the other changes only.
+   again and judged with the removed / added question (object + the other recording's
+   view of the place): confirmed halves keep the moved confidence, unclear ones get
+   `confidence * split_factor`, rejected ones (e.g. a wall region) move to `rejected`;
+   the kept halves then go through fragment merging (step 2) and re-pairing (step 3)
+   once more, with the other changes only.
 5. Descriptions: a template sentence from label, type, geometry (distance, size, place in
    the room, height above the floor = lowest 5 % of all valid points) and evidence; one
    text-only VLM call polishes all of them, a sentence is kept only if every number and
@@ -485,7 +488,7 @@ def merge_removed_added(r: Mapping[str, Any], a: Mapping[str, Any], reason: str)
         "confidence": round((r["confidence"] + a["confidence"]) / 2, 3),
         "before": b_side, "after": a_side,
         "transform": {"translation_m": round(float(np.linalg.norm(t)), 4),
-                      "rotation_deg": None, "R": np.eye(3).tolist(),
+                      "rotation_deg": None, "rotation_reliable": False, "R": np.eye(3).tolist(),
                       "t": t.round(5).tolist(), "icp_fitness": None, "icp_rmse": None},
         "motion_kind": None,
         "evidence": {
@@ -543,7 +546,8 @@ def absorb_part(m: dict[str, Any], a: Mapping[str, Any], reason: str) -> None:
     centroid = np.asarray(m["after"]["centroid"])
     t = centroid - np.asarray(m["before"]["centroid"])
     m["transform"] = {**m["transform"], "translation_m": round(float(np.linalg.norm(t)), 4),
-                      "rotation_deg": None, "R": np.eye(3).tolist(), "t": t.round(5).tolist()}
+                      "rotation_deg": None, "rotation_reliable": False, "R": np.eye(3).tolist(),
+                      "t": t.round(5).tolist()}
     m["confidence"] = round((m["confidence"] + a["confidence"]) / 2, 3)
     ev = m["evidence"]
     ev["free_rays"] = ev.get("free_rays", 0) + a["evidence"].get("free_rays", 0)
@@ -594,18 +598,22 @@ def merge_fragment_pair(
 
 def merge_fragments(vlm: BaseVLM, crops: Crops, changes: list[dict[str, Any]],
                     params: Mapping[str, Any], points: Mapping[str, Mapping[int, np.ndarray]],
+                    only: set[int] | None = None,
                     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Merge the fragments of one object (module docstring, step 2): pairs of removed /
     removed or added / added changes with matching labels whose oriented boxes are at
     most `fragment_gap_m` apart, closest first, each change in at most one merge, if the
-    VLM says both owner crops show parts of one physical object. Returns the new change
-    list and one record per VLM pair check."""
+    VLM says both owner crops show parts of one physical object. `only`: consider just
+    the pairs with one of these ids. Returns the new change list and one record per VLM
+    pair check."""
     by_id = {c["id"]: c for c in changes}
     pairs = []
     for kind, name in (("removed", "before"), ("added", "after")):
         group = [c for c in changes if c["type"] == kind and c.get(name)]
         for k, x in enumerate(group):
             for y in group[k + 1:]:
+                if only is not None and x["id"] not in only and y["id"] not in only:
+                    continue
                 if labels_match(x["label"], y["label"]):
                     gap = change_gap(x[name], y[name])
                     if gap <= params["fragment_gap_m"]:
@@ -674,7 +682,7 @@ def repair(vlm: BaseVLM, crops: Crops, changes: list[dict[str, Any]],
 
     moved = [c for c in by_id.values() if c["type"] == "moved"]
     added = [c for c in by_id.values() if c["type"] == "added"]
-    pairs = sorted((box_gap(m["after"]["aabb"], a["after"]["aabb"]), m["id"], a["id"])
+    pairs = sorted((change_gap(m["after"], a["after"]), m["id"], a["id"])
                    for m in moved for a in added
                    if labels_match(m["label"], a["label"]) and wanted(m, a))
     for gap, mid, aid in pairs:
@@ -695,14 +703,14 @@ def repair(vlm: BaseVLM, crops: Crops, changes: list[dict[str, Any]],
 
 
 def split_moved(
-    m: Mapping[str, Any], reason: str, factor: float, new_id: int,
+    m: Mapping[str, Any], reason: str, new_id: int,
     records: Mapping[str, Mapping[int, Mapping[str, Any]]],
 ) -> list[dict[str, Any]]:
     """A moved change `m` whose match the judge rejected, as a `removed` change (its before
-    side) and an `added` change (its after side): confidence x `factor`, verdict
-    "unclear". Ids: the merged candidates' ids for a re-paired change, else `m`'s id and
-    `new_id`. Evidence from the instance `records` (per recording and id) when available,
-    else from `m`'s per-place evidence."""
+    side) and an `added` change (its after side), with `m`'s confidence, not yet judged
+    (`evidence.split_reason` keeps the rejected match). Ids: the merged candidates' ids
+    for a re-paired change, else `m`'s id and `new_id`. Evidence from the instance
+    `records` (per recording and id) when available, else from `m`'s per-place evidence."""
     ev, crops = m["evidence"], m.get("crops") or {}
     ids = ev.get("merged_from") or []
     ids = ids[:2] if len(ids) >= 2 else [m["id"], new_id]
@@ -719,12 +727,13 @@ def split_moved(
             "id": cid, "type": kind, "label": m["label"],
             "attributes": m.get("attributes", ""),
             "object_description": m.get("object_description", ""),
-            "confidence": round(m["confidence"] * factor, 3),
+            "confidence": m["confidence"],
             "before": side if name == "before" else None,
             "after": side if name == "after" else None,
             "transform": None, "motion_kind": None,
-            "evidence": {**evidence, "split_from": m["id"], "vlm_verdict": "unclear",
-                         "vlm_reason": f"appearance judge did not confirm the match: {reason}"},
+            "evidence": {**evidence, "split_from": m["id"],
+                         "split_reason": f"appearance judge did not confirm the match: {reason}",
+                         "vlm_verdict": None, "vlm_reason": None},
             "description": "",
             "crops": {name: crops.get(own), crop_other: crops.get(other)},
         })
@@ -808,7 +817,8 @@ def template_description(change: Mapping[str, Any], frame: SceneFrame | None,
                      f" (lowest part {h_b} before, {h_a} after)")
         if change.get("motion_kind") == "deformed":
             text += ", mostly by being rearranged or deformed rather than carried as a whole"
-        elif tf.get("rotation_deg") is not None and tf["rotation_deg"] >= 10:
+        elif tf.get("rotation_deg") is not None and tf["rotation_deg"] >= 10 and \
+                tf.get("rotation_reliable", True):  # an unreliable angle is not quoted
             text += f" and turned by about {tf['rotation_deg']:.0f} degrees"
         nb, na = ev.get("observing_views_before_place", 0), ev.get("observing_views_after_place", 0)
         text += f"; the after recording saw the old place empty from {views(nb)}"
@@ -979,19 +989,26 @@ def run_semantics(out_dir: str | Path, cfg: Mapping[str, Any],
             continue
         verdict, reason = judge_change(vlm, crops, c)
         if c["type"] == "moved" and verdict == "rejected":  # keep the geometry, unpaired
-            halves = split_moved(c, reason, params["split_factor"], next_id, records)
+            halves = split_moved(c, reason, next_id, records)
             if halves[1]["id"] == next_id:
                 next_id += 1
-            for half in halves:
+            for half in halves:  # named and judged like any removed / added change
                 name_change(vlm, crops, half)
-            kept += halves
+                keep = apply_verdict(half, *judge_change(vlm, crops, half), params["split_factor"])
+                (kept if keep else rejected).append(half)
             splits.append({"id": c["id"], "label": c["label"], "into": [h["id"] for h in halves],
-                           "labels": [h["label"] for h in halves], "reason": reason})
+                           "labels": [h["label"] for h in halves], "reason": reason,
+                           "verdicts": [h["evidence"]["vlm_verdict"] for h in halves]})
             continue
         keep = apply_verdict(c, verdict, reason, params["unclear_factor"])
         (kept if keep else rejected).append(c)
-    if splits and params["enable_repair"]:  # a split half may pair up with another change
-        kept, more = repair(vlm, crops, kept, params, only={i for x in splits for i in x["into"]})
+    halves = {i for x in splits for i in x["into"]}
+    if splits and params["enable_fragment_merge"]:  # a kept half may be part of another change
+        kept, more = merge_fragments(vlm, crops, kept, params, points, only=halves)
+        merges += more
+        halves |= {i for x in more if x["verdict"] == "confirmed" for i in x["ids"]}
+    if splits and params["enable_repair"]:  # a kept split half may pair up with another change
+        kept, more = repair(vlm, crops, kept, params, only=halves)
         merges += more
         for c in kept:
             if c["type"] == "moved" and c["motion_kind"] is None:  # new: verdict from repair

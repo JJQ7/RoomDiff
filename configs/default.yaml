@@ -51,8 +51,10 @@ visibility:
                          # surfaces are only 2-3 voxels thick
   min_blob_volume: 0.0015  # m^3, smaller candidate blobs are dropped ...
   min_blob_voxels: 8     # ... as are blobs with fewer voxels
-  debug_views: 2         # debug crops per blob and recording (best views of the centroid)
-  occlusion_tol: 0.10    # m, a debug view may see a surface at most this far in front of the centroid
+  debug_views: 2         # debug crops per blob and recording (best views of its voxels)
+  occlusion_tol: 0.05    # m, depth tolerance of the debug-view scorer: a voxel centre is visible
+                         # if the observed depth is within this of it (own recording) or no
+                         # surface lies more than this in front of it (other recording)
   max_debug_blobs: 200   # debug crops for the largest blobs only
 
 # M4: object instances from the change blobs (SAM 2.1 masks lifted to 3D, DINOv3 features)
@@ -67,13 +69,21 @@ instances:
                                 # box are the surface that object hid or uncovered: dropped
   n_views: 4             # keyframes of the owner recording prompted per blob
   min_view_angle: 15.0   # deg, preferred minimum angle between the chosen viewing directions
-  occlusion_tol: 0.05    # m, a point is occluded if the observed depth is this much closer;
-                         # also the on-surface tolerance of the positive prompt points
-  box_enlarge: 0.10      # SAM box prompt = projected blob box enlarged by this fraction
+  occlusion_tol: 0.05    # m, view scoring: a blob voxel is visible if the observed depth is
+                         # within this of it; also the on-surface tolerance of the prompt points
+  box_enlarge: 0.10      # SAM box prompt = box of the projected blob voxels enlarged by this
   n_prompt_points: 5     # positive prompt points (projected depth-visible blob voxels)
-  expand_m: 0.15         # m, lifted points must lie in the blob box expanded by this ...
-  near_voxel_m: 0.10     # ... and not on a static surface, unless this close to a blob voxel
+  mask_grow_rounds: 3    # a mask reaching a side of the prompt box is re-prompted with the box
+                         # extended by its size on that side, at most this often (0 = off)
+  lift_cell_m: 0.015     # m, lifting: all valid-depth mask pixels are lifted, binned into cells
+  lift_link_m: 0.03      # m, ... of this size, linked when this close; the connected components
+                         # holding the blob are kept ...
+  near_voxel_m: 0.10     # ... minus points on static surfaces, unless this close to a blob voxel
   drop_static: true      # drop lifted points on surfaces the other recording also has
+  max_growth: 6.0        # if the kept points' oriented box exceeds this x the blob's, the mask
+                         # bled into the background: bounded lifting instead (lift_fallback) ...
+  expand_m: 0.15         # ... = points in the blob box expanded by this and not static, or
+                         # within near_voxel_m of a blob voxel
   lift_voxel: 0.01       # m, voxel size of the lifted instance points
   min_points: 150        # instances with fewer lifted points are dropped
   merge_mask_iou: 0.5    # merge fragments whose masks overlap more than this in a shared view ...
@@ -98,8 +108,10 @@ changes:
   extent_ratio_min: 0.5  # ... and every sorted extent ratio lies in [min, max]
   extent_ratio_max: 2.0
   icp_max_dist: 0.10     # m, max correspondence distance of the moved-object ICP
-  icp_min_fitness: 0.4   # rotation reported only if both point sets fit within 3 cm at least this
-                         # well (0.3 let a 64 deg fit of two partial ladder fragments through)
+  icp_min_fitness: 0.3   # rotation reported only if both point sets fit within 3 cm at least this
+                         # well (else rotation_deg null) ...
+  icp_reliable_fitness: 0.5  # ... and marked rotation_reliable from this fitness on (the ladder
+                         # of living_room_1 scores 0.397-0.404 from run to run)
   free_views_full: 5     # observing views of the other recording that give full free-space evidence
   w_mask: 0.3            # confidence = w_mask * SAM score + w_free * free-space evidence
   w_free: 0.4            #   + w_consistency * view consistency (weights sum to 1);
@@ -122,8 +134,8 @@ semantics:
   repair_max_distance: 3.0  # m, removed + added/unverified centroids closer than this are re-paired ...
   merge_max_distance: 1.0   # m, ... and a moved after-box absorbs an added box this close (box gap)
   unclear_factor: 0.7    # confidence multiplier of an "unclear" verdict
-  split_factor: 0.6      # a moved pair the judge rejects becomes removed + added, each with
-                         # confidence x this (verdict "unclear")
+  split_factor: 0.6      # a moved pair the judge rejects becomes removed + added, each judged
+                         # again (removed / added prompt): confidence x this if "unclear"
 
 # M6: Rerun recording and static web viewer assets
 viz: {}

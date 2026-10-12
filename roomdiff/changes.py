@@ -2,12 +2,14 @@
 
 * Moved candidates: before-instances from disappeared blobs (D) and after-instances from
   appeared blobs (A). Cost(d, a) = (1 - cos(f_d, f_a)) + lambda_size * |log(V_d / V_a)|
-  with V the volume of the extents box; Hungarian assignment over the feasible pairs
-  (cos >= tau_feat and every sorted-extent ratio within [extent_ratio_min, max]).
+  with V the volume of the oriented box (`obb`, unchanged when the world frame turns
+  about +Y; the axis-aligned extents are not); Hungarian assignment over the feasible
+  pairs (cos >= tau_feat and every sorted-extent ratio within [extent_ratio_min, max]).
 * Matched pair -> `moved` (rigid transform: Open3D point-to-point ICP of the before points
   onto the after points, started from the centroid translation; the rotation is reported
-  only if the ICP fitness reaches icp_min_fitness), unmatched D -> `removed`, unmatched
-  A -> `added`, unverified instances -> `unverified` (with the recording that saw them).
+  if the ICP fitness reaches icp_min_fitness and marked `rotation_reliable` from
+  icp_reliable_fitness on), unmatched D -> `removed`, unmatched A -> `added`, unverified
+  instances -> `unverified` (with the recording that saw them).
 * Confidence in [0, 1] = (w_mask * S_mask + w_free * S_free + w_consistency * S_cons) /
   (w_mask + w_free + w_consistency) with S_mask = mean SAM mask score, S_free =
   min(observing_views / free_views_full, 1) of the other recording (moved: mean of both
@@ -16,7 +18,8 @@
   (w_mask + w_consistency), so at most 0.5.
 * Crops `<out>/crops/<id>_before.jpg` / `<id>_after.jpg` (moved also `_before_place` /
   `_after_place`): the object in its own recording with mask outline and box, and the
-  other recording looking at the same 3D box.
+  other recording looking at the same place; both views are ranked by
+  `roomdiff.projection.score_views` on the instance points (frame-independent).
 
 Writes `<out>/changes.json` (docs/interfaces.md) with label "object" and a templated
 description (M5 replaces both), `<out>/crops/` and `<out>/instances/matching.json`.
@@ -43,6 +46,7 @@ from roomdiff.instances import (
     select_views,
 )
 from roomdiff.paths import RECORDINGS, OutputPaths
+from roomdiff.projection import score_views
 from roomdiff.recon import load_recon
 
 CHANGE_TYPES = ("moved", "removed", "added", "unverified")
@@ -55,12 +59,17 @@ TYPE_COLORS: dict[str, tuple[int, int, int]] = {
 MIN_EXTENT = 0.01  # m, extents are clamped to this before ratios / volumes
 INFEASIBLE = 1e6  # Hungarian cost of a pair that fails the thresholds
 FINE_ICP_DIST = 0.03  # m, correspondence distance of the fine ICP pass and its fitness
-BORDER_PX = 3  # a mask box this close to the image border marks a truncated view
+CROP_DEPTH_TOL = 0.05  # m, depth tolerance of the crop view scoring
 CROP_MIN_ASPECT = 0.6  # crops are at least this wide relative to their height (and v.v.)
 UNITS = "metres (approx.)"
 
 
 # ------------------------------------------------------------------ matching
+
+
+def box_extents(record: Mapping[str, Any]) -> Sequence[float]:
+    """Extents of an instance's oriented box (`obb`), else of its axis-aligned box."""
+    return (record.get("obb") or {}).get("extents") or record["extents"]
 
 
 def sorted_extents(extents: Sequence[float]) -> np.ndarray:
@@ -107,15 +116,18 @@ def rotation_angle_deg(R: np.ndarray) -> float:
 
 
 def rigid_transform(
-    src: np.ndarray, dst: np.ndarray, max_dist: float, min_fitness: float
+    src: np.ndarray, dst: np.ndarray, max_dist: float, min_fitness: float,
+    reliable_fitness: float | None = None,
 ) -> dict[str, Any]:
     """Rigid motion of an object from its before points `src` to its after points `dst`.
 
     Open3D point-to-point ICP initialised with the centroid translation (correspondences
-    up to `max_dist`), then refined with `FINE_ICP_DIST`. The fit is trusted if the
-    symmetric fitness (smaller of the two inlier fractions within `FINE_ICP_DIST`) reaches
-    `min_fitness`; otherwise R = I, t = centroid difference and rotation_deg = None.
-    `translation_m` is the displacement of the before centroid.
+    up to `max_dist`), then refined with `FINE_ICP_DIST`. Fitness = the smaller of the two
+    inlier fractions within `FINE_ICP_DIST` (symmetric). From `min_fitness` on the ICP
+    motion is used and `rotation_deg` reported, `rotation_reliable` from
+    `reliable_fitness` on (default: `min_fitness`); below `min_fitness` R = I, t =
+    centroid difference and `rotation_deg` = None. `translation_m` is the displacement of
+    the before centroid.
     """
     import open3d as o3d
 
@@ -135,6 +147,7 @@ def rigid_transform(
     back = reg.evaluate_registration(clouds[1], clouds[0], FINE_ICP_DIST, np.linalg.inv(T))
     fitness = min(float(fine.fitness), float(back.fitness))
     ok = fitness >= min_fitness
+    reliable = ok and fitness >= (min_fitness if reliable_fitness is None else reliable_fitness)
     if not ok:
         T = init
     c = src.mean(0)
@@ -142,6 +155,7 @@ def rigid_transform(
     return {
         "translation_m": round(float(np.linalg.norm(moved - c)), 4),
         "rotation_deg": round(rotation_angle_deg(T[:3, :3]), 2) if ok else None,
+        "rotation_reliable": bool(reliable),
         "R": T[:3, :3].round(6).tolist(),
         "t": T[:3, 3].round(5).tolist(),
         "icp_fitness": round(fitness, 4),
@@ -194,35 +208,43 @@ class CropMaker:
                 return decode_rle(rle)
         return None
 
-    def object_view(self, record: Mapping[str, Any]) -> tuple[int, tuple[int, int, int, int],
-                                                               np.ndarray | None]:
-        """Best view of an instance in its own recording: the largest mask box x score
-        among its views, preferring views with a stored per-keyframe mask, then views
-        where the object is not cut by the image border."""
+    def mask_score(self, frame: int, instance_id: int) -> float | None:
+        """SAM score of the stored per-keyframe mask of an instance, None if there is none."""
+        rec = RECORDINGS[int(self.recon["rec"][frame])]
+        for inst, score, _ in self.masks[rec].get(str(self.recon["files"][frame]), []):
+            if inst == instance_id:
+                return score
+        return None
+
+    def object_view(self, record: Mapping[str, Any], points: np.ndarray
+                    ) -> tuple[int, tuple[int, int, int, int], np.ndarray | None]:
+        """Best view of an instance in its own recording: the keyframes ranked by
+        `score_views` on its points (depth-consistent), those with a stored per-keyframe
+        mask first (score x SAM score); the box is the mask's, else that of the projected
+        points. Falls back to the prompted view with the largest mask box x score."""
         files = list(map(str, self.recon["files"]))
-
-        height, width = self.recon["depth"].shape[1:]
-
-        def rank(view: Mapping[str, Any]) -> tuple[bool, bool, float]:
-            x0, y0, x1, y1 = view["mask_box"]
-            frame = files.index(view["file"])
-            whole = (min(x0, y0) > BORDER_PX and x1 < width - 1 - BORDER_PX
-                     and y1 < height - 1 - BORDER_PX)
-            return (self.frame_mask(frame, record["id"]) is not None, whole,
-                    (x1 - x0) * (y1 - y0) * view["score"])
-
-        view = max(record["views"], key=rank)
+        frames = np.flatnonzero(self.recon["rec"] == RECORDINGS.index(record["recording"]))
+        ranked = score_views(points, frames, self.recon["cam2world"], self.recon["K"],
+                             self.recon["depth"], self.recon["valid"], CROP_DEPTH_TOL)
+        ranked = [v for v in ranked if v.score > 0]
+        if ranked:
+            sam = {v.frame: self.mask_score(v.frame, record["id"]) for v in ranked}
+            best = max(ranked, key=lambda v: (sam[v.frame] is not None,
+                                              v.score * (sam[v.frame] or 1.0), -v.frame))
+            mask = self.frame_mask(best.frame, record["id"])
+            return best.frame, best.box if mask is None else mask_box(mask), mask
+        view = max(record["views"], key=lambda v: (v["mask_box"][2] - v["mask_box"][0])
+                   * (v["mask_box"][3] - v["mask_box"][1]) * v["score"])
         frame = files.index(view["file"])
-        mask = self.frame_mask(frame, record["id"])
-        box = tuple(view["mask_box"]) if mask is None else mask_box(mask)
-        return frame, box, mask  # type: ignore[return-value]
+        return frame, tuple(view["mask_box"]), self.frame_mask(frame, record["id"])
 
     def place_view(
         self, points: np.ndarray, rec: int
     ) -> tuple[int, tuple[int, int, int, int]] | None:
-        """Keyframe of recording `rec` that sees the 3D box of `points` best."""
+        """Keyframe of recording `rec` that sees the place of `points` best (not occluded)."""
         frames = np.flatnonzero(self.recon["rec"] == rec)
-        chosen = select_views(points, frames, self.recon, 1, 0.05, 0.0)
+        chosen = select_views(points, frames, self.recon, 1, CROP_DEPTH_TOL, 0.0,
+                              on_surface=False)
         return chosen[0] if chosen else None
 
     def save(self, name: str, frame: int, box: Sequence[int], mask: np.ndarray | None,
@@ -252,8 +274,9 @@ class CropMaker:
         image.crop((x0, y0, x1 + 1, y1 + 1)).save(self.folder / f"{name}.jpg", quality=90)
         return f"crops/{name}.jpg"
 
-    def object_crop(self, name: str, record: Mapping[str, Any], color: tuple[int, int, int]) -> str:
-        frame, box, mask = self.object_view(record)
+    def object_crop(self, name: str, record: Mapping[str, Any], points: np.ndarray,
+                    color: tuple[int, int, int]) -> str:
+        frame, box, mask = self.object_view(record, points)
         return self.save(name, frame, box, mask, color)
 
     def place_crop(self, name: str, points: np.ndarray, rec: int,
@@ -293,8 +316,9 @@ def describe(kind: str, change: Mapping[str, Any]) -> str:
                 f"the before recording saw that space empty in {ev['observing_views']} views.")
     if kind == "moved":
         b, a, tf = change["before"], change["after"], change["transform"]
-        rot = (f" and turned by about {tf['rotation_deg']:.0f} degrees"
-               if tf["rotation_deg"] is not None else " (rotation not determined)")
+        rot = (" (rotation not determined)" if tf["rotation_deg"] is None else
+               f" and turned by about {tf['rotation_deg']:.0f} degrees"
+               if tf.get("rotation_reliable", True) else " (rotation uncertain)")
         return (f"An object about {_size(b['extents'])} m moved {tf['translation_m']:.2f} m from "
                 f"{_xyz(b['centroid'])} to {_xyz(a['centroid'])}{rot}.")
     side = change[ev["seen_in"]]
@@ -350,8 +374,8 @@ def run_changes(out_dir: str | Path, cfg: Mapping[str, Any]) -> dict[str, Any]:
     a_idx = [k for k, r in enumerate(aft["instances"]) if r["kind"] == "appeared"]
     pairs, cos, cost = match_instances(
         bef["feats"][d_idx], aft["feats"][a_idx],
-        [bef["instances"][k]["extents"] for k in d_idx],
-        [aft["instances"][k]["extents"] for k in a_idx], params)
+        [box_extents(bef["instances"][k]) for k in d_idx],
+        [box_extents(aft["instances"][k]) for k in a_idx], params)
 
     entries: list[tuple[str, dict[str, Any]]] = []  # (type, change without id / crops)
     matched_d, matched_a = set(), set()
@@ -360,7 +384,8 @@ def run_changes(out_dir: str | Path, cfg: Mapping[str, Any]) -> dict[str, Any]:
         matched_d.add(d_idx[i])
         matched_a.add(a_idx[j])
         transform = rigid_transform(bef["points"][rb["id"]], aft["points"][ra["id"]],
-                                    params["icp_max_dist"], params["icp_min_fitness"])
+                                    params["icp_max_dist"], params["icp_min_fitness"],
+                                    params["icp_reliable_fitness"])
         evidence = {
             "free_rays": rb["evidence"]["free_rays"] + ra["evidence"]["free_rays"],
             "observing_views": round((rb["evidence"]["observing_views"]
@@ -441,7 +466,7 @@ def make_crops(
             continue
         record = next(r for r in data[name]["instances"] if r["id"] == side["instance_id"])
         points = data[name]["points"][side["instance_id"]]
-        out[name] = crops.object_crop(f"{cid}_{name}", record, color)
+        out[name] = crops.object_crop(f"{cid}_{name}", record, points, color)
         if kind == "moved":  # the other recording at this place (empty there)
             out[f"{name}_place"] = crops.place_crop(f"{cid}_{name}_place", points, 1 - rec, color)
         elif change[other] is None:

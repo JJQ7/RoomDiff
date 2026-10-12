@@ -352,7 +352,8 @@ def test_run_recon_levels_the_world(scene_dir):
     is only a thin strip along the wall bottoms here (cameras look horizontally from the
     centre), a hard case: plain RANSAC inlier counting tilted this gauge by 1.2 degrees."""
     fake_run_pi3x.calls = 0  # a fixed gauge (scale 0.89)
-    meta = run_recon(scene_dir, load_config(overrides=["recon.pixel_limit=9408", "recon.snap_to_walls=true"]))
+    meta = run_recon(scene_dir, load_config(overrides=["recon.pixel_limit=9408",
+                                                       "recon.snap_to_walls=true"]))
     recon = load_recon(scene_dir / "recon" / "recon.npz")
     tilt, height = floor_tilt_and_height(recon)
     assert tilt < 1.0 and height < 0.01

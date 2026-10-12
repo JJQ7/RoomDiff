@@ -12,11 +12,13 @@ import numpy as np
 import pytest
 
 from roomdiff.config import load_config
+from roomdiff.geometry import rotation_y
 from roomdiff.projection import (
     aabb_corners,
     best_views,
     project_aabb,
     project_to_pixels,
+    score_views,
 )
 from roomdiff.recon import write_recon
 from roomdiff.visibility import (
@@ -269,8 +271,91 @@ def test_projection_helpers():
     box = project_aabb([-0.1, -0.1, 1.9], [0.1, 0.1, 2.1], K, T, W, H)
     assert box is not None and box[0] < 159.5 < box[2] and box[1] < 119.5 < box[3]
     assert project_aabb([-1, -1, -3], [1, 1, -2], K, T, W, H) is None  # behind the camera
-    cams = np.stack([pose(0, 0, 0), pose(1.5, 0, 0), pose(0.2, 0, 0), pose(0, 0, 3.0)])
-    depth = np.full((4, H, W), 5.0, np.float32)
-    depth[2] = 1.0  # camera 2 sees a surface 1 m in front of the point: occluded
-    views = best_views([0, 0, 2.0], range(4), cams, np.repeat(K[None], 4, 0), depth, k=3)
-    assert views == [(0, False), (1, False), (2, True)]  # camera 3 is past the point
+    # a 20 cm patch on a wall 2 m away: camera 1 is farther back (smaller), camera 2 sees an
+    # occluder 1 m in front of it, camera 3 stands past it, camera 4 looks the other way
+    patch = np.stack(np.meshgrid(np.linspace(-0.1, 0.1, 21), np.linspace(-0.1, 0.1, 21),
+                                 [2.0], indexing="ij"), -1).reshape(-1, 3)
+    flip = pose(0, 0, 0)
+    flip[:3, :3] = np.diag([-1.0, 1.0, -1.0])
+    cams = np.stack([pose(0, 0, 0), pose(0.3, 0, -1.0), pose(0.2, 0, 0), pose(0, 0, 3.0), flip])
+    depth = np.full((5, H, W), 2.0, np.float32)
+    depth[1] = 3.0
+    depth[2] = 1.0
+    views = best_views(patch, range(5), cams, np.repeat(K[None], 5, 0), depth, k=4)
+    assert [v.frame for v in views] == [0, 1, 2]  # cameras 3 and 4 never see the patch
+    assert views[0].visible == 1.0 and not views[0].occluded and not views[0].cut
+    assert views[0].score > views[1].score > 0 and views[2].occluded and views[2].score == 0
+    assert views[0].box == (152, 112, 168, 128)  # all projected points, also when occluded
+    assert views[2].box == (136, 112, 152, 128)
+    # the place seen by the other recording: visible = not occluded (seen past)
+    behind = np.where(depth == 2.0, 3.0, depth)  # camera 0 sees the wall behind the place
+    place = score_views(patch, [0, 2], cams, np.repeat(K[None], 5, 0), behind,
+                        on_surface=False)
+    assert [(v.frame, v.visible) for v in place] == [(0, 1.0), (2, 0.0)]
+    assert best_views(patch[:0], range(5), cams, np.repeat(K[None], 5, 0), depth) == []
+
+
+def look_at(centre, target, up=(0.0, 1.0, 0.0)) -> np.ndarray:
+    """OpenCV camera (x right, y down, z forward) at `centre` looking at `target` in a
+    y-up world."""
+    f = np.asarray(target, float) - centre
+    f /= np.linalg.norm(f)
+    x = np.cross(f, up)
+    x /= np.linalg.norm(x)
+    T = np.eye(4)
+    T[:3, :3] = np.stack([x, np.cross(f, x), f], 1)
+    T[:3, 3] = centre
+    return T
+
+
+def splat_depth(points, cam2world) -> np.ndarray:
+    """z-buffer of `points` in front of a background 6 m away."""
+    depth = np.full((H, W), 6.0, np.float32)
+    col, row, z, inside = project_to_pixels(points, K, cam2world, W, H)
+    order = np.argsort(-z[inside])  # far first: the nearest point is written last
+    depth[row[inside][order], col[inside][order]] = z[inside][order]
+    return depth
+
+
+def test_view_ranking_does_not_depend_on_the_world_frame():
+    """Rotating points and cameras about +Y together leaves the depth maps (camera frame)
+    unchanged, and must leave the ranking unchanged too (it used to rank by the projected
+    axis-aligned box, which depends on the world axes)."""
+    rng = np.random.default_rng(3)
+    # a bench 0.9 x 0.4 x 0.3 m (surface samples), turned 30 degrees, at the origin
+    u = np.linspace(-0.5, 0.5, 46)
+    faces = [np.stack([a, b, c], -1).reshape(-1, 3) for a, b, c in (
+        np.meshgrid(0.9 * u, 0.4 * u, [-0.15, 0.15], indexing="ij"),
+        np.meshgrid(0.9 * u, [-0.2, 0.2], 0.3 * u, indexing="ij"),
+        np.meshgrid([-0.45, 0.45], 0.4 * u, 0.3 * u, indexing="ij"))]
+    bench = np.concatenate(faces) @ rotation_y(30.0).T + [0.0, 0.2, 0.0]
+    cams = []
+    for k in range(12):  # all around, 0.6-3 m away, aimed a little off the bench
+        a = 2 * np.pi * k / 12 + rng.uniform(-0.2, 0.2)
+        c = np.array([np.sin(a), 0, np.cos(a)]) * rng.uniform(0.6, 3.0) + [0, 0.8, 0]
+        cams.append(look_at(c, rng.uniform(-0.8, 0.8, 3) + [0, 0.2, 0]))
+    cams = np.stack(cams)
+    depth = np.stack([splat_depth(bench, T) for T in cams])
+    Ks = np.repeat(K[None], len(cams), 0)
+    frames = range(len(cams))
+    ref = score_views(bench, frames, cams, Ks, depth)
+    assert len(ref) >= 8 and ref[0].score > 0
+    assert any(v.cut for v in ref) and not all(v.cut for v in ref)
+
+    def aabb_order(points, poses):
+        lo, hi = points.min(0), points.max(0)
+        boxes = [project_aabb(lo, hi, K, T, W, H) for T in poses]
+        area = [(b[2] - b[0]) * (b[3] - b[1]) if b else 0 for b in boxes]
+        return list(np.argsort(area, kind="stable"))
+
+    old_rank_changed = False
+    for yaw in rng.uniform(-180, 180, 4):
+        turn = np.eye(4)
+        turn[:3, :3] = rotation_y(yaw)
+        turned = score_views(bench @ turn[:3, :3].T, frames, turn @ cams, Ks, depth)
+        assert [v.frame for v in turned] == [v.frame for v in ref]
+        assert [v.box for v in turned] == [v.box for v in ref]
+        assert np.allclose([v.score for v in turned], [v.score for v in ref], rtol=1e-6)
+        old_rank_changed |= aabb_order(bench @ turn[:3, :3].T, turn @ cams) != \
+            aabb_order(bench, cams)
+    assert old_rank_changed  # the axis-aligned box ranking does depend on the frame

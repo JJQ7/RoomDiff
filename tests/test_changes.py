@@ -12,7 +12,9 @@ import numpy as np
 import pytest
 
 from roomdiff.changes import (
+    box_extents,
     confidence,
+    describe,
     extents_compatible,
     match_instances,
     rigid_transform,
@@ -250,6 +252,10 @@ def test_hungarian_matching_with_thresholds():
     pairs, _, _ = match_instances(feats_d[:2], feats_a2, ext[:2], ext[:2], PARAMS)
     assert sorted((i, j) for i, j, _ in pairs) == [(0, 1), (1, 0)]
     assert match_instances(feats_d[:0], feats_a, [], ext, PARAMS)[0] == []
+    # sizes come from the oriented box (frame-independent), not the axis-aligned extents
+    record = {"extents": [0.7, 0.5, 0.7], "obb": {"extents": [0.5, 0.5, 0.4]}}
+    assert box_extents(record) == [0.5, 0.5, 0.4]
+    assert box_extents({"extents": [0.7, 0.5, 0.7], "obb": None}) == [0.7, 0.5, 0.7]
 
 
 def test_confidence_bounds():
@@ -280,16 +286,37 @@ def test_rigid_transform_recovers_rotation_and_translation():
     R = np.array([[np.cos(angle), 0, np.sin(angle)], [0, 1, 0], [-np.sin(angle), 0, np.cos(angle)]])
     c = src.mean(0)
     dst = (src - c) @ R.T + c + [0.6, 0.0, 0.3]
-    tf = rigid_transform(src, dst, 0.10, 0.3)
-    assert tf["rotation_deg"] == pytest.approx(25, abs=2)
+    tf = rigid_transform(src, dst, 0.10, 0.3, 0.5)
+    assert tf["rotation_deg"] == pytest.approx(25, abs=2) and tf["rotation_reliable"]
+    assert tf["icp_fitness"] > 0.9
     assert tf["translation_m"] == pytest.approx(np.hypot(0.6, 0.3), abs=0.02)
     assert np.allclose(np.array(tf["R"]) @ np.array(tf["R"]).T, np.eye(3), atol=1e-5)
     # unrelated shapes: no trustworthy fit, rotation unknown, centroid translation
     blob = rng.normal(0, 0.15, (500, 3)) + [3, 0, 0]
     tf = rigid_transform(src, blob, 0.10, 0.9)
-    assert tf["rotation_deg"] is None
+    assert tf["rotation_deg"] is None and not tf["rotation_reliable"]
     assert tf["translation_m"] == pytest.approx(np.linalg.norm(blob.mean(0) - src.mean(0)),
                                                 abs=1e-3)
+
+
+def test_rotation_between_the_fitness_thresholds_is_reported_as_unreliable():
+    """Fitness >= icp_reliable_fitness: reliable angle; icp_min_fitness <= fitness < it: the
+    angle is reported but marked unreliable (and not quoted in the description)."""
+    rng = np.random.default_rng(2)
+    src = rng.uniform([0, 0, 0], [0.4, 1.4, 0.1], (3000, 3))
+    angle = np.radians(15)
+    R = np.array([[np.cos(angle), 0, np.sin(angle)], [0, 1, 0], [-np.sin(angle), 0, np.cos(angle)]])
+    dst = (src - src.mean(0)) @ R.T + src.mean(0) + [0.3, 0.0, 0.1]
+    fit = rigid_transform(src, dst, 0.10, 0.3, 0.5)["icp_fitness"]
+    shaky = rigid_transform(src, dst, 0.10, fit - 0.01, fit + 0.01)  # just below "reliable"
+    assert shaky["rotation_deg"] == pytest.approx(15, abs=2) and not shaky["rotation_reliable"]
+    assert not np.allclose(shaky["R"], np.eye(3))  # the ICP motion is used
+    change = {"type": "moved", "evidence": {}, "transform": shaky,
+              "before": {"extents": [0.4, 1.4, 0.1], "centroid": [0, 0, 0]},
+              "after": {"extents": [0.4, 1.4, 0.1], "centroid": [0.3, 0, 0.1]}}
+    assert describe("moved", change).endswith("(rotation uncertain).")
+    change["transform"] = {**shaky, "rotation_reliable": True}
+    assert "turned by about 15 degrees" in describe("moved", change)
 
 
 def test_summary_text():

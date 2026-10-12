@@ -34,7 +34,7 @@ import numpy as np
 from scipy import ndimage
 
 from roomdiff.paths import RECORDINGS, OutputPaths
-from roomdiff.projection import best_views, project_aabb, project_to_pixels
+from roomdiff.projection import best_views, project_to_pixels
 from roomdiff.recon import load_recon
 
 if TYPE_CHECKING:
@@ -332,38 +332,54 @@ def view_evidence(
 # ---------------------------------------------------------------- debug crops
 
 
+def blob_voxels(
+    labelled: Mapping[str, np.ndarray], blobs: Sequence[Mapping[str, Any]], grid: Grid
+) -> dict[int, np.ndarray]:
+    """World centres (V, 3) of the voxels of each blob, from the per-type label arrays."""
+    out: dict[int, np.ndarray] = {}
+    for kind, labels in labelled.items():
+        boxes = ndimage.find_objects(labels)
+        for blob in blobs:
+            if blob["type"] != kind or blob["id"] > len(boxes) or boxes[blob["id"] - 1] is None:
+                continue
+            box = boxes[blob["id"] - 1]
+            ijk = np.argwhere(labels[box] == blob["id"]) + [s.start for s in box]
+            out[blob["id"]] = grid.centers(ijk)
+    return out
+
+
 def write_debug_crops(
     debug_dir: Path, blobs: list[dict[str, Any]], recon: Mapping[str, Any],
-    n_views: int = 2, occlusion_tol: float = 0.10,
+    voxels: Mapping[int, np.ndarray], n_views: int = 2, depth_tol: float = 0.05,
 ) -> int:
-    """For each blob and recording, draw the blob's projected AABB on the `n_views`
-    keyframes that see its centroid best; adds `views` to each blob. Returns the number
-    of images written."""
+    """For each blob and recording, draw the 2D box of the blob's projected voxel centres
+    on the `n_views` keyframes that show them best (`roomdiff.projection.best_views`:
+    depth-consistent voxels in the recording where the blob is occupied, unoccluded ones
+    in the other); adds `views` to each blob. Returns the number of images written."""
     from PIL import Image, ImageDraw, ImageFont
 
     debug_dir.mkdir(parents=True, exist_ok=True)
     for old in debug_dir.glob("blob_*.jpg"):
         old.unlink()
-    height, width = recon["depth"].shape[1:]
     font = ImageFont.load_default(size=14)
     written = 0
     for blob in blobs:
         color = TYPE_COLORS[blob["type"]]
+        own = CANDIDATE_TYPES[blob["type"]][0]
+        points = voxels.get(blob["id"], np.asarray([blob["centroid"]], np.float64))
         blob["views"] = {}
         for rec_id, name in enumerate(RECORDINGS):
             frames = np.flatnonzero(recon["rec"] == rec_id)
-            chosen = best_views(blob["centroid"], frames, recon["cam2world"], recon["K"],
-                                recon["depth"], n_views, occlusion_tol)
+            chosen = best_views(points, frames, recon["cam2world"], recon["K"], recon["depth"],
+                                n_views, depth_tol, recon["valid"], on_surface=rec_id == own)
             blob["views"][name] = []
-            for k, (i, occluded) in enumerate(chosen):
+            for k, view in enumerate(chosen):
+                i = view.frame
                 image = Image.fromarray(recon["images"][i])
                 draw = ImageDraw.Draw(image)
-                box = project_aabb(*blob["aabb"], recon["K"][i], recon["cam2world"][i],
-                                   width, height)
-                if box is not None:
-                    draw.rectangle(box, outline=color, width=3)
+                draw.rectangle(view.box, outline=color, width=3)
                 text = f"{blob['id']}:{blob['type']} {name} {recon['files'][i]}"
-                if occluded:
+                if view.occluded:
                     text += " (occluded)"
                 draw.rectangle(draw.textbbox((4, 4), text, font=font), fill=(0, 0, 0))
                 draw.text((4, 4), text, fill=color, font=font)
@@ -371,8 +387,9 @@ def write_debug_crops(
                 image.save(debug_dir / file, quality=85)
                 written += 1
                 blob["views"][name].append(
-                    {"frame": int(i), "file": str(recon["files"][i]), "occluded": occluded,
-                     "box": list(box) if box is not None else None, "crop": f"debug/{file}"})
+                    {"frame": int(i), "file": str(recon["files"][i]), "occluded": view.occluded,
+                     "visible_fraction": round(view.visible, 3), "box": list(view.box),
+                     "crop": f"debug/{file}"})
     return written
 
 
@@ -486,7 +503,8 @@ def run_visibility(out_dir: str | Path, cfg: Mapping[str, Any]) -> dict[str, Any
             r["evidence"]["observing_views"] = int(n)
             r["evidence"]["min_camera_distance"] = round(float(d), 3)
     debug_blobs = records[:params["max_debug_blobs"]]
-    n_crops = write_debug_crops(out / "debug", debug_blobs, recon, params["debug_views"],
+    n_crops = write_debug_crops(out / "debug", debug_blobs, recon,
+                                blob_voxels(labelled, debug_blobs, grid), params["debug_views"],
                                 params["occlusion_tol"])
     times["evidence_and_crops"] = time.perf_counter() - t0
 

@@ -9,10 +9,13 @@ from roomdiff.instances import (
     View,
     box_distance,
     build_instance,
+    connected_to_blob,
     decode_rle,
     encode_rle,
     enlarge_box,
+    grow_box,
     keep_near_blob,
+    lift_view_points,
     mean_pairwise_cosine,
     merge_close_fragments,
     merge_instances,
@@ -20,6 +23,7 @@ from roomdiff.instances import (
     pooled_feature,
     prompt_points,
     select_blobs,
+    touched_sides,
 )
 from roomdiff.models import FakeFeaturizer, FakeSegmenter
 
@@ -36,28 +40,33 @@ def pose(x: float) -> np.ndarray:
     return T
 
 
-def render(cam2world: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """z-depth and object id (0 floor / none, 1 box) of the floor + box scene."""
+def render(cam2world: np.ndarray, boxes=((BOX_LO, BOX_HI),)) -> tuple[np.ndarray, np.ndarray]:
+    """z-depth and object id (0 floor / none, 1 any box) of the floor + boxes scene."""
     v, u = np.mgrid[0:H, 0:W].astype(np.float64)
     d = np.stack([(u - K[0, 2]) / K[0, 0], (v - K[1, 2]) / K[1, 1], np.ones((H, W))], -1)
     c = cam2world[:3, 3]
     with np.errstate(divide="ignore", invalid="ignore"):
-        t_floor = np.where(d[..., 1] > 0, (FLOOR_Y - c[1]) / d[..., 1], np.inf)
-        t0, t1 = (BOX_LO - c) / d, (BOX_HI - c) / d
-    near, far = np.minimum(t0, t1).max(-1), np.maximum(t0, t1).min(-1)
-    hit_box = (near < far) & (near > 0) & (near < t_floor)
-    depth = np.where(hit_box, near, t_floor)
+        depth = np.where(d[..., 1] > 0, (FLOOR_Y - c[1]) / d[..., 1], np.inf)
+    ids = np.zeros((H, W), np.int32)
+    for lo, hi in boxes:
+        with np.errstate(divide="ignore", invalid="ignore"):
+            t0, t1 = (lo - c) / d, (hi - c) / d
+        near, far = np.minimum(t0, t1).max(-1), np.maximum(t0, t1).min(-1)
+        hit_box = (near < far) & (near > 0) & (near < depth)
+        depth = np.where(hit_box, near, depth)
+        ids = np.where(hit_box, 1, ids)
     depth = np.where(np.isfinite(depth) & (depth < 6), depth, 0.0)
-    return depth.astype(np.float32), hit_box.astype(np.int32)
+    return depth.astype(np.float32), ids
 
 
-def make_recon(xs=(-0.4, 0.0, 0.4)) -> tuple[dict, dict[str, np.ndarray]]:
+def make_recon(xs=(-0.4, 0.0, 0.4), boxes=((BOX_LO, BOX_HI),)
+               ) -> tuple[dict, dict[str, np.ndarray]]:
     """Recon-like dict of cameras at the lateral positions `xs`, plus label maps."""
     data = {k: [] for k in ("rec", "files", "images", "cam2world", "K", "depth", "valid")}
     labels = {}
     for i, x in enumerate(xs):
         T = pose(x)
-        depth, ids = render(T)
+        depth, ids = render(T, boxes)
         image = np.where(ids[..., None] == 1, [200, 30, 30], [90, 90, 90]).astype(np.uint8)
         data["rec"].append(0)
         data["files"].append(f"before_{i:05d}.jpg")
@@ -70,13 +79,13 @@ def make_recon(xs=(-0.4, 0.0, 0.4)) -> tuple[dict, dict[str, np.ndarray]]:
     return {k: np.stack(v) for k, v in data.items()}, labels
 
 
-def box_surface_voxels(step: float = 0.02) -> np.ndarray:
-    """Voxel centres on the visible faces of the box (front face and top), as M3 gives."""
-    xs = np.arange(BOX_LO[0] + step / 2, BOX_HI[0], step)
-    ys = np.arange(BOX_LO[1] + step / 2, BOX_HI[1] - 0.04, step)  # not touching the floor
-    zs = np.arange(BOX_LO[2] + step / 2, BOX_HI[2], step)
-    front = np.array([[x, y, BOX_LO[2] + step / 2] for x in xs for y in ys])
-    top = np.array([[x, BOX_LO[1] + step / 2, z] for x in xs for z in zs])
+def box_surface_voxels(step: float = 0.02, lo=BOX_LO, hi=BOX_HI) -> np.ndarray:
+    """Voxel centres on the visible faces of a box (front face and top), as M3 gives."""
+    xs = np.arange(lo[0] + step / 2, hi[0], step)
+    ys = np.arange(lo[1] + step / 2, hi[1] - 0.04, step)  # not touching the floor
+    zs = np.arange(lo[2] + step / 2, hi[2], step)
+    front = np.array([[x, y, lo[2] + step / 2] for x in xs for y in ys])
+    top = np.array([[x, lo[1] + step / 2, z] for x in xs for z in zs])
     return np.concatenate([front, top])
 
 
@@ -136,8 +145,9 @@ def test_lift_keeps_the_object_and_drops_mask_bleeding():
     recon, _ = make_recon()
     voxels = box_surface_voxels()
     seg = Bleeding()
+    params = PARAMS | {"mask_grow_rounds": 0}  # a box-shaped mask always reaches the box
     inst, reason = build_instance(blob(7, "disappeared", voxels.mean(0)), voxels, recon,
-                                  [0, 1, 2], seg, PARAMS, on_floor)
+                                  [0, 1, 2], seg, params, on_floor)
     assert reason == "ok" and inst is not None and inst.kind == "disappeared"
     assert seg.calls == len(inst.views) == 3  # n_views = 4 but only 3 cameras
     assert len(inst.points) >= PARAMS["min_points"]
@@ -147,7 +157,7 @@ def test_lift_keeps_the_object_and_drops_mask_bleeding():
     assert inside_box(inst.points, 0.03).mean() > 0.8
     # without the static-surface test the whole expanded box of floor comes along
     loose, _ = build_instance(blob(7, "disappeared", voxels.mean(0)), voxels, recon,
-                              [0, 1, 2], Bleeding(), PARAMS, None)
+                              [0, 1, 2], Bleeding(), params, None)
     assert loose is not None and len(loose.points) > len(inst.points)
     assert cKDTree(voxels).query(loose.points)[0].max() > 0.13
     assert inside_box(loose.points, 0.03).mean() < inside_box(inst.points, 0.03).mean() - 0.1
@@ -169,6 +179,96 @@ def test_keep_near_blob_rules():
     keep = keep_near_blob(points, voxels, expand_m=0.15, near_voxel_m=0.10, on_static=static)
     assert keep.tolist() == [True, True, False, False, True]
     assert keep_near_blob(points[:0], voxels, 0.15, 0.1).shape == (0,)
+
+
+class BoxBound(FakeSegmenter):
+    """Like SAM with a box prompt: the label region under the prompt points, cut to the
+    prompt box."""
+
+    def segment(self, key, image, box, points):
+        masks, scores = super().segment(key, image, box, points)
+        x0, y0, x1, y1 = box
+        inside = np.zeros(masks.shape[1:], bool)
+        inside[y0:y1 + 1, x0:x1 + 1] = True
+        return masks & inside, scores
+
+
+def test_lift_recovers_the_part_of_the_object_beyond_the_blob():
+    """A two-part object (a 40 cm seat and a 40 cm back plate on its rear edge) whose blob
+    covers only the seat, like the ladder whose appeared blob was only its lower half.
+    SAM, prompted with the seat's box, segments only what lies in the box; the mask
+    reaches the top of the box, so it is re-prompted with the box grown upwards and then
+    shows the whole object. Lifting keeps the connected component that holds the blob, so
+    the back comes along. Without the growth, or with the old bounded rule (forced here
+    with max_growth = 0), the back is cut off."""
+    seat = (np.array([-0.15, 0.10, 0.85]), np.array([0.15, FLOOR_Y, 1.15]))
+    back = (np.array([-0.15, -0.30, 1.05]), np.array([0.15, 0.10, 1.15]))
+    recon, labels = make_recon(boxes=(seat, back))
+    voxels = box_surface_voxels(lo=seat[0], hi=[0.15, FLOOR_Y, 1.05])  # seat front and top
+    args = (blob(7, "appeared", voxels.mean(0)), voxels, recon, [0, 1, 2])
+    seg = BoxBound(labels)
+    inst, reason = build_instance(*args, seg, PARAMS, on_floor)
+    assert reason == "ok" and inst is not None and not inst.lift_fallback
+    assert seg.calls > len(inst.views)  # re-prompted with grown boxes
+    assert all(v.box[1] < 100 for v in inst.views)  # grew past the back top (row 102) from ~175
+    lo, hi = inst.points.min(0), inst.points.max(0)
+    assert lo[1] < -0.28 and hi[1] > FLOOR_Y - 0.05  # full height: back top to the floor
+    assert hi[2] < 1.16 and lo[0] > -0.16 and hi[0] < 0.16  # nothing but the object
+    assert all(g is not None and g < PARAMS["max_growth"] for g in inst.lift_growth)
+    cut, _ = build_instance(*args, BoxBound(labels), PARAMS | {"mask_grow_rounds": 0}, on_floor)
+    assert cut is not None and cut.points[:, 1].min() > -0.05
+    bounded, _ = build_instance(*args, BoxBound(labels), PARAMS | {"max_growth": 0.0}, on_floor)
+    assert bounded is not None and bounded.lift_fallback
+    assert bounded.points[:, 1].min() > voxels[:, 1].min() - PARAMS["expand_m"] - 0.01
+
+
+def test_mask_growth_helpers():
+    mask = np.zeros((H, W), bool)
+    mask[40:100, 50:70] = True  # reaches the top of the box (60, 40) - (90, 120) only
+    assert touched_sides(mask, (45, 40, 90, 120), W, H) == (False, True, False, False)
+    assert touched_sides(mask, (45, 0, 90, 120), W, H) == (False, False, False, False)
+    mask[40:100, 88:91] = True  # a 3 px sliver along the right side: too short a contact?
+    assert touched_sides(mask, (45, 40, 90, 120), W, H)[2]  # 60 rows of 60: it does reach
+    assert grow_box((45, 40, 90, 120), (False, True, False, False), W, H) == (45, 0, 90, 120)
+    assert grow_box((45, 40, 90, 120), (True, False, True, True), W, H) == (0, 40, 136, 201)
+
+
+def test_lift_view_points_cuts_bleeding_and_falls_back():
+    """Mask points = a 30 cm cube's front and top (also the blob, 2 cm voxels) + the floor
+    it stands on (3 x 3 m, connected) + a second cube on a shelf beside it (not connected)."""
+    g = np.arange(-0.15, 0.1501, 0.01)
+    cube = np.concatenate([np.stack(np.meshgrid(g, g, [-0.15], indexing="ij"), -1).reshape(-1, 3),
+                           np.stack(np.meshgrid(g, [-0.15], g, indexing="ij"), -1).reshape(-1, 3)])
+    f = np.arange(-1.5, 1.5, 0.01)
+    floor = np.stack(np.meshgrid(f, [0.15], f, indexing="ij"), -1).reshape(-1, 3)
+    floor = floor[(np.abs(floor[:, 0]) > 0.15) | (np.abs(floor[:, 2]) > 0.15)]
+    other = cube + [0.6, -0.5, 0.0]
+    points = np.concatenate([cube, floor, other])
+    part = np.repeat([0, 1, 2], [len(cube), len(floor), len(other)])
+    voxels = np.round(cube / 0.02) * 0.02 + 0.01  # the blob: voxel centres (y > 0.15 = floor)
+    voxels = np.unique(voxels[voxels[:, 1] < 0.12], axis=0)
+
+    def static(p):
+        return np.abs(p[:, 1] - 0.15) < 0.03
+
+    keep = connected_to_blob(points, voxels, 0.03, 0.015, 0.03)
+    assert keep is not None and keep[part == 0].all() and keep[part == 1].all()
+    assert not keep[part == 2].any()  # not connected to the blob
+    assert connected_to_blob(points, voxels + [0, -1.0, 0], 0.03, 0.015, 0.03) is None
+    # the floor is static: cut back to within near_voxel_m of the blob, no fallback
+    keep, fell_back, ratio = lift_view_points(points, voxels, PARAMS, static, 0.02)
+    assert not fell_back and keep[part == 0].mean() > 0.9 and not keep[part == 2].any()
+    assert 1.0 < ratio < 3.0
+    near = np.min(np.linalg.norm(floor[:, None] - voxels[None], axis=-1), 1) <= 0.1
+    assert np.array_equal(keep[part == 1], near)
+    # the floor is not static (the other video never saw it): far too big -> bounded rule
+    keep, fell_back, ratio = lift_view_points(points, voxels, PARAMS, None, 0.02)
+    assert fell_back and ratio > 50
+    assert np.array_equal(keep, keep_near_blob(points, voxels, PARAMS["expand_m"],
+                                               PARAMS["near_voxel_m"], None))
+    assert np.abs(points[keep][:, [0, 2]]).max() <= voxels[:, 0].max() + PARAMS["expand_m"]
+    # the mask missed the blob: bounded rule too
+    assert lift_view_points(points, voxels + [0, -1.0, 0], PARAMS, static, 0.02)[1]
 
 
 def test_select_views_skips_cameras_that_cannot_see_the_blob():
