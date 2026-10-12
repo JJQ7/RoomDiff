@@ -1,0 +1,1409 @@
+{
+  "scene": {
+    "before": "original_video1.mp4",
+    "after": "original_video2.mp4",
+    "units": "metres (approx.)"
+  },
+  "changes": [
+    {
+      "id": 1,
+      "type": "moved",
+      "label": "curtain",
+      "confidence": 0.924,
+      "before": {
+        "instance_id": 1,
+        "centroid": [
+          2.1900999546051025,
+          0.7813000082969666,
+          -1.4605000019073486
+        ],
+        "aabb": [
+          [
+            2.024600028991699,
+            0.20499999821186066,
+            -1.895300030708313
+          ],
+          [
+            2.312700033187866,
+            1.2229000329971313,
+            -1.1993999481201172
+          ]
+        ],
+        "extents": [
+          0.288100004196167,
+          1.017899990081787,
+          0.695900022983551
+        ],
+        "obb": {
+          "center": [
+            2.152,
+            0.714,
+            -1.5396
+          ],
+          "extents": [
+            0.1291,
+            1.0179,
+            0.7387
+          ],
+          "yaw_deg": 18.5
+        },
+        "n_points": 10821,
+        "blob_ids": [
+          12
+        ],
+        "source": "geometry"
+      },
+      "after": {
+        "instance_id": 1,
+        "centroid": [
+          2.4370999336242676,
+          0.7664999961853027,
+          -0.37139999866485596
+        ],
+        "aabb": [
+          [
+            2.3417000770568848,
+            0.008999999612569809,
+            -0.5396999716758728
+          ],
+          [
+            2.5188000202178955,
+            1.5226999521255493,
+            -0.16110000014305115
+          ]
+        ],
+        "extents": [
+          0.17710000276565552,
+          1.513700008392334,
+          0.37860000133514404
+        ],
+        "obb": {
+          "center": [
+            2.4409,
+            0.7658,
+            -0.3492
+          ],
+          "extents": [
+            0.1641,
+            1.5137,
+            0.3719
+          ],
+          "yaw_deg": 10.33
+        },
+        "n_points": 16302,
+        "blob_ids": [
+          10,
+          16
+        ],
+        "source": "geometry"
+      },
+      "transform": {
+        "translation_m": 1.114,
+        "rotation_deg": 10.23,
+        "rotation_reliable": true,
+        "R": [
+          [
+            0.992308,
+            -0.001444,
+            -0.123782
+          ],
+          [
+            0.017297,
+            0.99174,
+            0.127093
+          ],
+          [
+            0.122576,
+            -0.128256,
+            0.984137
+          ]
+        ],
+        "t": [
+          0.08202,
+          0.12996,
+          0.89512
+        ],
+        "icp_fitness": 0.5185,
+        "icp_rmse": 0.0122
+      },
+      "evidence": {
+        "free_rays": 6975,
+        "observing_views": 6,
+        "observing_views_before_place": 6,
+        "observing_views_after_place": 7,
+        "appearance_similarity": 0.7775,
+        "cls_similarity": 0.613,
+        "mask_score": 0.8532,
+        "icp_fitness": 0.5185,
+        "vlm_verdict": "confirmed",
+        "vlm_reason": "Both outlined regions show curtains with identical floral pattern and color, consistent material appearance, and same overall design, despite different lighting and poses.",
+        "vlm_motion_reason": "The curtain's shape and pattern remain consistent, indicating it was not deformed or rearranged, but rather moved as a whole."
+      },
+      "description": "The light-colored floral curtain (about 1.0 x 0.7 x 0.1 m) shifted 1.1 m within the far left part of the room (lowest point 0.5 m above the floor before, on the floor after) and rotated about 10 degrees; the later video shows its old spot empty from 6 viewpoints and the earlier video shows the new spot empty from 7 viewpoints.",
+      "crops": {
+        "before": "crops/1_before.jpg",
+        "before_place": "crops/1_before_place.jpg",
+        "after": "crops/1_after.jpg",
+        "after_place": "crops/1_after_place.jpg"
+      },
+      "attributes": "light-colored, floral pattern",
+      "object_description": "A light-colored curtain with a floral pattern, hanging in a bedroom window.",
+      "motion_kind": "rigid",
+      "description_template": "The curtain (light-colored, floral pattern; about 1.0 x 0.7 x 0.1 m) moved 1.1 m within the far left part of the room (lowest part 0.5 m above the floor before, on the floor after) and turned by about 10 degrees; the after recording saw the old place empty from 6 viewpoints and the before recording saw the new place empty from 7 viewpoints."
+    },
+    {
+      "id": 2,
+      "type": "moved",
+      "label": "wooden ladder shelf",
+      "confidence": 0.845,
+      "before": {
+        "instance_id": 3,
+        "centroid": [
+          2.0604000091552734,
+          0.7809000015258789,
+          0.08510000258684158
+        ],
+        "aabb": [
+          [
+            1.8909000158309937,
+            0.0544000007212162,
+            -0.02590000070631504
+          ],
+          [
+            2.350600004196167,
+            1.4275000095367432,
+            0.2054000049829483
+          ]
+        ],
+        "extents": [
+          0.45969998836517334,
+          1.3731000423431396,
+          0.2313999980688095
+        ],
+        "obb": {
+          "center": [
+            2.1222,
+            0.7409,
+            0.0799
+          ],
+          "extents": [
+            0.5015,
+            1.3731,
+            0.1265
+          ],
+          "yaw_deg": 19.78
+        },
+        "n_points": 5254,
+        "blob_ids": [
+          13
+        ],
+        "source": "geometry"
+      },
+      "after": {
+        "instance_id": 2,
+        "centroid": [
+          1.8286000490188599,
+          0.6452999711036682,
+          0.193900004029274
+        ],
+        "aabb": [
+          [
+            1.6993000507354736,
+            0.0034000000450760126,
+            0.09730000048875809
+          ],
+          [
+            2.0787999629974365,
+            1.492799997329712,
+            0.31150001287460327
+          ]
+        ],
+        "extents": [
+          0.37959998846054077,
+          1.489400029182434,
+          0.2142000049352646
+        ],
+        "obb": {
+          "center": [
+            1.8844,
+            0.7481,
+            0.2109
+          ],
+          "extents": [
+            0.3803,
+            1.4894,
+            0.2075
+          ],
+          "yaw_deg": -5.4
+        },
+        "n_points": 4465,
+        "blob_ids": [
+          18
+        ],
+        "source": "geometry"
+      },
+      "transform": {
+        "translation_m": 0.2916,
+        "rotation_deg": 6.23,
+        "rotation_reliable": true,
+        "R": [
+          [
+            0.994339,
+            0.082445,
+            -0.067035
+          ],
+          [
+            -0.080919,
+            0.996403,
+            0.02518
+          ],
+          [
+            0.068869,
+            -0.019613,
+            0.997433
+          ]
+        ],
+        "t": [
+          -0.23623,
+          -0.0355,
+          -0.03664
+        ],
+        "icp_fitness": 0.7037,
+        "icp_rmse": 0.0128
+      },
+      "evidence": {
+        "free_rays": 5528,
+        "observing_views": 6,
+        "observing_views_before_place": 4,
+        "observing_views_after_place": 9,
+        "appearance_similarity": 0.8219,
+        "cls_similarity": 0.7398,
+        "mask_score": 0.8139,
+        "icp_fitness": 0.7037,
+        "vlm_verdict": "confirmed",
+        "vlm_reason": "The outlined objects are identical wooden ladder shelves with the same color, material, and design, including the same number and shape of rungs and side rails.",
+        "vlm_motion_reason": "The ladder shelf appears in the same position relative to the wall and floor in both images, with no visible deformation or movement."
+      },
+      "description": "The brown wooden ladder shelf (about 1.4 x 0.5 x 0.1 m) moved 0.3 m within the far part of the room (lowest point 0.3 m above the floor before, on the floor after); the later video shows its old spot empty from 4 viewpoints and the earlier video shows the new spot empty from 9 viewpoints.",
+      "crops": {
+        "before": "crops/2_before.jpg",
+        "before_place": "crops/2_before_place.jpg",
+        "after": "crops/2_after.jpg",
+        "after_place": "crops/2_after_place.jpg"
+      },
+      "attributes": "brown wood",
+      "object_description": "a tall, narrow wooden ladder-style shelf with multiple rungs, leaning against a wall.",
+      "motion_kind": "rigid",
+      "description_template": "The wooden ladder shelf (brown wood; about 1.4 x 0.5 x 0.1 m) moved 0.3 m within the far part of the room (lowest part 0.3 m above the floor before, on the floor after); the after recording saw the old place empty from 4 viewpoints and the before recording saw the new place empty from 9 viewpoints."
+    },
+    {
+      "id": 3,
+      "type": "removed",
+      "label": "black wallet",
+      "confidence": 0.954,
+      "before": {
+        "instance_id": 11,
+        "centroid": [
+          -1.186900019645691,
+          0.6223000288009644,
+          -0.3228999972343445
+        ],
+        "aabb": [
+          [
+            -1.2440999746322632,
+            0.6141999959945679,
+            -0.37450000643730164
+          ],
+          [
+            -1.1287000179290771,
+            0.6326000094413757,
+            -0.2639999985694885
+          ]
+        ],
+        "extents": [
+          0.11540000140666962,
+          0.018400000408291817,
+          0.11060000211000443
+        ],
+        "obb": {
+          "center": [
+            -1.1874,
+            0.6234,
+            -0.321
+          ],
+          "extents": [
+            0.1049,
+            0.0184,
+            0.0978
+          ],
+          "yaw_deg": 18.24
+        },
+        "n_points": 179,
+        "blob_ids": [],
+        "source": "appearance"
+      },
+      "after": null,
+      "transform": null,
+      "evidence": {
+        "free_rays": 0,
+        "free_frames_mean": 0.0,
+        "observing_views": 12,
+        "occ_points": 179,
+        "mask_score": 0.9561,
+        "view_consistency": 0.8891,
+        "appearance": {
+          "cluster": 2,
+          "frames_supporting": 8,
+          "mean_score": 0.73,
+          "feat_term": 0.73,
+          "geom_term": 0.0,
+          "partners_visible": 5
+        },
+        "vlm_verdict": "confirmed",
+        "vlm_reason": "in place: removed; The black wallet is gone in image 2, leaving only the bare surface.",
+        "vlm_replace_answer": "removed"
+      },
+      "description": "The black leather wallet (about 10 x 10 x 2 cm), which was 0.6 m above the floor in the near right part of the room, was removed: the later video looked at that spot from 12 viewpoints and saw it empty.",
+      "crops": {
+        "before": "crops/3_before.jpg",
+        "after": "crops/3_after.jpg"
+      },
+      "attributes": "black leather",
+      "object_description": "a small black leather wallet sitting on a surface.",
+      "motion_kind": null,
+      "description_template": "The black wallet (black leather; about 10 x 10 x 2 cm), which was 0.6 m above the floor in the near right part of the room, was removed: the after recording looked at that spot from 12 viewpoints and saw it empty."
+    },
+    {
+      "id": 5,
+      "type": "removed",
+      "label": "brown leather bag",
+      "confidence": 0.913,
+      "before": {
+        "instance_id": 4,
+        "centroid": [
+          -0.4178999960422516,
+          0.1347000002861023,
+          0.8492000102996826
+        ],
+        "aabb": [
+          [
+            -0.620199978351593,
+            0.005100000184029341,
+            0.7045000195503235
+          ],
+          [
+            -0.20739999413490295,
+            0.2612000107765198,
+            0.9829000234603882
+          ]
+        ],
+        "extents": [
+          0.41280001401901245,
+          0.25600001215934753,
+          0.2784000039100647
+        ],
+        "obb": {
+          "center": [
+            -0.4211,
+            0.1332,
+            0.8458
+          ],
+          "extents": [
+            0.4456,
+            0.256,
+            0.1846
+          ],
+          "yaw_deg": 16.54
+        },
+        "n_points": 2703,
+        "blob_ids": [
+          20
+        ],
+        "source": "geometry"
+      },
+      "after": null,
+      "transform": null,
+      "evidence": {
+        "free_rays": 2571,
+        "free_frames_mean": 8.24,
+        "observing_views": 7,
+        "occ_points": 51545,
+        "mask_score": 0.8518,
+        "view_consistency": 0.8596,
+        "vlm_verdict": "confirmed",
+        "vlm_reason": "The brown object highlighted in image 1 is completely absent in image 2, which shows only the empty floor and wall corner within the same outlined region."
+      },
+      "description": "The dark brown leather bag (about 0.4 x 0.3 x 0.2 m), which was on the floor on the right side of the room, was removed: the later video looked at that spot from 7 viewpoints and saw it empty.",
+      "crops": {
+        "before": "crops/5_before.jpg",
+        "after": "crops/5_after.jpg"
+      },
+      "attributes": "dark brown, leather",
+      "object_description": "a brown leather bag lying on a wooden floor.",
+      "motion_kind": null,
+      "description_template": "The brown leather bag (dark brown, leather; about 0.4 x 0.3 x 0.2 m), which was on the floor on the right side of the room, was removed: the after recording looked at that spot from 7 viewpoints and saw it empty."
+    },
+    {
+      "id": 7,
+      "type": "removed",
+      "label": "curtain",
+      "confidence": 0.85,
+      "before": {
+        "instance_id": 2,
+        "centroid": [
+          2.4058001041412354,
+          0.8715000152587891,
+          -0.805899977684021
+        ],
+        "aabb": [
+          [
+            2.27810001373291,
+            0.06530000269412994,
+            -1.240399956703186
+          ],
+          [
+            2.549099922180176,
+            1.351099967956543,
+            -0.3483000099658966
+          ]
+        ],
+        "extents": [
+          0.2709999978542328,
+          1.2857999801635742,
+          0.8920999765396118
+        ],
+        "obb": {
+          "center": [
+            2.411,
+            0.7082,
+            -0.7891
+          ],
+          "extents": [
+            0.09,
+            1.2858,
+            0.915
+          ],
+          "yaw_deg": 16.59
+        },
+        "n_points": 9872,
+        "blob_ids": [
+          15
+        ],
+        "source": "geometry"
+      },
+      "after": null,
+      "transform": null,
+      "evidence": {
+        "free_rays": 1580,
+        "free_frames_mean": 3.65,
+        "observing_views": 4,
+        "occ_points": 15611,
+        "mask_score": 0.858,
+        "view_consistency": 0.9101,
+        "vlm_verdict": "confirmed",
+        "vlm_reason": "The curtain in image 1 is fully drawn and covers the window, while in image 2 the curtain is pulled aside, revealing the window and a lamp, so the curtain is no longer covering that spot."
+      },
+      "description": "The white curtain with dark grey flowers (about 1.3 x 0.9 x 0.1 m), which was 0.5 m above the floor in the far left part of the room, was removed: the later video looked at that spot from 4 viewpoints and saw it empty.",
+      "crops": {
+        "before": "crops/7_before.jpg",
+        "after": "crops/7_after.jpg"
+      },
+      "attributes": "white with dark grey flowers",
+      "object_description": "A sheer curtain with a floral pattern featuring dark grey flowers and leaves, hanging in a window.",
+      "motion_kind": null,
+      "description_template": "The curtain (white with dark grey flowers; about 1.3 x 0.9 x 0.1 m), which was 0.5 m above the floor in the far left part of the room, was removed: the after recording looked at that spot from 4 viewpoints and saw it empty."
+    },
+    {
+      "id": 10,
+      "type": "added",
+      "label": "hairbrush",
+      "confidence": 0.9,
+      "before": null,
+      "after": {
+        "instance_id": 8,
+        "centroid": [
+          0.5871000289916992,
+          0.43320000171661377,
+          -1.1799999475479126
+        ],
+        "aabb": [
+          [
+            0.44769999384880066,
+            0.4262000024318695,
+            -1.2539000511169434
+          ],
+          [
+            0.6729000210762024,
+            0.4410000145435333,
+            -1.1169999837875366
+          ]
+        ],
+        "extents": [
+          0.22529999911785126,
+          0.014800000004470348,
+          0.13689999282360077
+        ],
+        "obb": {
+          "center": [
+            0.5564,
+            0.4336,
+            -1.1759
+          ],
+          "extents": [
+            0.2342,
+            0.0148,
+            0.1118
+          ],
+          "yaw_deg": 16.52
+        },
+        "n_points": 332,
+        "blob_ids": [],
+        "source": "appearance"
+      },
+      "transform": null,
+      "evidence": {
+        "free_rays": 0,
+        "free_frames_mean": 0.0,
+        "observing_views": 11,
+        "occ_points": 332,
+        "mask_score": 0.92,
+        "view_consistency": 0.7475,
+        "appearance": {
+          "cluster": 11,
+          "frames_supporting": 6,
+          "mean_score": 0.7363,
+          "feat_term": 0.7363,
+          "geom_term": 0.0,
+          "partners_visible": 3
+        },
+        "replace_overlap": 0.9595,
+        "vlm_verdict": "confirmed",
+        "vlm_reason": "in place: different; The region outlined in image 1 contains a bed sheet, while image 2 shows a hairbrush in the same region, indicating a different object is present.",
+        "vlm_replace_answer": "different"
+      },
+      "description": "The black-bristled pink-handled hairbrush (about 23 x 11 x 1 cm) appeared 0.4 m above the floor in the middle of the room: the earlier video looked at that spot from 11 viewpoints and saw it empty.",
+      "crops": {
+        "after": "crops/10_after.jpg",
+        "before": "crops/10_before.jpg"
+      },
+      "replaces": 4,
+      "attributes": "black bristles, pink handle",
+      "object_description": "a hairbrush with black bristles and a pink handle lying on a bed.",
+      "motion_kind": null,
+      "description_template": "A hairbrush (black bristles, pink handle; about 23 x 11 x 1 cm) appeared 0.4 m above the floor in the middle of the room: the before recording looked at that spot from 11 viewpoints and saw it empty."
+    },
+    {
+      "id": 17,
+      "type": "unverified",
+      "label": "white dresser",
+      "confidence": 0.377,
+      "before": null,
+      "after": {
+        "instance_id": 4,
+        "centroid": [
+          -1.2603000402450562,
+          0.9305999875068665,
+          -0.4627000093460083
+        ],
+        "aabb": [
+          [
+            -1.575600028038025,
+            -0.0019000000320374966,
+            -1.0784000158309937
+          ],
+          [
+            -0.8245999813079834,
+            1.6134999990463257,
+            0.2483000010251999
+          ]
+        ],
+        "extents": [
+          0.7511000037193298,
+          1.615399956703186,
+          1.32669997215271
+        ],
+        "obb": {
+          "center": [
+            -1.2142,
+            0.8058,
+            -0.4011
+          ],
+          "extents": [
+            0.7113,
+            1.6154,
+            1.3409
+          ],
+          "yaw_deg": 3.49
+        },
+        "n_points": 19791,
+        "blob_ids": [
+          5,
+          11
+        ],
+        "source": "geometry"
+      },
+      "transform": null,
+      "evidence": {
+        "free_rays": 12,
+        "free_frames_mean": 0.0,
+        "observing_views": 0,
+        "occ_points": 548745,
+        "mask_score": 0.7828,
+        "view_consistency": 0.7249,
+        "seen_in": "after",
+        "vlm_verdict": "confirmed",
+        "vlm_reason": "The outline covers a white dresser with open drawers and scattered clothes, which are real physical objects."
+      },
+      "description": "The white wooden dresser (about 1.6 x 1.3 x 0.7 m), on the floor in the near right part of the room, was only visible in the later video; the earlier video never looked at that spot, so this possible change cannot be verified.",
+      "crops": {
+        "after": "crops/17_after.jpg",
+        "before": null
+      },
+      "attributes": "white, wooden",
+      "object_description": "A white wooden dresser with a mirror on top, cluttered with clothes and items.",
+      "motion_kind": null,
+      "description_template": "A white dresser (white, wooden; about 1.6 x 1.3 x 0.7 m), on the floor in the near right part of the room, was seen only in the after recording; the before recording never looked at that spot, so this possible change cannot be verified."
+    }
+  ],
+  "rejected": [
+    {
+      "id": 4,
+      "type": "removed",
+      "label": "bed sheet",
+      "confidence": 0.928,
+      "before": {
+        "instance_id": 10,
+        "centroid": [
+          0.6565999984741211,
+          0.436599999666214,
+          -1.2653000354766846
+        ],
+        "aabb": [
+          [
+            0.47440001368522644,
+            0.42660000920295715,
+            -1.6138999462127686
+          ],
+          [
+            0.8932999968528748,
+            0.44449999928474426,
+            -1.049399971961975
+          ]
+        ],
+        "extents": [
+          0.4189000129699707,
+          0.017899999395012856,
+          0.5645999908447266
+        ],
+        "obb": {
+          "center": [
+            0.6918,
+            0.4356,
+            -1.3535
+          ],
+          "extents": [
+            0.264,
+            0.0179,
+            0.6483
+          ],
+          "yaw_deg": -40.67
+        },
+        "n_points": 869,
+        "blob_ids": [],
+        "source": "appearance"
+      },
+      "after": null,
+      "transform": null,
+      "evidence": {
+        "free_rays": 0,
+        "free_frames_mean": 0.0,
+        "observing_views": 8,
+        "occ_points": 869,
+        "mask_score": 0.7965,
+        "view_consistency": 0.962,
+        "appearance": {
+          "cluster": 8,
+          "frames_supporting": 9,
+          "mean_score": 0.727,
+          "feat_term": 0.727,
+          "geom_term": 0.0,
+          "partners_visible": 3
+        },
+        "replace_overlap": 0.9595,
+        "vlm_verdict": "rejected",
+        "vlm_reason": "named 'bed sheet' (part of the room or a bare surface): in place: different; The region outlined in image 1 contains a bed sheet, while image 2 shows a hairbrush in the same region, indicating a different object is present.",
+        "vlm_replace_answer": "different"
+      },
+      "description": "An object about 0.42 x 0.02 x 0.56 m was removed from (0.66, 0.44, -1.27); the after recording saw that space empty in 8 views.",
+      "crops": {
+        "before": "crops/4_before.jpg",
+        "after": "crops/4_after.jpg"
+      },
+      "replaced_by": 10,
+      "attributes": "gray cotton",
+      "object_description": "A gray cotton bed sheet, slightly wrinkled and lying flat on a bed.",
+      "motion_kind": null
+    },
+    {
+      "id": 6,
+      "type": "removed",
+      "label": "pile of clothes",
+      "confidence": 0.888,
+      "before": {
+        "instance_id": 9,
+        "centroid": [
+          -0.6104000210762024,
+          0.00559999980032444,
+          -0.5924999713897705
+        ],
+        "aabb": [
+          [
+            -0.9121999740600586,
+            -0.011599999852478504,
+            -0.7366999983787537
+          ],
+          [
+            -0.4609000086784363,
+            0.04859999939799309,
+            -0.3889000117778778
+          ]
+        ],
+        "extents": [
+          0.4512999951839447,
+          0.06019999831914902,
+          0.34779998660087585
+        ],
+        "obb": {
+          "center": [
+            -0.6562,
+            0.0185,
+            -0.623
+          ],
+          "extents": [
+            0.4712,
+            0.0602,
+            0.3146
+          ],
+          "yaw_deg": -22.91
+        },
+        "n_points": 968,
+        "blob_ids": [],
+        "source": "appearance"
+      },
+      "after": null,
+      "transform": null,
+      "evidence": {
+        "free_rays": 0,
+        "free_frames_mean": 0.0,
+        "observing_views": 12,
+        "occ_points": 968,
+        "mask_score": 0.7702,
+        "view_consistency": 0.8562,
+        "appearance": {
+          "cluster": 1,
+          "frames_supporting": 4,
+          "mean_score": 0.6578,
+          "feat_term": 0.6578,
+          "geom_term": 0.0,
+          "partners_visible": 2
+        },
+        "vlm_verdict": "rejected",
+        "vlm_reason": "in place: same; The red contour in image 1 traces a pile of clothes, which is still present in image 2, though the pile appears more spread out and less compact. The object is the same, just slightly rearranged.",
+        "vlm_replace_answer": "same"
+      },
+      "description": "An object about 0.45 x 0.06 x 0.35 m was removed from (-0.61, 0.01, -0.59); the after recording saw that space empty in 12 views.",
+      "crops": {
+        "before": "crops/6_before.jpg",
+        "after": "crops/6_after.jpg"
+      },
+      "attributes": "grey and black",
+      "object_description": "a messy pile of mixed clothing items on the wooden floor.",
+      "motion_kind": null
+    },
+    {
+      "id": 8,
+      "type": "removed",
+      "label": "dark blanket",
+      "confidence": 0.797,
+      "before": {
+        "instance_id": 8,
+        "centroid": [
+          0.7056999802589417,
+          0.49540001153945923,
+          -0.6887999773025513
+        ],
+        "aabb": [
+          [
+            0.5975000262260437,
+            0.44769999384880066,
+            -0.8665000200271606
+          ],
+          [
+            0.850600004196167,
+            0.5421000123023987,
+            -0.49709999561309814
+          ]
+        ],
+        "extents": [
+          0.2531999945640564,
+          0.09430000185966492,
+          0.3693999946117401
+        ],
+        "obb": {
+          "center": [
+            0.7157,
+            0.4949,
+            -0.6813
+          ],
+          "extents": [
+            0.2441,
+            0.0943,
+            0.3344
+          ],
+          "yaw_deg": 13.31
+        },
+        "n_points": 1129,
+        "blob_ids": [],
+        "source": "appearance"
+      },
+      "after": null,
+      "transform": null,
+      "evidence": {
+        "free_rays": 138,
+        "free_frames_mean": 0.55,
+        "observing_views": 10,
+        "occ_points": 1129,
+        "mask_score": 0.8362,
+        "view_consistency": 0.8666,
+        "appearance": {
+          "cluster": 7,
+          "frames_supporting": 3,
+          "mean_score": 0.8366,
+          "feat_term": 0.5513,
+          "geom_term": 0.2853,
+          "partners_visible": 3
+        },
+        "vlm_verdict": "rejected",
+        "vlm_reason": "in place: same; The object inside the contour in both images is the same plaid blanket, just with different lighting and slight folds.",
+        "vlm_replace_answer": "same"
+      },
+      "description": "An object about 0.25 x 0.09 x 0.37 m was removed from (0.71, 0.50, -0.69); the after recording saw that space empty in 10 views.",
+      "crops": {
+        "before": "crops/8_before.jpg",
+        "after": "crops/8_after.jpg"
+      },
+      "attributes": "dark, plaid pattern",
+      "object_description": "a dark, plaid-patterned blanket draped over a surface.",
+      "motion_kind": null
+    },
+    {
+      "id": 9,
+      "type": "removed",
+      "label": "wall",
+      "confidence": 0.578,
+      "before": {
+        "instance_id": 7,
+        "centroid": [
+          1.8696000576019287,
+          1.194000005722046,
+          0.3156000077724457
+        ],
+        "aabb": [
+          [
+            1.4744999408721924,
+            0.9052000045776367,
+            0.2223999947309494
+          ],
+          [
+            2.2047998905181885,
+            1.440999984741211,
+            0.43320000171661377
+          ]
+        ],
+        "extents": [
+          0.7301999926567078,
+          0.5358999967575073,
+          0.21080000698566437
+        ],
+        "obb": {
+          "center": [
+            1.8393,
+            1.1731,
+            0.3267
+          ],
+          "extents": [
+            0.76,
+            0.5359,
+            0.015
+          ],
+          "yaw_deg": 16.71
+        },
+        "n_points": 2594,
+        "blob_ids": [],
+        "source": "appearance"
+      },
+      "after": null,
+      "transform": null,
+      "evidence": {
+        "free_rays": 606,
+        "free_frames_mean": 1.01,
+        "observing_views": 3,
+        "occ_points": 2594,
+        "mask_score": 0.5837,
+        "view_consistency": 0.8207,
+        "appearance": {
+          "cluster": 5,
+          "frames_supporting": 3,
+          "mean_score": 1.0052,
+          "feat_term": 0.423,
+          "geom_term": 0.5822,
+          "partners_visible": 2
+        },
+        "vlm_verdict": "rejected",
+        "vlm_reason": "in place: same; The region in both images contains only a plain wall with no objects or changes, despite different lighting and viewpoints.",
+        "vlm_replace_answer": "same"
+      },
+      "description": "An object about 0.73 x 0.54 x 0.21 m was removed from (1.87, 1.19, 0.32); the after recording saw that space empty in 3 views.",
+      "crops": {
+        "before": "crops/9_before.jpg",
+        "after": "crops/9_after.jpg"
+      },
+      "attributes": "white painted",
+      "object_description": "A plain white painted wall with a wooden ladder leaning against it.",
+      "motion_kind": null
+    },
+    {
+      "id": 11,
+      "type": "added",
+      "label": "wooden floor",
+      "confidence": 0.873,
+      "before": null,
+      "after": {
+        "instance_id": 6,
+        "centroid": [
+          -0.33309999108314514,
+          0.010099999606609344,
+          0.7479000091552734
+        ],
+        "aabb": [
+          [
+            -0.4936999976634979,
+            0.004000000189989805,
+            0.6687999963760376
+          ],
+          [
+            -0.17499999701976776,
+            0.016699999570846558,
+            0.8345999717712402
+          ]
+        ],
+        "extents": [
+          0.31869998574256897,
+          0.012600000016391277,
+          0.16580000519752502
+        ],
+        "obb": {
+          "center": [
+            -0.339,
+            0.0103,
+            0.7464
+          ],
+          "extents": [
+            0.3377,
+            0.0126,
+            0.1237
+          ],
+          "yaw_deg": 11.45
+        },
+        "n_points": 659,
+        "blob_ids": [],
+        "source": "appearance"
+      },
+      "transform": null,
+      "evidence": {
+        "free_rays": 0,
+        "free_frames_mean": 0.0,
+        "observing_views": 13,
+        "occ_points": 659,
+        "mask_score": 0.8019,
+        "view_consistency": 0.7744,
+        "appearance": {
+          "cluster": 12,
+          "frames_supporting": 8,
+          "mean_score": 0.6673,
+          "feat_term": 0.6673,
+          "geom_term": 0.0,
+          "partners_visible": 7
+        },
+        "vlm_verdict": "rejected",
+        "vlm_reason": "in place: same; The region inside the contour in both images shows the same wooden floor surface, with no object present in either image.",
+        "vlm_replace_answer": "same"
+      },
+      "description": "An object about 0.32 x 0.01 x 0.17 m was added at (-0.33, 0.01, 0.75); the before recording saw that space empty in 13 views.",
+      "crops": {
+        "after": "crops/11_after.jpg",
+        "before": "crops/11_before.jpg"
+      },
+      "attributes": "brown wood",
+      "object_description": "a section of a wooden floor with visible grain and planks.",
+      "motion_kind": null
+    },
+    {
+      "id": 12,
+      "type": "added",
+      "label": "wall-mounted mirror",
+      "confidence": 0.57,
+      "before": null,
+      "after": {
+        "instance_id": 7,
+        "centroid": [
+          -0.6589000225067139,
+          0.984499990940094,
+          0.8614000082015991
+        ],
+        "aabb": [
+          [
+            -0.6916000247001648,
+            0.8988000154495239,
+            0.7434999942779541
+          ],
+          [
+            -0.6255000233650208,
+            1.25409996509552,
+            0.9872999787330627
+          ]
+        ],
+        "extents": [
+          0.06620000302791595,
+          0.35530000925064087,
+          0.24379999935626984
+        ],
+        "obb": {
+          "center": [
+            -0.6592,
+            1.0765,
+            0.8656
+          ],
+          "extents": [
+            0.0079,
+            0.3553,
+            0.2527
+          ],
+          "yaw_deg": 15.58
+        },
+        "n_points": 353,
+        "blob_ids": [],
+        "source": "appearance"
+      },
+      "transform": null,
+      "evidence": {
+        "free_rays": 353,
+        "free_frames_mean": 4.06,
+        "observing_views": 11,
+        "occ_points": 353,
+        "mask_score": 0.3553,
+        "view_consistency": 0.8452,
+        "appearance": {
+          "cluster": 13,
+          "frames_supporting": 2,
+          "mean_score": 0.6122,
+          "feat_term": 0.6122,
+          "geom_term": 0.0,
+          "partners_visible": 4
+        },
+        "vlm_verdict": "rejected",
+        "vlm_reason": "in place: same; The region inside the contour in both images shows a plain wall surface, with no objects present. The only differences are lighting and viewpoint, which aligns with 'same'.",
+        "vlm_replace_answer": "same"
+      },
+      "description": "An object about 0.07 x 0.36 x 0.24 m was added at (-0.66, 0.98, 0.86); the before recording saw that space empty in 11 views.",
+      "crops": {
+        "after": "crops/12_after.jpg",
+        "before": "crops/12_before.jpg"
+      },
+      "attributes": "green outline, metallic frame",
+      "object_description": "a mirror mounted on the wall with a green outline tracing its edge.",
+      "motion_kind": null
+    },
+    {
+      "id": 13,
+      "type": "unverified",
+      "label": "wooden bed frame",
+      "confidence": 0.479,
+      "before": {
+        "instance_id": 6,
+        "centroid": [
+          0.38280001282691956,
+          0.0017999999690800905,
+          -0.9707000255584717
+        ],
+        "aabb": [
+          [
+            0.13770000636577606,
+            -0.010599999688565731,
+            -1.4818999767303467
+          ],
+          [
+            0.617900013923645,
+            0.09640000015497208,
+            -0.3962000012397766
+          ]
+        ],
+        "extents": [
+          0.48019999265670776,
+          0.10700000077486038,
+          1.0857000350952148
+        ],
+        "obb": {
+          "center": [
+            0.372,
+            0.0429,
+            -0.9088
+          ],
+          "extents": [
+            0.2599,
+            0.107,
+            1.1263
+          ],
+          "yaw_deg": 17.92
+        },
+        "n_points": 2711,
+        "blob_ids": [
+          14
+        ],
+        "source": "geometry"
+      },
+      "after": null,
+      "transform": null,
+      "evidence": {
+        "free_rays": 0,
+        "free_frames_mean": 0.0,
+        "observing_views": 0,
+        "occ_points": 172277,
+        "mask_score": 0.9437,
+        "view_consistency": 0.9708,
+        "seen_in": "before",
+        "vlm_verdict": "rejected",
+        "vlm_reason": "The contour covers part of a wooden floor and the base of a bed frame, which are part of the room's structure."
+      },
+      "description": "An object about 0.48 x 0.11 x 1.09 m at (0.38, 0.00, -0.97) was seen only in the before recording; the after recording never observed that space, so no verdict is possible.",
+      "crops": {
+        "before": "crops/13_before.jpg",
+        "after": null
+      },
+      "attributes": "dark brown wood",
+      "object_description": "a dark brown wooden bed frame with visible grain and a curved corner detail.",
+      "motion_kind": null
+    },
+    {
+      "id": 14,
+      "type": "unverified",
+      "label": "mirror reflection",
+      "confidence": 0.473,
+      "before": {
+        "instance_id": 5,
+        "centroid": [
+          -1.6295000314712524,
+          0.8533999919891357,
+          0.40950000286102295
+        ],
+        "aabb": [
+          [
+            -1.8228000402450562,
+            0.6074000000953674,
+            0.13770000636577606
+          ],
+          [
+            -1.4134000539779663,
+            1.1518000364303589,
+            0.5393999814987183
+          ]
+        ],
+        "extents": [
+          0.40939998626708984,
+          0.5444999933242798,
+          0.4016999900341034
+        ],
+        "obb": {
+          "center": [
+            -1.6073,
+            0.8796,
+            0.3735
+          ],
+          "extents": [
+            0.3052,
+            0.5445,
+            0.4531
+          ],
+          "yaw_deg": -19.01
+        },
+        "n_points": 6224,
+        "blob_ids": [
+          9
+        ],
+        "source": "geometry"
+      },
+      "after": null,
+      "transform": null,
+      "evidence": {
+        "free_rays": 0,
+        "free_frames_mean": 0.0,
+        "observing_views": 0,
+        "occ_points": 116491,
+        "mask_score": 0.9236,
+        "view_consistency": 0.9666,
+        "seen_in": "before",
+        "vlm_verdict": "rejected",
+        "vlm_reason": "The highlighted region shows a reflection of a bed and floor, indicating it is inside a mirror."
+      },
+      "description": "An object about 0.41 x 0.54 x 0.40 m at (-1.63, 0.85, 0.41) was seen only in the before recording; the after recording never observed that space, so no verdict is possible.",
+      "crops": {
+        "before": "crops/14_before.jpg",
+        "after": null
+      },
+      "attributes": "dark, reflective",
+      "object_description": "The mirror reflects a distorted view of the room's floor and wall, showing a cluttered area with objects and a pipe.",
+      "motion_kind": null
+    },
+    {
+      "id": 15,
+      "type": "unverified",
+      "label": "wooden door",
+      "confidence": 0.46,
+      "before": null,
+      "after": {
+        "instance_id": 5,
+        "centroid": [
+          -2.637500047683716,
+          0.9194999933242798,
+          -0.36340001225471497
+        ],
+        "aabb": [
+          [
+            -2.7595999240875244,
+            0.4047999978065491,
+            -0.4474000036716461
+          ],
+          [
+            -2.454200029373169,
+            1.4156999588012695,
+            -0.27250000834465027
+          ]
+        ],
+        "extents": [
+          0.305400013923645,
+          1.0109000205993652,
+          0.17489999532699585
+        ],
+        "obb": {
+          "center": [
+            -2.6068,
+            0.9102,
+            -0.3586
+          ],
+          "extents": [
+            0.3015,
+            1.0109,
+            0.177
+          ],
+          "yaw_deg": -1.68
+        },
+        "n_points": 6940,
+        "blob_ids": [
+          6
+        ],
+        "source": "geometry"
+      },
+      "transform": null,
+      "evidence": {
+        "free_rays": 0,
+        "free_frames_mean": 0.0,
+        "observing_views": 0,
+        "occ_points": 63128,
+        "mask_score": 0.9128,
+        "view_consistency": 0.9266,
+        "seen_in": "after",
+        "vlm_verdict": "rejected",
+        "vlm_reason": "The yellow outline traces a reflection of a wooden door in the mirror."
+      },
+      "description": "An object about 0.31 x 1.01 x 0.17 m at (-2.64, 0.92, -0.36) was seen only in the after recording; the before recording never observed that space, so no verdict is possible.",
+      "crops": {
+        "after": "crops/15_after.jpg",
+        "before": null
+      },
+      "attributes": "brown wood",
+      "object_description": "a tall, narrow wooden door reflected in a mirror.",
+      "motion_kind": null
+    },
+    {
+      "id": 16,
+      "type": "unverified",
+      "label": "bed",
+      "confidence": 0.451,
+      "before": null,
+      "after": {
+        "instance_id": 3,
+        "centroid": [
+          -3.5761001110076904,
+          0.474700003862381,
+          0.19439999759197235
+        ],
+        "aabb": [
+          [
+            -4.105800151824951,
+            0.06750000268220901,
+            -0.3188999891281128
+          ],
+          [
+            -3.088200092315674,
+            0.9563000202178955,
+            0.663100004196167
+          ]
+        ],
+        "extents": [
+          1.0176000595092773,
+          0.8888000249862671,
+          0.9819999933242798
+        ],
+        "obb": {
+          "center": [
+            -3.647,
+            0.5119,
+            0.1922
+          ],
+          "extents": [
+            0.9286,
+            0.8888,
+            0.9814
+          ],
+          "yaw_deg": 12.77
+        },
+        "n_points": 34186,
+        "blob_ids": [
+          3
+        ],
+        "source": "geometry"
+      },
+      "transform": null,
+      "evidence": {
+        "free_rays": 0,
+        "free_frames_mean": 0.0,
+        "observing_views": 0,
+        "occ_points": 104959,
+        "mask_score": 0.8784,
+        "view_consistency": 0.9262,
+        "seen_in": "after",
+        "vlm_verdict": "rejected",
+        "vlm_reason": "The highlighted region is a reflection of a bed with pillows and blankets in a mirror."
+      },
+      "description": "An object about 1.02 x 0.89 x 0.98 m at (-3.58, 0.47, 0.19) was seen only in the after recording; the before recording never observed that space, so no verdict is possible.",
+      "crops": {
+        "after": "crops/16_after.jpg",
+        "before": null
+      },
+      "attributes": "gray sheets, wooden frame",
+      "object_description": "A bed with rumpled gray sheets and a wooden frame, appearing unmade.",
+      "motion_kind": null
+    }
+  ],
+  "summary": "6 changes: 2 moved, 1 added, 3 removed; 1 unverified. The light-colored floral curtain and the brown wooden ladder shelf both moved within the far part of the room, with the curtain now on the floor and the shelf lowered. The black leather wallet, dark brown leather bag, and white floral curtain were removed from their respective spots. A pink-handled hairbrush was added in the middle of the room. The white wooden dresser may have been added, but this cannot be verified because the earlier video did not show that area."
+}

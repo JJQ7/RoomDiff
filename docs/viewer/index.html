@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RoomDiff viewer</title>
+  <link rel="stylesheet" href="style.css">
+  <!-- three.js from a CDN, pinned; no build step -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <header id="header">
+    <h1 id="title">RoomDiff</h1>
+    <div id="counts" class="counts"></div>
+    <p id="summary"></p>
+  </header>
+
+  <main id="view">
+    <canvas id="canvas" aria-label="3D view of the before and after point clouds"></canvas>
+    <div id="status" role="status">Loading…</div>
+    <p id="hint">Drag: orbit · right-drag: pan · wheel: zoom · N / P: next / previous change · R: reset view</p>
+  </main>
+
+  <aside id="panel">
+    <section id="controls" aria-label="Display options">
+      <div class="row" role="radiogroup" aria-label="Point clouds">
+        <span class="row-label">Clouds</span>
+        <label><input type="radio" name="show" value="before"> Before</label>
+        <label><input type="radio" name="show" value="after"> After</label>
+        <label><input type="radio" name="show" value="both" checked> Both</label>
+      </div>
+      <div class="row">
+        <label><input type="checkbox" id="tint"> Tint: before <span class="swatch tint-before"></span> after <span class="swatch tint-after"></span></label>
+      </div>
+      <div class="row">
+        <label for="size" class="row-label">Point size</label>
+        <input type="range" id="size" min="0.25" max="4" step="0.05" value="1">
+        <output id="size-value" for="size">1.00×</output>
+      </div>
+      <div class="row">
+        <label><input type="checkbox" id="light"> Light background</label>
+      </div>
+      <div class="row" id="filters" role="group" aria-label="Change types">
+        <span class="row-label">Show</span>
+      </div>
+    </section>
+    <section>
+      <h2>Changes</h2>
+      <ol id="changes"></ol>
+    </section>
+  </aside>
+
+  <script>
+    // Classic script: runs even when the module below cannot load (file:// pages, offline).
+    window.SERVE_HINT = 'Browsers block loading data into a page opened from file://. ' +
+      'Serve this folder instead: run "python -m http.server 8000" inside it and open http://localhost:8000/';
+    window.showError = function (message) {
+      var status = document.getElementById('status');
+      status.textContent = message;
+      status.className = 'error';
+      status.hidden = false;
+    };
+    if (location.protocol === 'file:') showError(SERVE_HINT);
+  </script>
+  <script type="module" src="app.js"
+          onerror="showError(location.protocol === 'file:' ? SERVE_HINT : 'Could not load the viewer code (app.js, or three.js from unpkg.com, which needs an internet connection).')"></script>
+</body>
+</html>

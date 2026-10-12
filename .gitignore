@@ -19,3 +19,4 @@ outputs/
 *.ply
 !examples/**/*.ply
 !**/examples/**/*.ply
+!docs/viewer/scenes/**/*.ply

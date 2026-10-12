@@ -8,30 +8,57 @@ explicit geometric, appearance and visual-language evidence, and changes in spac
 other video never observed are reported as **unverified** instead of being guessed.
 See [docs/PLAN.md](docs/PLAN.md) for the design.
 
-Status: work in progress (day 1 of 5).
-
 ## Install
 
+Tested on Ubuntu 24.04 under WSL2 with Python 3.12 and an RTX 5090 (the pipeline needs a
+CUDA GPU with about 22 GiB free: Qwen3-VL-8B alone takes 16.7 GiB, the Pi3X pass on 96
+keyframes 12.4 GiB; the two never run at the same time). Exact package pins are in
+`requirements.lock.txt`.
+
 ```bash
-# TODO: environment setup (torch cu128 + requirements), see docs/env_report.md
-pip install -e .
+git clone https://github.com/JJQ7/RoomDiff.git && cd RoomDiff
+python3.12 -m venv .venv && source .venv/bin/activate
+# torch for your CUDA; the RTX 5090 (sm_120) needs the cu128 wheels
+pip install torch==2.10.0 torchvision==0.25.0 --index-url https://download.pytorch.org/whl/cu128
+pip install -e .                                   # roomdiff + dependencies (pyproject.toml)
+# Pi3X reconstruction model code (not on PyPI); --no-deps keeps our numpy 2.x
+git clone https://github.com/yyfz/Pi3.git third_party/Pi3
+pip install --no-deps -e third_party/Pi3
 ```
+
+Model weights are read from the Hugging Face cache; download them once (about 25 GB).
+DINOv3 is gated: accept its terms on the model page and `hf auth login` first.
+
+```bash
+hf download yyfz233/Pi3X model.safetensors          # reconstruction (5.4 GB)
+hf download facebook/sam2.1-hiera-large             # instance masks (1.7 GB)
+hf download facebook/dinov3-vitl16-pretrain-lvd1689m   # appearance features (1.2 GB, gated)
+hf download Qwen/Qwen3-VL-8B-Instruct               # semantics (17 GB)
+```
+
+Notes: video decoding uses PyAV's bundled FFmpeg, so no system `ffmpeg` is needed. Open3D
+needs `libusb-1.0.so.0` (`sudo apt install libusb-1.0-0`; without root, `apt-get download
+libusb-1.0-0`, extract the `.so` and put it in `.venv/lib/`). The SceneDiff benchmark
+(`roomdiff eval`) additionally needs the dataset under `data/scenediff/scenediff_benchmark/`
+and the official evaluator: `git clone https://github.com/yuqunw/scene_diff.git third_party/scene_diff`.
 
 ## Run
 
 ```bash
-# Implemented so far: video ingest + keyframe selection
-python -m roomdiff.cli ingest --before before.mov --after after.mov --out outputs/scene1
-# any value in configs/default.yaml can be overridden (or use --config scene.yaml)
-python -m roomdiff.cli ingest ... --set ingest.num_keyframes=32 --set ingest.max_side=768
-
-# full pipeline: ingest -> recon -> visibility -> appearance -> instances -> changes ->
-# describe -> viz -> viewer
+# full pipeline (about 2 minutes on an RTX 5090): ingest -> recon -> visibility ->
+# appearance -> instances -> changes -> describe -> viz -> viewer
 roomdiff run --before before.mov --after after.mov --out outputs/scene1
-# single stages on an existing output folder, e.g. the semantics stage and the viewer
-python -m roomdiff.cli describe --out outputs/scene1
-python -m roomdiff.cli viewer --out outputs/scene1
+# any value in configs/default.yaml can be overridden (or use --config scene.yaml)
+roomdiff run ... --set ingest.num_keyframes=32 --set ingest.max_side=768
+# single stages on an existing output folder (each stage caches its result), e.g.
+roomdiff describe --out outputs/scene1
+roomdiff viewer --out outputs/scene1
 ```
+
+`roomdiff` is the console script of the package (`python -m roomdiff.cli` is the same).
+The results of a run are `outputs/scene1/report.md` (every change with its evidence and
+crops, a summary and the rejected candidates), `changes.json` (the machine-readable list,
+see `docs/interfaces.md`), `scene.rrd` (open with `rerun scene.rrd`) and `viewer/`.
 
 - **Semantics and report** (`describe`): Qwen3-VL-8B (local, bf16, about 16.6 GiB VRAM,
   30-60 s per scene) names every change from its crops, judges it on paired before/after
@@ -68,9 +95,9 @@ docs/viewer/index.html, app.js, style.css       # copied from viewer/
 docs/viewer/scenes/<name>/                      # contents of outputs/<name>/viewer/
 ```
 
-Open `https://<user>.github.io/<repo>/viewer/?scene=scenes/<name>`. Without `?scene=` the
-viewer loads `./scene.json` from its own folder. `*.ply` is gitignored except under
-`examples/`, so the scene PLYs under `docs/viewer/` need a `.gitignore` exception.
+Live example: <https://jjq7.github.io/RoomDiff/viewer/?scene=scenes/scenediff_living_room_1>
+(a SceneDiff benchmark pair). Without `?scene=` the viewer loads `./scene.json` from its own
+folder. `*.ply` is gitignored except under `docs/viewer/scenes/` and `examples/`.
 
 ## Benchmark (SceneDiff validation subset)
 

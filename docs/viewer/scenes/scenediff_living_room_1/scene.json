@@ -1,0 +1,39 @@
+{
+  "name": "scenediff_living_room_1",
+  "units": "metres (approx.)",
+  "before_ply": "before.ply",
+  "after_ply": "after.ply",
+  "changes": "changes.json",
+  "stats": {
+    "points_before": 237780,
+    "points_after": 354350,
+    "extent_m": [
+      8.031,
+      1.484,
+      3.503
+    ],
+    "voxel_m": 0.0133
+  },
+  "bbox_m": [
+    [
+      -5.396,
+      -0.004,
+      -2.333
+    ],
+    [
+      2.635,
+      1.48,
+      1.17
+    ]
+  ],
+  "up_axis": [
+    0.0,
+    1.0,
+    0.0
+  ],
+  "view_dir": [
+    0.8088,
+    0.0,
+    0.588
+  ]
+}
