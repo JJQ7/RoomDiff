@@ -51,10 +51,12 @@ jumper on a bed or a bottle swapped for another gets a verdict without a fake 0 
 
 On the same three scenes this recovered the wallet, the hairbrush and the tissue box, at
 the cost of one false positive (a bare wall patch that the judge read as a "wall
-decoration"); on 20 SceneDiff validation pairs it lifted per-view AP from 0.15 to 0.40 (see
-the README benchmark table). The judge is the weak point of this channel: a lighting-only
-region survives if the VLM over-reads the crop, and an object that moved a few centimetres
-may be judged "same".
+decoration", gone once the prompt said the drawn outline is not part of the room); on 20
+SceneDiff validation pairs it lifted per-view AP from 0.15 to 0.40 (see the README
+benchmark table). Denser keyframes (every 0.5 s instead of 1 s) give every keyframe more
+co-visible partners and raise the per-scene metrics a little more. The judge is the weak
+point of this channel: a lighting-only region survives if the VLM over-reads the crop, and
+an object that moved a few centimetres may be judged "same".
 
 ## 3. Objects, not voxels
 Blobs fragment (a removed chair became four blobs) and merge neighbours. We therefore use

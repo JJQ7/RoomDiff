@@ -133,16 +133,18 @@ fixed keyframes every 1 s, RTX 5090:
 | | per-view AP | per-scene AP | AP (typed) | global IoU | objects TP / FP / FN |
 |---|---|---|---|---|---|
 | geometry channel only (commit `ce23def`) | 0.151 | 0.083 | 0.078 | 0.187 | 7 / 42 / 68 |
-| + appearance channel (commit `c660672`) | **0.395** | **0.352** | **0.238** | **0.331** | 30 / 53 / 45 |
+| + appearance channel (commit `c660672`) | **0.395** | 0.352 | 0.238 | 0.331 | 30 / 53 / 45 |
+| same, keyframes every 0.5 s (commit `ad1b585`) | 0.394 | **0.383** | **0.256** | **0.351** | 32 / 61 / 43 |
 | SceneDiff paper (full val set, for reference) | 0.496 | 0.463 | 0.255 | – | – |
 
 The paper numbers are on the whole validation set, ours on a 20-pair subset, so they are
-indicative only. The remaining gap is recall on small objects in recordings with few
-co-visible keyframes and the precision of the VLM judge; see `docs/design_note.md`.
+indicative only. Median run time per pair: 70 s at 1 s keyframes, 85 s at 0.5 s (RTX
+5090). The remaining gap is recall on small objects in recordings with few co-visible
+keyframes and the precision of the VLM judge; see `docs/design_note.md`.
 
 ```bash
 python -m roomdiff.cli eval --split val --set varied --limit 20 --out-root outputs/scenediff_eval \
-    -o ingest.mode=fixed -o ingest.fixed_interval_s=1.0     # -o overrides config values here
+    -o ingest.mode=fixed -o ingest.fixed_interval_s=0.5     # -o overrides config values here
 ```
 
 ## Development
