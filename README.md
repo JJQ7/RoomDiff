@@ -70,6 +70,30 @@ see `docs/interfaces.md`), `scene.rrd` (open with `rerun scene.rrd`) and `viewer
 
 - **Diagnostics**: `python scripts/plot_align.py outputs/scene1` renders top-down and side views of the before/after clouds (`<out>/recon/<run>_{top,side}.png`) to check the alignment by eye.
 
+## Example outputs
+
+Three pairs of the SceneDiff benchmark, run end to end with the default settings
+(`examples/<scene>/report.md`, `changes.json` and the crops; the point clouds are in the
+live viewer linked below). Each crop shows the object's mask outline in the keyframe that
+sees it best; "place" crops show the same spot in the other video.
+
+| scene | result | ground truth |
+|---|---|---|
+| [office_1](examples/scenediff_office_1/report.md) | 1 chair removed, 1 chair moved 0.6 m and turned 54 deg | exactly that |
+| [bedroom_1](examples/scenediff_bedroom_1/report.md) | jacket removed, bedding moved (deformed), tissue box moved; bedside table unverified | pyjamas also moved (missed: judged "same") |
+| [living_room_1](examples/scenediff_living_room_1/report.md) | bag and wallet removed, hairbrush added, ladder shelf and one curtain moved, second curtain removed | second curtain was moved, not removed |
+
+| office_1: moved chair, before / after | living_room_1: removed wallet, before / after |
+|---|---|
+| ![](examples/scenediff_office_1/crops/1_before.jpg) ![](examples/scenediff_office_1/crops/1_after.jpg) | ![](examples/scenediff_living_room_1/crops/3_before.jpg) ![](examples/scenediff_living_room_1/crops/3_after.jpg) |
+
+From the office report, the moved chair's entry reads: *"The office chair (grey fabric
+seat, black mesh back; about 0.5 x 0.5 x 0.4 m) was shifted 0.6 m within the near part of
+the room ... and rotated about 54 degrees; the later video shows its old spot empty from 7
+viewpoints and the earlier video shows the new spot empty from 32 viewpoints."* An evidence
+line follows (free-space views, appearance similarity, displacement, mask score and the
+VLM's reason), then the four crops.
+
 ## Web viewer
 
 A static three.js viewer (source in `viewer/`, no build step; three.js is loaded from

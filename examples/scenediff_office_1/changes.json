@@ -1,0 +1,384 @@
+{
+  "scene": {
+    "before": "original_video1.MOV",
+    "after": "original_video2.MOV",
+    "units": "metres (approx.)"
+  },
+  "changes": [
+    {
+      "id": 1,
+      "type": "moved",
+      "label": "office chair",
+      "confidence": 0.932,
+      "before": {
+        "instance_id": 2,
+        "centroid": [
+          0.6245999932289124,
+          0.45239999890327454,
+          -0.5746999979019165
+        ],
+        "aabb": [
+          [
+            0.41929998993873596,
+            0.20489999651908875,
+            -0.8011000156402588
+          ],
+          [
+            0.8712999820709229,
+            0.7526999711990356,
+            -0.2678999900817871
+          ]
+        ],
+        "extents": [
+          0.4519999921321869,
+          0.5478000044822693,
+          0.5332000255584717
+        ],
+        "obb": {
+          "center": [
+            0.6259,
+            0.4788,
+            -0.5376
+          ],
+          "extents": [
+            0.4231,
+            0.5478,
+            0.5198
+          ],
+          "yaw_deg": 18.47
+        },
+        "n_points": 3327,
+        "blob_ids": [
+          12
+        ],
+        "source": "geometry"
+      },
+      "after": {
+        "instance_id": 1,
+        "centroid": [
+          0.15600000321865082,
+          0.4494999945163727,
+          -0.20340000092983246
+        ],
+        "aabb": [
+          [
+            -0.1421000063419342,
+            0.010900000110268593,
+            -0.44020000100135803
+          ],
+          [
+            0.3880000114440918,
+            0.7451000213623047,
+            0.13570000231266022
+          ]
+        ],
+        "extents": [
+          0.5300999879837036,
+          0.7342000007629395,
+          0.5759999752044678
+        ],
+        "obb": {
+          "center": [
+            0.1682,
+            0.378,
+            -0.13
+          ],
+          "extents": [
+            0.4949,
+            0.7342,
+            0.4145
+          ],
+          "yaw_deg": 39.49
+        },
+        "n_points": 3855,
+        "blob_ids": [
+          8
+        ],
+        "source": "geometry"
+      },
+      "transform": {
+        "translation_m": 0.6128,
+        "rotation_deg": 53.98,
+        "rotation_reliable": true,
+        "R": [
+          [
+            0.588159,
+            0.000266,
+            -0.808745
+          ],
+          [
+            -0.00654,
+            0.999969,
+            -0.004427
+          ],
+          [
+            0.808719,
+            0.007893,
+            0.588143
+          ]
+        ],
+        "t": [
+          -0.66514,
+          -0.0095,
+          -0.33779
+        ],
+        "icp_fitness": 0.8007,
+        "icp_rmse": 0.01
+      },
+      "evidence": {
+        "free_rays": 22455,
+        "observing_views": 20,
+        "observing_views_before_place": 7,
+        "observing_views_after_place": 32,
+        "appearance_similarity": 0.9132,
+        "cls_similarity": 0.7184,
+        "mask_score": 0.8655,
+        "icp_fitness": 0.8007,
+        "vlm_verdict": "confirmed",
+        "vlm_reason": "The outlined objects are identical in color, material, and design: both are grey fabric seats with black mesh backs, black armrests, and black wheeled legs.",
+        "vlm_motion_reason": "The chair's shape and orientation remain consistent between the two images, indicating it was moved as a whole without deformation."
+      },
+      "description": "The office chair (grey fabric seat, black mesh back; about 0.5 x 0.5 x 0.4 m) was shifted 0.6 m within the near part of the room (lowest point 0.3 m above floor before, 0.2 m above floor after) and rotated about 54 degrees; the later video shows its old spot empty from 7 viewpoints and the earlier video shows the new spot empty from 32 viewpoints.",
+      "crops": {
+        "before": "crops/1_before.jpg",
+        "before_place": "crops/1_before_place.jpg",
+        "after": "crops/1_after.jpg",
+        "after_place": "crops/1_after_place.jpg"
+      },
+      "attributes": "grey fabric seat, black mesh back",
+      "object_description": "A modern office chair with a grey fabric seat and black mesh backrest, positioned at a desk in an office setting.",
+      "motion_kind": "rigid",
+      "description_template": "The office chair (grey fabric seat, black mesh back; about 0.5 x 0.5 x 0.4 m) moved 0.6 m within the near part of the room (lowest part 0.3 m above the floor before, 0.2 m above the floor after) and turned by about 54 degrees; the after recording saw the old place empty from 7 viewpoints and the before recording saw the new place empty from 32 viewpoints."
+    },
+    {
+      "id": 3,
+      "type": "removed",
+      "label": "office chair",
+      "confidence": 0.953,
+      "before": {
+        "instance_id": 1,
+        "centroid": [
+          -0.1145,
+          0.4453,
+          -0.3601
+        ],
+        "aabb": [
+          [
+            -0.462,
+            -0.0014,
+            -0.6456
+          ],
+          [
+            0.1457,
+            0.8301,
+            -0.0569
+          ]
+        ],
+        "extents": [
+          0.6077,
+          0.8316,
+          0.5887
+        ],
+        "obb": {
+          "center": [
+            -0.1595,
+            0.4143,
+            -0.3229
+          ],
+          "extents": [
+            0.5193,
+            0.8316,
+            0.5619
+          ],
+          "yaw_deg": -36.11
+        },
+        "n_points": 8212,
+        "blob_ids": [
+          7,
+          11,
+          18
+        ],
+        "source": "geometry",
+        "instance_ids": [
+          1,
+          3
+        ]
+      },
+      "after": null,
+      "transform": null,
+      "evidence": {
+        "free_rays": 32325,
+        "free_frames_mean": 25.47,
+        "observing_views": 32,
+        "occ_points": 750668,
+        "mask_score": 0.8897,
+        "view_consistency": 0.8971,
+        "vlm_verdict": "confirmed",
+        "vlm_reason": "The object highlighted in image 1 (a grey office chair) is no longer present in the exact same location in image 2; the chair has been replaced by a different chair (a grey mesh-back chair) in the same spot.",
+        "merged_from": [
+          3,
+          2
+        ],
+        "merged_types": [
+          "removed",
+          "removed"
+        ],
+        "merged_part_reason": "The red contour in Image 1 traces the base of the chair, and the red contour in Image 2 traces the seat and backrest of the same chair, which are physically connected.",
+        "fragment_gap_m": 0.104
+      },
+      "description": "The office chair (gray fabric; about 0.8 x 0.6 x 0.5 m), which was on the floor in the near part of the room, was removed: the later video looked at that spot from 32 viewpoints and saw it empty.",
+      "crops": {
+        "before": "crops/3_before.jpg",
+        "after": "crops/3_after.jpg",
+        "before_part": "crops/2_before.jpg"
+      },
+      "attributes": "gray fabric",
+      "object_description": "a gray fabric office chair with armrests and a backrest.",
+      "motion_kind": null,
+      "description_template": "The office chair (gray fabric; about 0.8 x 0.6 x 0.5 m), which was on the floor in the near part of the room, was removed: the after recording looked at that spot from 32 viewpoints and saw it empty."
+    }
+  ],
+  "rejected": [
+    {
+      "id": 4,
+      "type": "unverified",
+      "label": "wall",
+      "confidence": 0.497,
+      "before": {
+        "instance_id": 4,
+        "centroid": [
+          -3.1993000507354736,
+          1.173799991607666,
+          1.3723000288009644
+        ],
+        "aabb": [
+          [
+            -3.9168999195098877,
+            0.444599986076355,
+            1.1735999584197998
+          ],
+          [
+            -2.031100034713745,
+            1.743299961090088,
+            1.7731000185012817
+          ]
+        ],
+        "extents": [
+          1.8858000040054321,
+          1.298699975013733,
+          0.5995000004768372
+        ],
+        "obb": {
+          "center": [
+            -2.9823,
+            1.0939,
+            1.4537
+          ],
+          "extents": [
+            1.947,
+            1.2987,
+            0.1841
+          ],
+          "yaw_deg": -15.73
+        },
+        "n_points": 37220,
+        "blob_ids": [
+          1
+        ],
+        "source": "geometry"
+      },
+      "after": null,
+      "transform": null,
+      "evidence": {
+        "free_rays": 0,
+        "free_frames_mean": 0.0,
+        "observing_views": 0,
+        "occ_points": 58748,
+        "mask_score": 0.9882,
+        "view_consistency": 0.9982,
+        "seen_in": "before",
+        "vlm_verdict": "rejected",
+        "vlm_reason": "The contour covers a section of the wall and the top of office cubicle partitions, which are part of the room's structure."
+      },
+      "description": "An object about 1.89 x 1.30 x 0.60 m at (-3.20, 1.17, 1.37) was seen only in the before recording; the after recording never observed that space, so no verdict is possible.",
+      "crops": {
+        "before": "crops/4_before.jpg",
+        "after": null
+      },
+      "attributes": "light beige, smooth",
+      "object_description": "a plain, light beige wall in an office cubicle area.",
+      "motion_kind": null
+    },
+    {
+      "id": 5,
+      "type": "unverified",
+      "label": "white wall",
+      "confidence": 0.369,
+      "before": null,
+      "after": {
+        "instance_id": 2,
+        "centroid": [
+          -1.0902999639511108,
+          1.0289000272750854,
+          1.902500033378601
+        ],
+        "aabb": [
+          [
+            -2.0002999305725098,
+            0.1526000052690506,
+            1.6778000593185425
+          ],
+          [
+            -0.2433999925851822,
+            1.8514000177383423,
+            2.0936999320983887
+          ]
+        ],
+        "extents": [
+          1.7568999528884888,
+          1.698799967765808,
+          0.41600000858306885
+        ],
+        "obb": {
+          "center": [
+            -1.1235,
+            1.002,
+            1.8903
+          ],
+          "extents": [
+            1.8039,
+            1.6988,
+            0.043
+          ],
+          "yaw_deg": -13.25
+        },
+        "n_points": 6969,
+        "blob_ids": [
+          6
+        ],
+        "source": "geometry"
+      },
+      "transform": null,
+      "evidence": {
+        "free_rays": 0,
+        "free_frames_mean": 0.0,
+        "observing_views": 0,
+        "occ_points": 26443,
+        "mask_score": 0.6636,
+        "view_consistency": 0.8128,
+        "seen_in": "after",
+        "vlm_verdict": "rejected",
+        "vlm_reason": "The outline covers a plain wall, which is part of the room structure."
+      },
+      "description": "An object about 1.76 x 1.70 x 0.42 m at (-1.09, 1.03, 1.90) was seen only in the after recording; the before recording never observed that space, so no verdict is possible.",
+      "crops": {
+        "after": "crops/5_after.jpg",
+        "before": null
+      },
+      "attributes": "plain, smooth, off-white",
+      "object_description": "A plain, smooth, off-white wall covering the back and side of the office space.",
+      "motion_kind": null
+    }
+  ],
+  "summary": "2 changes: 1 moved, 0 added, 1 removed; 0 unverified. The office chair was moved slightly within the near part of the room and rotated, while another office chair was removed from the same area. The moved chair\u2019s original spot appears empty in the later video, and the removed chair\u2019s spot is also empty in the later video."
+}
