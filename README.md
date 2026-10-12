@@ -70,3 +70,14 @@ docs/viewer/scenes/<name>/                      # contents of outputs/<name>/vie
 Open `https://<user>.github.io/<repo>/viewer/?scene=scenes/<name>`. Without `?scene=` the
 viewer loads `./scene.json` from its own folder. `*.ply` is gitignored except under
 `examples/`, so the scene PLYs under `docs/viewer/` need a `.gitignore` exception.
+
+## Development
+
+```bash
+.venv/bin/python -m pytest tests -q                 # CPU only, synthetic scenes, no weights
+~/.local/bin/uvx --offline ruff check roomdiff tests scripts   # or: uvx ruff check ...
+```
+
+The ruff rule selection is pinned in `pyproject.toml` (`[tool.ruff.lint]`: E, F, W, B, I,
+UP, C4, SIM, PIE, PERF, PLE, PLW, FURB, RUF, BLE, TRY004; line length 100), so the result
+does not depend on the default rule set of the installed ruff version.

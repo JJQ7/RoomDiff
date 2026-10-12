@@ -217,24 +217,36 @@ function updateBackground() {
 
 // ------------------------------------------------------------ change boxes
 
-function boxLines(aabb, color, dashed) {
-  const lo = vec(aabb[0]);
-  const hi = vec(aabb[1]);
-  const size = hi.clone().sub(lo).max(new THREE.Vector3(0.01, 0.01, 0.01));
+// Box of one change side: the oriented box `obb` (center, extents [w, h, d], yaw_deg about
+// +Y) when present, else the axis-aligned `aabb`. Recon world frame.
+function sideBox(side) {
+  if (side?.obb) {
+    const { center, extents, yaw_deg: yaw } = side.obb;
+    return { center: vec(center), size: vec(extents), yaw: THREE.MathUtils.degToRad(yaw || 0) };
+  }
+  if (!side?.aabb) return null;
+  const lo = vec(side.aabb[0]);
+  const hi = vec(side.aabb[1]);
+  return { center: lo.clone().add(hi).multiplyScalar(0.5), size: hi.sub(lo), yaw: 0 };
+}
+
+function boxLines(box, color, dashed) {
+  const size = box.size.clone().max(new THREE.Vector3(0.01, 0.01, 0.01));
   const geometry = new THREE.EdgesGeometry(new THREE.BoxGeometry(size.x, size.y, size.z));
   const dash = Math.max(size.x, size.y, size.z) / 12;
   const material = dashed
     ? new THREE.LineDashedMaterial({ color, dashSize: dash, gapSize: 0.7 * dash })
     : new THREE.LineBasicMaterial({ color });
   const lines = new THREE.LineSegments(geometry, material);
-  lines.position.addVectors(lo, hi).multiplyScalar(0.5);
+  lines.position.copy(box.center);
+  lines.rotation.y = box.yaw;
   if (dashed) lines.computeLineDistances();
   return lines;
 }
 
 function arrowBetween(from, to, color) {
-  const start = vec(from);
-  const direction = vec(to).sub(start);
+  const start = from.clone();
+  const direction = to.clone().sub(start);
   const length = direction.length();
   if (length < 1e-3) return null;
   const head = Math.min(0.25 * length, 0.15);
@@ -268,19 +280,21 @@ function makeLabel(text, color) {
 }
 
 // 3D objects of one change: before / after boxes (moved: dashed darker before box and an
-// arrow), plus a label above them. Returns null if the change has no box.
+// arrow between the box centres), plus a label above them. Returns null if the change has
+// no box.
 function buildChange3d(change, type) {
   const color = new THREE.Color(TYPE_COLORS[type]);
   const group = new THREE.Group();
+  const boxes = {};
   for (const side of ['before', 'after']) {
-    const aabb = change[side]?.aabb;
-    if (!aabb) continue;
+    boxes[side] = sideBox(change[side]);
+    if (!boxes[side]) continue;
     const dashed = type === 'moved' && side === 'before';
-    group.add(boxLines(aabb, dashed ? color.clone().multiplyScalar(0.6) : color, dashed));
+    group.add(boxLines(boxes[side], dashed ? color.clone().multiplyScalar(0.6) : color, dashed));
   }
   if (!group.children.length) return null;
-  if (type === 'moved' && change.before?.centroid && change.after?.centroid) {
-    const arrow = arrowBetween(change.before.centroid, change.after.centroid, color);
+  if (type === 'moved' && boxes.before && boxes.after) {
+    const arrow = arrowBetween(boxes.before.center, boxes.after.center, color);
     if (arrow) group.add(arrow);
   }
   world.add(group);

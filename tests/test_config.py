@@ -68,7 +68,7 @@ def test_bad_overrides_fail(bad):
 def test_unknown_key_in_override_file_fails(tmp_path):
     override = tmp_path / "bad.yaml"
     override.write_text("ingest:\n  num_keyframe: 3\n")
-    with pytest.raises(ConfigError, match="ingest.num_keyframe"):
+    with pytest.raises(ConfigError, match=r"ingest\.num_keyframe"):
         load_config(override_file=override)
 
 

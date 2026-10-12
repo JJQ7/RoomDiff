@@ -8,7 +8,12 @@ intrinsic matrix recovered from Pi3X rays can be used here directly.
 
 from __future__ import annotations
 
+import contextlib
+from typing import Any
+
 import numpy as np
+
+MIN_YAW_SPREAD = 0.1  # min singular value ratio of the camera x axes to trust 2 directions
 
 
 def se3_inverse(T: np.ndarray) -> np.ndarray:
@@ -130,3 +135,88 @@ def voxel_downsample(
     if np.issubdtype(colors.dtype, np.integer):
         out_colors = np.round(out_colors)
     return out_points, out_colors.astype(colors.dtype)
+
+
+# ------------------------------------------------------------------ gravity and boxes
+
+
+def estimate_up(cam2world: np.ndarray) -> np.ndarray:
+    """Unit vector against gravity, from the camera axes (OpenCV: y down, x right).
+
+    Gravity is the mean camera "down" (y) axis, but phones are usually tilted down while
+    filming, which biases that mean (by ~7 degrees on scenediff_living_room_1). An upright
+    phone keeps its x axis horizontal, so the components of the mean y axis along the
+    directions spanned by the camera x axes are removed first (the second direction only
+    if the camera also turned sideways). Same idea as `scripts/plot_align.py`.
+    """
+    _, s, vt = np.linalg.svd(cam2world[:, :3, 0].astype(np.float64))
+    horizontal = vt[:2] if s[1] > MIN_YAW_SPREAD * s[0] else vt[:1]
+    down = cam2world[:, :3, 1].astype(np.float64).mean(0)
+    down -= horizontal.T @ (horizontal @ down)
+    norm = np.linalg.norm(down)
+    return -down / norm if norm > 1e-6 else np.array([0.0, -1.0, 0.0])
+
+
+def rotation_between(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """Smallest rotation (3, 3) that maps the direction `a` onto the direction `b`."""
+    a = np.asarray(a, np.float64) / np.linalg.norm(a)
+    b = np.asarray(b, np.float64) / np.linalg.norm(b)
+    v, c = np.cross(a, b), float(a @ b)
+    if c < -1 + 1e-9:  # opposite: half a turn about any axis perpendicular to a
+        axis = np.cross(a, [1.0, 0.0, 0.0] if abs(a[0]) < 0.9 else [0.0, 1.0, 0.0])
+        axis /= np.linalg.norm(axis)
+        return 2 * np.outer(axis, axis) - np.eye(3)
+    vx = np.array([[0, -v[2], v[1]], [v[2], 0, -v[0]], [-v[1], v[0], 0]])
+    return np.eye(3) + vx + vx @ vx / (1 + c)
+
+
+def rotation_y(yaw_deg: float) -> np.ndarray:
+    """Rotation about +y: x -> (cos, 0, -sin), z -> (sin, 0, cos) (three.js `rotation.y`)."""
+    c, s = np.cos(np.radians(yaw_deg)), np.sin(np.radians(yaw_deg))
+    return np.array([[c, 0.0, s], [0.0, 1.0, 0.0], [-s, 0.0, c]])
+
+
+def floor_obb(points: np.ndarray) -> dict[str, Any]:
+    """Box with a vertical (y) axis around `points` (M, 3), for a levelled world frame.
+
+    The minimum-area rectangle of the (x, z) projection (rotating calipers over the convex
+    hull) gives the footprint, the y range the height. Returns `center` (3,), `extents`
+    [w, h, d] (w / d along the box's own x / z axis, h vertical) and `yaw_deg` in
+    (-45, 45]: the box is `rotation_y(yaw_deg)` applied to an axis-aligned box.
+    """
+    from scipy.spatial import ConvexHull, QhullError
+
+    pts = np.asarray(points, np.float64).reshape(-1, 3)
+    if len(pts) == 0:
+        return {"center": [0.0, 0.0, 0.0], "extents": [0.0, 0.0, 0.0], "yaw_deg": 0.0}
+    xz = np.unique(pts[:, [0, 2]], axis=0)
+    hull = xz
+    if len(xz) >= 3:
+        with contextlib.suppress(QhullError):  # collinear footprint: keep all points
+            hull = xz[ConvexHull(xz).vertices]
+    edges = np.diff(np.vstack([hull, hull[:1]]), axis=0)
+    angles = np.concatenate([[0.0], np.mod(np.arctan2(edges[:, 1], edges[:, 0]), np.pi / 2)])
+
+    def spans(phi: float) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        axes = np.array([[np.cos(phi), np.sin(phi)], [-np.sin(phi), np.cos(phi)]])
+        proj = hull @ axes.T  # coordinates along the box x / z axes
+        return proj.min(0), proj.max(0), axes
+
+    areas = [np.prod(hi - lo) for lo, hi, _ in map(spans, angles)]
+    phi = float(angles[int(np.argmin(areas))])
+    if phi >= np.pi / 4:  # same rectangle with the axes swapped: yaw in (-45, 45]
+        phi -= np.pi / 2
+    lo, hi, axes = spans(phi)
+    mid = axes.T @ ((lo + hi) / 2)
+    y0, y1 = pts[:, 1].min(), pts[:, 1].max()
+    yaw = -np.degrees(phi)  # box x axis = (cos phi, 0, sin phi) = rotation_y(-phi) x
+    return {"center": np.round([mid[0], (y0 + y1) / 2, mid[1]], 4).tolist(),
+            "extents": np.round([hi[0] - lo[0], y1 - y0, hi[1] - lo[1]], 4).tolist(),
+            "yaw_deg": round(float(yaw), 2) + 0.0}  # + 0.0: no "-0.0"
+
+
+def obb_corners(obb: dict[str, Any]) -> np.ndarray:
+    """The 8 corners (8, 3) of a `floor_obb` box."""
+    signs = np.array([[x, y, z] for x in (-1, 1) for y in (-1, 1) for z in (-1, 1)], float)
+    local = signs * np.asarray(obb["extents"], np.float64) / 2
+    return local @ rotation_y(obb["yaw_deg"]).T + np.asarray(obb["center"], np.float64)

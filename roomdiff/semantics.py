@@ -15,7 +15,10 @@ the stage can be re-run):
 3. Judge: type-specific paired-crop questions -> `evidence.vlm_verdict` ("confirmed" /
    "rejected" / "unclear") and `evidence.vlm_reason`; moved also `motion_kind` ("rigid" /
    "deformed" / "unknown"). Rejected changes move to the `rejected` list; unclear ones keep
-   `confidence * unclear_factor`.
+   `confidence * unclear_factor`. A rejected `moved` change keeps its geometry: it is split
+   back into a `removed` (before side) and an `added` change (after side), each named
+   again, verdict "unclear" and `confidence * split_factor`; the halves then go through
+   re-pairing (step 2) once more, with the other changes only.
 4. Descriptions: a template sentence from label, type, geometry (distance, size, place in
    the room, height above the floor = lowest 5 % of all valid points) and evidence; one
    text-only VLM call polishes all of them, a sentence is kept only if every number and
@@ -43,7 +46,8 @@ from typing import Any
 import numpy as np
 from PIL import Image
 
-from roomdiff.changes import CHANGE_TYPES
+from roomdiff.changes import CHANGE_TYPES, instance_evidence
+from roomdiff.geometry import floor_obb, obb_corners
 from roomdiff.paths import RECORDINGS, OutputPaths
 from roomdiff.vlm import BaseVLM
 
@@ -166,9 +170,9 @@ JUDGE_UNVERIFIED = (
     "highlighted region a distinct movable object (furniture, an item, a bag, clothes, a "
     "box, a bottle, ...) rather than part of the room itself (wall, floor, ceiling, door, "
     "door frame, window, radiator), a mirror reflection, a shadow or a lighting effect?\n"
-    f"{OUTLINE}\nFirst check whether the outline lies inside a mirror: a framed reflective surface that "
-    "shows another view of the room. Everything inside a mirror is a reflection, even if it "
-    "looks like a bed or furniture.\n"
+    f"{OUTLINE}\nFirst check whether the outline lies inside a mirror: a framed reflective "
+    "surface that shows another view of the room. Everything inside a mirror is a "
+    "reflection, even if it looks like a bed or furniture.\n"
     'Answer "confirmed" if the outline mainly covers a distinct real object; "rejected" if '
     "it mainly covers part of the room, a reflection, a shadow or lighting; \"unclear\" if "
     "you cannot tell.\n"
@@ -294,9 +298,9 @@ def scene_frame(paths: OutputPaths) -> SceneFrame | None:
     file = paths.recon / "recon.npz"
     if not file.is_file():
         return None
-    from roomdiff.geometry import unproject_depth
-    from roomdiff.recon import load_recon
-    from roomdiff.viewer_export import estimate_up, horizontal_view_dir
+    from roomdiff.geometry import estimate_up, unproject_depth
+    from roomdiff.recon import is_levelled, load_recon
+    from roomdiff.viewer_export import horizontal_view_dir
 
     recon = load_recon(file)
     s = POINT_STRIDE
@@ -305,7 +309,8 @@ def scene_frame(paths: OutputPaths) -> SceneFrame | None:
     pts = np.concatenate(points).astype(np.float64)
     if not len(pts):
         return None
-    up = estimate_up(recon["cam2world"])
+    up = np.array([0.0, 1.0, 0.0]) if is_levelled(paths.recon) else estimate_up(
+        recon["cam2world"])
     forward = horizontal_view_dir(recon["cam2world"], up)
     right = np.cross(forward, up)
     heights = pts @ up
@@ -484,15 +489,18 @@ def merge_removed_added(r: Mapping[str, Any], a: Mapping[str, Any], reason: str)
 
 def absorb_part(m: dict[str, Any], a: Mapping[str, Any], reason: str) -> None:
     """Union the after side of the added change `a` into the moved change `m` (two parts
-    of one deformable object); the transform becomes the centroid translation."""
+    of one deformable object; the oriented box encloses both boxes); the transform becomes
+    the centroid translation."""
     side, part = m["after"], a["after"]
     lo = np.minimum(side["aabb"][0], part["aabb"][0])
     hi = np.maximum(side["aabb"][1], part["aabb"][1])
     n1, n2 = side.get("n_points", 1), part.get("n_points", 1)
     centroid = (np.multiply(side["centroid"], n1) + np.multiply(part["centroid"], n2)) / (n1 + n2)
+    obb = floor_obb(np.vstack([obb_corners(side["obb"]), obb_corners(part["obb"])])) \
+        if side.get("obb") and part.get("obb") else None
     m["after"] = {**side, "centroid": centroid.round(4).tolist(),
                   "aabb": [lo.round(4).tolist(), hi.round(4).tolist()],
-                  "extents": (hi - lo).round(4).tolist(), "n_points": n1 + n2,
+                  "extents": (hi - lo).round(4).tolist(), "obb": obb, "n_points": n1 + n2,
                   "blob_ids": sorted(set(side.get("blob_ids", [])) | set(part.get("blob_ids", []))),
                   "instance_ids": [side["instance_id"], part["instance_id"]]}
     t = centroid - np.asarray(m["before"]["centroid"])
@@ -507,16 +515,27 @@ def absorb_part(m: dict[str, Any], a: Mapping[str, Any], reason: str) -> None:
 
 
 def repair(vlm: BaseVLM, crops: Crops, changes: list[dict[str, Any]],
-           params: Mapping[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Re-pair split changes (module docstring, step 2). Returns the new change list and
-    one record per VLM pair check."""
+           params: Mapping[str, Any], only: set[int] | None = None,
+           ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Re-pair split changes (module docstring, step 2). `only`: consider just the pairs
+    with one of these ids, never two halves of the same rejected moved change. Returns the
+    new change list and one record per VLM pair check."""
     records: list[dict[str, Any]] = []
     by_id = {c["id"]: c for c in changes}
+
+    def wanted(x: Mapping[str, Any], y: Mapping[str, Any]) -> bool:
+        if only is None:
+            return True
+        same_split = x["evidence"].get("split_from") is not None and \
+            x["evidence"].get("split_from") == y["evidence"].get("split_from")
+        return (x["id"] in only or y["id"] in only) and not same_split
+
     removed = [c for c in changes if c["type"] == "removed"]
     targets = [c for c in changes if c["type"] == "added"
                or (c["type"] == "unverified" and c["evidence"].get("seen_in") == "after")]
     pairs = sorted((centroid_distance(r["before"], a["after"]), r["id"], a["id"])
-                   for r in removed for a in targets if labels_match(r["label"], a["label"]))
+                   for r in removed for a in targets
+                   if labels_match(r["label"], a["label"]) and wanted(r, a))
     used: set[int] = set()
     for dist, rid, aid in pairs:
         if dist >= params["repair_max_distance"] or rid in used or aid in used:
@@ -536,7 +555,8 @@ def repair(vlm: BaseVLM, crops: Crops, changes: list[dict[str, Any]],
     moved = [c for c in by_id.values() if c["type"] == "moved"]
     added = [c for c in by_id.values() if c["type"] == "added"]
     pairs = sorted((box_gap(m["after"]["aabb"], a["after"]["aabb"]), m["id"], a["id"])
-                   for m in moved for a in added if labels_match(m["label"], a["label"]))
+                   for m in moved for a in added
+                   if labels_match(m["label"], a["label"]) and wanted(m, a))
     for gap, mid, aid in pairs:
         if gap > params["merge_max_distance"] or aid not in by_id or mid not in by_id:
             continue
@@ -554,6 +574,43 @@ def repair(vlm: BaseVLM, crops: Crops, changes: list[dict[str, Any]],
     return list(by_id.values()), records
 
 
+def split_moved(
+    m: Mapping[str, Any], reason: str, factor: float, new_id: int,
+    records: Mapping[str, Mapping[int, Mapping[str, Any]]],
+) -> list[dict[str, Any]]:
+    """A moved change `m` whose match the judge rejected, as a `removed` change (its before
+    side) and an `added` change (its after side): confidence x `factor`, verdict
+    "unclear". Ids: the merged candidates' ids for a re-paired change, else `m`'s id and
+    `new_id`. Evidence from the instance `records` (per recording and id) when available,
+    else from `m`'s per-place evidence."""
+    ev, crops = m["evidence"], m.get("crops") or {}
+    ids = ev.get("merged_from") or []
+    ids = ids[:2] if len(ids) >= 2 else [m["id"], new_id]
+    halves = []
+    for cid, kind, name, own, other in ((ids[0], "removed", "before", "before", "before_place"),
+                                        (ids[1], "added", "after", "after", "after_place")):
+        side = m[name]
+        record = records.get(name, {}).get(side.get("instance_id"))
+        evidence = instance_evidence(record) if record else {
+            "observing_views": ev.get(f"observing_views_{name}_place", 0),
+            "mask_score": ev.get("mask_score", 0.0)}
+        crop_other = "after" if name == "before" else "before"
+        halves.append({
+            "id": cid, "type": kind, "label": m["label"],
+            "attributes": m.get("attributes", ""),
+            "object_description": m.get("object_description", ""),
+            "confidence": round(m["confidence"] * factor, 3),
+            "before": side if name == "before" else None,
+            "after": side if name == "after" else None,
+            "transform": None, "motion_kind": None,
+            "evidence": {**evidence, "split_from": m["id"], "vlm_verdict": "unclear",
+                         "vlm_reason": f"appearance judge did not confirm the match: {reason}"},
+            "description": "",
+            "crops": {name: crops.get(own), crop_other: crops.get(other)},
+        })
+    return halves
+
+
 # ------------------------------------------------------------------ descriptions
 
 
@@ -563,6 +620,11 @@ def size_text(extents: Sequence[float]) -> str:
     if dims[0] < 0.3:
         return "about " + " x ".join(f"{100 * d:.0f}" for d in dims) + " cm"
     return "about " + " x ".join(f"{max(d, 0.1):.1f}" for d in dims) + " m"
+
+
+def side_extents(side: Mapping[str, Any]) -> Sequence[float]:
+    """Size of a change side: the oriented box extents if present, else the AABB's."""
+    return (side.get("obb") or {}).get("extents") or side["extents"]
 
 
 def height_text(h: float, on_floor: str = "on the floor") -> str:
@@ -613,8 +675,8 @@ def template_description(change: Mapping[str, Any], frame: SceneFrame | None,
 
     if kind == "moved":
         tf = change["transform"] or {}
-        what = f"The {label}" + (f" ({attrs}; {size_text(change['before']['extents'])})"
-                                 if attrs else f" ({size_text(change['before']['extents'])})")
+        size = size_text(side_extents(change["before"]))
+        what = f"The {label}" + (f" ({attrs}; {size})" if attrs else f" ({size})")
         (h_b, p_b), (h_a, p_a) = side_where("before"), side_where("after")
         text = f"{what} moved {tf.get('translation_m', 0):.1f} m"
         if p_b == p_a:  # same coarse region: say it once
@@ -636,8 +698,8 @@ def template_description(change: Mapping[str, Any], frame: SceneFrame | None,
             text += f"; this entry merges candidates {', '.join(map(str, ev['merged_from']))}"
         return text + "."
     side = owner_side(change)
-    what = f"{label}" + (f" ({attrs}; {size_text(change[side]['extents'])})" if attrs
-                         else f" ({size_text(change[side]['extents'])})")
+    size = size_text(side_extents(change[side]))
+    what = f"{label}" + (f" ({attrs}; {size})" if attrs else f" ({size})")
     if kind == "removed":
         return (f"The {what}, which was {joined('before')}, was removed: the after recording "
                 f"looked at that spot from {views(ev.get('observing_views'))} and saw it empty.")
@@ -720,6 +782,16 @@ def instance_points(paths: OutputPaths) -> dict[str, dict[int, np.ndarray]]:
     return out
 
 
+def instance_records(paths: OutputPaths) -> dict[str, dict[int, dict[str, Any]]]:
+    """M4 instance records per recording and id (empty if the files are missing)."""
+    out: dict[str, dict[int, dict[str, Any]]] = {}
+    for name in RECORDINGS:
+        file = paths.instances / f"{name}.json"
+        if file.is_file():
+            out[name] = {r["id"]: r for r in json.loads(file.read_text())["instances"]}
+    return out
+
+
 def sort_changes(changes: list[dict[str, Any]]) -> list[dict[str, Any]]:
     order = {t: k for k, t in enumerate(CHANGE_TYPES)}
     return sorted(changes, key=lambda c: (order[c["type"]], -c["confidence"], c["id"]))
@@ -772,14 +844,33 @@ def run_semantics(out_dir: str | Path, cfg: Mapping[str, Any],
     times["repair"] = time.perf_counter() - t0
 
     t0 = time.perf_counter()
-    kept, rejected = [], []
+    kept, rejected, splits = [], [], []
+    records = instance_records(paths)
+    next_id = max([c["id"] for c in doc["changes"]], default=0) + 1
     for c in changes:
-        if params["enable_judge"]:
-            verdict, reason = judge_change(vlm, crops, c)
-            keep = apply_verdict(c, verdict, reason, params["unclear_factor"])
-        else:
-            keep = True
+        if not params["enable_judge"]:
+            kept.append(c)
+            continue
+        verdict, reason = judge_change(vlm, crops, c)
+        if c["type"] == "moved" and verdict == "rejected":  # keep the geometry, unpaired
+            halves = split_moved(c, reason, params["split_factor"], next_id, records)
+            if halves[1]["id"] == next_id:
+                next_id += 1
+            for half in halves:
+                name_change(vlm, crops, half)
+            kept += halves
+            splits.append({"id": c["id"], "label": c["label"], "into": [h["id"] for h in halves],
+                           "labels": [h["label"] for h in halves], "reason": reason})
+            continue
+        keep = apply_verdict(c, verdict, reason, params["unclear_factor"])
         (kept if keep else rejected).append(c)
+    if splits and params["enable_repair"]:  # a split half may pair up with another change
+        kept, more = repair(vlm, crops, kept, params, only={i for x in splits for i in x["into"]})
+        merges += more
+        for c in kept:
+            if c["type"] == "moved" and c["motion_kind"] is None:  # new: verdict from repair
+                verdict, reason = judge_change(vlm, crops, c)  # asks for the motion kind
+                apply_verdict(c, verdict, reason, params["unclear_factor"])
     kept, rejected = sort_changes(kept), sort_changes(rejected)
     times["judge"] = time.perf_counter() - t0
 
@@ -818,6 +909,7 @@ def run_semantics(out_dir: str | Path, cfg: Mapping[str, Any],
         "rejected": [{"id": c["id"], "type": c["type"], "label": c["label"],
                       "reason": c["evidence"]["vlm_reason"]} for c in rejected],
         "merges": merges,
+        "splits": splits,
         "verdicts": {str(c["id"]): c["evidence"]["vlm_verdict"] for c in kept + rejected},
         "polished": sum(p is not None for p in polished),
         "template_kept": sum(p is None for p in polished),
@@ -828,5 +920,6 @@ def run_semantics(out_dir: str | Path, cfg: Mapping[str, Any],
     (folder / "meta.json").write_text(json.dumps(meta, indent=2))
     print(f"[semantics] {result['summary'][:200]} | {len(rejected)} rejected, "
           f"{len([m for m in merges if m['verdict'] == 'confirmed'])} merged, "
+          f"{len(splits)} moved split, "
           f"{vlm.calls} VLM calls, {times['total']:.1f} s -> {paths.changes_json}")
     return result

@@ -6,7 +6,8 @@ Writes
 * `changes.json`: `<out>/changes.json` if it exists, else changes generated from the M3
   `visibility/candidates.json`, else an empty change list (schema: docs/interfaces.md);
 * `crops/`: the crop images referenced by `changes.json`;
-* `scene.json`: manifest read by the viewer (file names, point counts, extent, up axis);
+* `scene.json`: manifest read by the viewer (file names, point counts, extent, up axis:
+  [0, 1, 0] if recon/meta.json says the frame is levelled, else `estimate_up`);
 * a copy of the viewer app (repo `viewer/`: index.html, app.js, style.css).
 
 Browsers refuse `fetch` on file:// pages, so serve the folder:
@@ -27,15 +28,14 @@ from typing import Any
 
 import numpy as np
 
-from roomdiff.geometry import voxel_downsample
+from roomdiff.geometry import estimate_up, voxel_downsample
 from roomdiff.paths import RECORDINGS, OutputPaths
-from roomdiff.recon import load_recon, recording_points, write_ply
+from roomdiff.recon import is_levelled, load_recon, recording_points, write_ply
 
 VIEWER_SRC = Path(__file__).resolve().parent.parent / "viewer"
 APP_FILES = ("index.html", "app.js", "style.css")
 TARGET_POINTS = 400_000
 START_VOXEL = 0.005  # m, first voxel size tried by `downsample_to_target`
-MIN_YAW_SPREAD = 0.1  # min singular value ratio of the camera x axes to trust 2 directions
 UNITS = "metres (approx.)"
 # M3 candidate type -> (change type, recording in which the region is occupied)
 CANDIDATE_TO_CHANGE = {
@@ -80,23 +80,6 @@ def downsample_to_target(
             return out, voxel
         # points on surfaces: count ~ 1 / voxel^2
         voxel *= max(1.1, 1.02 * math.sqrt(largest / target_points))
-
-
-def estimate_up(cam2world: np.ndarray) -> np.ndarray:
-    """Unit vector against gravity, from the camera axes (OpenCV: y down, x right).
-
-    Gravity is the mean camera "down" (y) axis, but phones are usually tilted down while
-    filming, which biases that mean (by ~7 degrees on scenediff_living_room_1). An upright
-    phone keeps its x axis horizontal, so the components of the mean y axis along the
-    directions spanned by the camera x axes are removed first (the second direction only
-    if the camera also turned sideways). Same idea as `scripts/plot_align.py`.
-    """
-    _, s, vt = np.linalg.svd(cam2world[:, :3, 0].astype(np.float64))
-    horizontal = vt[:2] if s[1] > MIN_YAW_SPREAD * s[0] else vt[:1]
-    down = cam2world[:, :3, 1].astype(np.float64).mean(0)
-    down -= horizontal.T @ (horizontal @ down)
-    norm = np.linalg.norm(down)
-    return -down / norm if norm > 1e-6 else np.array([0.0, -1.0, 0.0])
 
 
 def horizontal_view_dir(cam2world: np.ndarray, up: np.ndarray) -> np.ndarray:
@@ -197,16 +180,18 @@ def copy_crops(changes: dict[str, Any], src_root: Path, viewer: Path) -> None:
 
 
 def scene_manifest(
-    name: str, units: str, clouds: list[Cloud], cam2world: np.ndarray, voxel: float
+    name: str, units: str, clouds: list[Cloud], cam2world: np.ndarray, voxel: float,
+    levelled: bool = False,
 ) -> dict[str, Any]:
     """`scene.json`: file names, statistics and orientation hints for the viewer.
 
     `bbox_m` is the 1st-99th percentile box of both clouds (robust to stray points),
-    `up_axis` the unit vector against gravity and `view_dir` the horizontal direction the
-    cameras mostly looked in, all in the world frame of recon.npz."""
+    `up_axis` the unit vector against gravity (+Y in a `levelled` frame, else estimated
+    from the cameras) and `view_dir` the horizontal direction the cameras mostly looked in,
+    all in the world frame of recon.npz."""
     points = np.concatenate([p for p, _ in clouds])
     lo, hi = np.percentile(points, [1, 99], axis=0) if len(points) else np.zeros((2, 3))
-    up = estimate_up(cam2world)
+    up = np.array([0.0, 1.0, 0.0]) if levelled else estimate_up(cam2world)
     return {
         "name": name,
         "units": units,
@@ -244,7 +229,8 @@ def export_viewer(out_dir: str | Path, target_points: int = TARGET_POINTS) -> Pa
     (viewer / "changes.json").write_text(json.dumps(changes, indent=2))
 
     units = changes.get("scene", {}).get("units", UNITS)
-    manifest = scene_manifest(paths.root.resolve().name, units, clouds, cam2world, voxel)
+    manifest = scene_manifest(paths.root.resolve().name, units, clouds, cam2world, voxel,
+                              is_levelled(paths.recon))
     (viewer / "scene.json").write_text(json.dumps(manifest, indent=2))
     for file in APP_FILES:
         shutil.copy2(VIEWER_SRC / file, viewer / file)

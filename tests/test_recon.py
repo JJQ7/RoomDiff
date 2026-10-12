@@ -23,6 +23,8 @@ from roomdiff.geometry import sim3_apply_to_poses, sim3_matrix, umeyama
 from roomdiff.recon import (
     alignment_diagnostics,
     anchor_indices,
+    fit_floor,
+    level_transform,
     load_recon,
     observable_by,
     preprocess_images,
@@ -331,6 +333,73 @@ def test_run_recon_joint(scene_dir, capsys):
     assert "alignment OK" in capsys.readouterr().out
     for name in ("before", "after"):
         assert len(PlyData.read(str(scene_dir / "recon" / f"{name}.ply"))["vertex"]) > 1000
+
+
+def floor_tilt_and_height(recon: dict) -> tuple[float, float]:
+    """Angle (deg) between the ground-truth up and +Y, and the largest |y| of the floor
+    corners, in the frame of `recon` (GT cameras are upright: world +y is down)."""
+    s, R, t = umeyama(GT_POSES[:, :3, 3], recon["cam2world"][:, :3, 3])
+    up = R @ np.array([0.0, -1.0, 0.0])
+    corners = np.array([[x, ROOM_HI[1], z] for x in ROOM_LO[[0]].tolist() + ROOM_HI[[0]].tolist()
+                        for z in (ROOM_LO[2], ROOM_HI[2])])
+    floor = s * corners @ R.T + t
+    return float(np.degrees(np.arccos(np.clip(up[1], -1, 1)))), float(np.abs(floor[:, 1]).max())
+
+
+def test_run_recon_levels_the_world(scene_dir):
+    """The fake model returns the room in a random (tilted) gauge; run_recon levels it:
+    floor normal along +Y, floor at y = 0, first before camera looking along +Z. The floor
+    is only a thin strip along the wall bottoms here (cameras look horizontally from the
+    centre), a hard case: plain RANSAC inlier counting tilted this gauge by 1.2 degrees."""
+    fake_run_pi3x.calls = 0  # a fixed gauge (scale 0.89)
+    meta = run_recon(scene_dir, load_config(overrides=["recon.pixel_limit=9408"]))
+    recon = load_recon(scene_dir / "recon" / "recon.npz")
+    tilt, height = floor_tilt_and_height(recon)
+    assert tilt < 1.0 and height < 0.01
+    forward = recon["cam2world"][0, :3, 2]
+    assert abs(forward[0]) < 1e-3 and forward[2] > 0.99
+    assert meta["levelled"] and meta["level"]["method"] == "ransac floor plane"
+    assert meta["floor_inliers_fraction"] > 0.1 and len(meta["up_axis_original"]) == 3
+
+    fake_run_pi3x.calls -= 1  # same gauge, levelling off: the floor stays tilted
+    meta = run_recon(scene_dir, load_config(
+        overrides=["recon.pixel_limit=9408", "recon.level_world=false"]))
+    assert not meta["levelled"] and "level" not in meta
+    assert floor_tilt_and_height(load_recon(scene_dir / "recon" / "recon.npz"))[0] > 1.0
+
+
+def test_floor_plane_corrects_the_camera_up():
+    """Rolled cameras bias the camera up estimate by ~8 degrees; the floor fit removes it."""
+    poses = []
+    for yaw in np.linspace(0, 40, 8):
+        T = yaw_pose(yaw)
+        T[:3, :3] = T[:3, :3] @ Rotation.from_euler("zx", [8, -15], degrees=True).as_matrix()
+        poses.append(T)
+    poses = np.stack(poses)
+    n = len(poses)
+    recon = {"cam2world": poses, "K": np.repeat(K_TRUE[None], n, 0),
+             "depth": np.stack([render_depth(T) for T in poses]),
+             "valid": np.ones((n, H, W), bool), "rec": np.zeros(n, int)}
+    T, info = level_transform(recon)
+    assert info["floor_vs_camera_up_deg"] > 5  # the camera estimate alone is off
+    up = T[:3, :3] @ np.array([0.0, -1.0, 0.0])
+    assert np.degrees(np.arccos(up[1])) < 1.0
+    assert abs((T[:3, :3] @ [0.0, ROOM_HI[1], 0.0] + T[:3, 3])[1]) < 0.01
+    assert info["floor_inliers_fraction"] > 0.5
+
+
+def test_fit_floor_ignores_steep_planes():
+    rng = np.random.default_rng(0)
+    xz = rng.uniform(-1, 1, (4000, 2))
+    up = np.array([0.0, 1.0, 0.0])
+    ramp = np.c_[xz[:, 0], xz[:, 0], xz[:, 1]]  # 45 degrees from horizontal
+    assert fit_floor(ramp, up) is None
+    tilted = np.c_[xz[:, 0], 0.05 * xz[:, 0] + rng.normal(0, 0.003, len(xz)), xz[:, 1]]
+    clutter = rng.uniform([-1, 0.1, -1], [1, 1.5, 1], (20000, 3))
+    normal, offset, inliers = fit_floor(np.vstack([tilted, clutter]), up)
+    truth = np.array([-0.05, 1.0, 0.0]) / np.linalg.norm([-0.05, 1.0, 0.0])
+    assert np.degrees(np.arccos(normal @ truth)) < 0.5 and abs(offset) < 0.005
+    assert inliers > 0.9
 
 
 def test_run_recon_separate_recovers_the_shared_frame(scene_dir):

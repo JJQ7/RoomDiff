@@ -12,6 +12,7 @@ import pytest
 from PIL import Image
 
 from roomdiff.config import load_config
+from roomdiff.geometry import rotation_y
 from roomdiff.semantics import (
     SceneFrame,
     head_noun,
@@ -37,7 +38,8 @@ def responder(images, prompt):
     """Scripted VLM answers keyed on the prompt type and the crop colours."""
     cols = [colour(im) for im in images]
     if '"label"' in prompt:
-        return f"Sure! ```json\n{json.dumps({'label': NAMES[cols[0]], 'attributes': cols[0], 'description': 'A thing.'})}\n```"
+        answer = {"label": NAMES[cols[0]], "attributes": cols[0], "description": "A thing."}
+        return f"Sure! ```json\n{json.dumps(answer)}\n```"
     if "same physical object" in prompt:
         same = len(set(cols)) == 1 and cols[0] != "grey"
         return json.dumps({"verdict": "confirmed" if same else "rejected", "reason": "colours"})
@@ -67,7 +69,9 @@ def crop(root, name, col):
 def side(iid, centroid, half=0.1, n=500):
     c = np.asarray(centroid, float)
     return {"instance_id": iid, "centroid": c.tolist(), "aabb": [(c - half).tolist(),
-            (c + half).tolist()], "extents": [2 * half] * 3, "n_points": n, "blob_ids": [iid]}
+            (c + half).tolist()], "extents": [2 * half] * 3,
+            "obb": {"center": c.tolist(), "extents": [2 * half] * 3, "yaw_deg": 0.0},
+            "n_points": n, "blob_ids": [iid]}
 
 
 def change(cid, kind, before=None, after=None, crops=None, conf=0.8, views=5, seen_in=None):
@@ -256,11 +260,93 @@ def test_moved_absorbs_nearby_part(tmp_path, gap, merged):
     assert np.allclose(lo, [1.0, -0.3, 1.7]) and np.allclose(hi, [2.9, 0.7, 2.7])
     assert np.allclose(m["after"]["extents"], hi - lo)
     assert m["after"]["instance_ids"] == [1, 2] and m["after"]["n_points"] == 2000
+    obb = m["after"]["obb"]  # the oriented box encloses both parts
+    corners = np.array([[x, y, z] for x in (1.0, 1.4, 1.9, 2.9) for y in (-0.3, 0.7)
+                        for z in (1.7, 2.7)])
+    local = (corners - obb["center"]) @ rotation_y(obb["yaw_deg"])
+    assert np.all(np.abs(local) <= np.array(obb["extents"]) / 2 + 1e-3)
+    assert obb["extents"][1] == pytest.approx(1.0)
     assert m["crops"]["after_part"] == "crops/2_after.jpg"
     assert m["transform"]["rotation_deg"] is None
     assert m["transform"]["translation_m"] == pytest.approx(
         np.linalg.norm(np.subtract(m["after"]["centroid"], [0, 0, 2])), abs=1e-3)
     assert "merges candidates 1, 2" in m["description"]
+
+
+def test_rejected_moved_pair_is_split_into_removed_and_added(tmp_path):
+    """The judge rejects an M4 moved pair (a red bag before, a green hairbrush after): both
+    sides are kept, as a removed and an added change, named again, confidence x 0.6,
+    verdict "unclear"."""
+    moved = change(3, "moved", before=side(4, [0, 0, 2]), after=side(5, [1, 0, 2]), conf=0.8,
+                   crops={"before": crop(tmp_path, "3_before", "red"),
+                          "after": crop(tmp_path, "3_after", "green"),
+                          "before_place": crop(tmp_path, "3_before_place", "grey"),
+                          "after_place": crop(tmp_path, "3_after_place", "grey")})
+    moved["transform"] = {"translation_m": 1.0, "rotation_deg": None, "R": np.eye(3).tolist(),
+                          "t": [1.0, 0.0, 0.0], "icp_fitness": 0.2, "icp_rmse": 0.02}
+    moved["evidence"].update(observing_views_before_place=6, observing_views_after_place=2)
+    other = change(7, "removed", before=side(6, [-3, 0, 2]), conf=0.9,
+                   crops={"before": crop(tmp_path, "7_before", "red"),
+                          "after": crop(tmp_path, "7_after", "grey")})
+    write_doc(tmp_path, [moved, other])
+    (tmp_path / "instances").mkdir()  # the before instance's own evidence is used if present
+    record = {"id": 4, "mask_score_mean": 0.85, "view_consistency": 0.7,
+              "evidence": {"free_rays": 321, "free_frames_mean": 4.0, "observing_views": 6,
+                           "occ_points": 800}}
+    (tmp_path / "instances" / "before.json").write_text(json.dumps({"instances": [record]}))
+    doc = run_semantics(tmp_path, load_config(), FakeVLM(responder))
+
+    assert doc["rejected"] == []
+    by_id = {c["id"]: c for c in doc["changes"]}
+    assert sorted(by_id) == [3, 7, 8]  # the added half gets the next free id
+    removed, added = by_id[3], by_id[8]
+    assert removed["type"] == "removed" and added["type"] == "added"
+    assert removed["before"] == moved["before"] and removed["after"] is None
+    assert added["after"] == moved["after"] and added["before"] is None
+    assert removed["label"] == "red bag" and added["label"] == "hairbrush"  # named again
+    for c in (removed, added):
+        assert c["confidence"] == pytest.approx(0.8 * 0.6)
+        assert c["evidence"]["vlm_verdict"] == "unclear" and c["evidence"]["split_from"] == 3
+        assert c["evidence"]["vlm_reason"] == "appearance judge did not confirm the match: colours"
+        assert c["transform"] is None and c["motion_kind"] is None
+        assert "viewpoint" in c["description"]
+    assert removed["crops"] == {"before": "crops/3_before.jpg", "after": "crops/3_before_place.jpg"}
+    assert added["crops"] == {"after": "crops/3_after.jpg", "before": "crops/3_after_place.jpg"}
+    assert removed["evidence"]["observing_views"] == 6 and added["evidence"]["observing_views"] == 2
+    assert removed["evidence"]["free_rays"] == 321 and removed["evidence"]["mask_score"] == 0.85
+    assert "free_rays" not in added["evidence"]  # no instance record: per-place evidence
+    meta = json.loads((tmp_path / "semantics" / "meta.json").read_text())
+    assert meta["splits"] == [{"id": 3, "label": "red bag", "into": [3, 8],
+                               "labels": ["red bag", "hairbrush"], "reason": "colours"}]
+    assert meta["verdicts"] == {"3": "unclear", "7": "confirmed", "8": "unclear"}
+
+
+def test_split_half_is_re_paired_with_another_change(tmp_path):
+    """M4 paired the wrong objects (a red bag before, a green hairbrush after) and missed
+    the removed hairbrush 7: after the split, the added hairbrush half pairs with it."""
+    moved = change(3, "moved", before=side(4, [0, 0, 2]), after=side(5, [1, 0, 2]), conf=0.8,
+                   crops={"before": crop(tmp_path, "3_before", "red"),
+                          "after": crop(tmp_path, "3_after", "green"),
+                          "before_place": crop(tmp_path, "3_before_place", "grey"),
+                          "after_place": crop(tmp_path, "3_after_place", "grey")})
+    moved["evidence"].update(observing_views_before_place=6, observing_views_after_place=2)
+    brush = change(7, "removed", before=side(6, [0.5, 0, 2]), conf=0.9,
+                   crops={"before": crop(tmp_path, "7_before", "green"),
+                          "after": crop(tmp_path, "7_after", "grey")})
+    write_doc(tmp_path, [moved, brush])
+    vlm = FakeVLM(responder)
+    doc = run_semantics(tmp_path, load_config(), vlm)
+
+    assert [(c["id"], c["type"], c["label"]) for c in doc["changes"]] == [
+        (7, "moved", "hairbrush"), (3, "removed", "red bag")]
+    m = doc["changes"][0]
+    assert m["evidence"]["merged_from"] == [7, 8] and m["evidence"]["vlm_verdict"] == "confirmed"
+    assert m["after"] == moved["after"] and m["motion_kind"] == "rigid"
+    assert m["confidence"] == pytest.approx((0.9 + 0.8 * 0.6) / 2, abs=1e-3)
+    meta = json.loads((tmp_path / "semantics" / "meta.json").read_text())
+    assert [x["ids"] for x in meta["merges"]] == [[7, 8]]  # never the two halves 3 + 8
+    assert sum("same physical object" in p and "already matched" not in p
+               for p in vlm.prompts) == 1  # one strict same-object check: 7 + 8
 
 
 # ------------------------------------------------------------------ descriptions

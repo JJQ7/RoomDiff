@@ -53,8 +53,9 @@ def evidence_line(change: Mapping[str, Any]) -> str:
             parts.append("merged from candidates " + ", ".join(map(str, ev["merged_from"])))
     elif kind in ("removed", "added"):
         other = "after" if kind == "removed" else "before"
+        rays = f" ({ev['free_rays']} free-space rays)" if ev.get("free_rays") is not None else ""
         parts.append(f"place seen empty from {ev.get('observing_views', 0)} views of the "
-                     f"{other} video ({ev.get('free_rays', 0)} free-space rays)")
+                     f"{other} video{rays}")
     else:
         other = "after" if ev.get("seen_in") == "before" else "before"
         parts.append(f"seen only in the {ev.get('seen_in')} video; the {other} video never "

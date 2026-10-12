@@ -22,6 +22,9 @@ recon:
   conf_threshold: 0.25   # valid pixel: sigmoid(conf) above this ...
   edge_rtol: 0.03        # ... and not a depth/normal edge (relative depth jump)
   scale_factor: 1.0      # multiplies all metric outputs (e.g. from a tape-measure check)
+  level_world: true      # rotate the result into a gravity-aligned frame: +Y up (camera up
+                         # refined by a RANSAC floor plane), floor at y = 0, first before
+                         # camera looking along +Z
   n_anchor: 8            # separate mode: keyframes per recording in the anchor joint pass
   icp_refine: true       # separate mode: refine the Sim(3) with point-to-plane ICP
   voxel_size_diag: 0.02  # voxel size (m) for diagnostics, ICP and the .ply clouds
@@ -109,6 +112,8 @@ semantics:
   repair_max_distance: 3.0  # m, removed + added/unverified centroids closer than this are re-paired ...
   merge_max_distance: 1.0   # m, ... and a moved after-box absorbs an added box this close (box gap)
   unclear_factor: 0.7    # confidence multiplier of an "unclear" verdict
+  split_factor: 0.6      # a moved pair the judge rejects becomes removed + added, each with
+                         # confidence x this (verdict "unclear")
 
 # M6: Rerun recording and static web viewer assets
 viz: {}

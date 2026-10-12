@@ -6,8 +6,10 @@ Reads `<out>/recon/{before,after}.ply`, the cameras in `recon.npz` and `meta.jso
 writes `<run>_top.png` (all points; a +-5 cm horizontal slice at camera height; after
 points coloured by their distance to the before cloud) and `<run>_side.png` (two side
 views) to `--png-dir` (default `<out>/recon`), where `<run>` is the name of `<out>`.
-Blue = before, orange = after. The clouds are levelled with a gravity estimate from the
-cameras; at most 300k random points per cloud are drawn.
+Blue = before, orange = after. The clouds are drawn with gravity along the vertical plot
+axis: a levelled reconstruction (`levelled` in meta.json: +Y up) is only turned so that
+the first camera looks up the top-down plots, otherwise a gravity estimate from the
+cameras levels it; at most 300k random points per cloud are drawn.
 """
 
 from __future__ import annotations
@@ -57,7 +59,9 @@ class AlignPlot:
         with np.load(recon_dir / "recon.npz") as npz:  # lazy: only the cameras are read
             cams, rec = npz["cam2world"], npz["rec"]
         meta = json.loads((recon_dir / "meta.json").read_text())
-        R = level_rotation(cams)
+        # this script draws "down" as +y; a levelled frame is +Y up with the first camera
+        # looking along +Z: half a turn about z keeps that camera pointing up the plot
+        R = np.diag([-1.0, -1.0, 1.0]) if meta.get("levelled") else level_rotation(cams)
         rng = np.random.default_rng(0)
         self.full, self.clouds, self.paths = {}, {}, {}
         for r, name in enumerate(RECORDINGS):

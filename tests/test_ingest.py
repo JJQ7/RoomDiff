@@ -239,7 +239,7 @@ def test_ingest_pair_fixed_mode_records_benchmark_frames(tmp_path):
         assert [f["benchmark_frame"] for f in frames] == [0, 1, 2]
         assert [f["t_target"] for f in frames] == [0.0, 1.0, 2.0]
         assert len(list((tmp_path / "out" / "keyframes" / name).glob("*.jpg"))) == 3
-    with pytest.raises(ValueError, match="ingest.mode"):
+    with pytest.raises(ValueError, match=r"ingest\.mode"):
         ingest_pair(video, video, tmp_path / "bad", load_config(overrides=["ingest.mode=every"]))
 
 

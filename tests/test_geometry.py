@@ -7,7 +7,11 @@ from pi3.utils.geometry import recover_intrinsic_from_rays_d
 from scipy.spatial.transform import Rotation
 
 from roomdiff.geometry import (
+    floor_obb,
+    obb_corners,
     project_points,
+    rotation_between,
+    rotation_y,
     se3_inverse,
     sim3_apply_to_poses,
     sim3_matrix,
@@ -116,3 +120,35 @@ def test_voxel_downsample_averages_points_and_colours():
     assert out_colors[order].tolist() == [[7, 7, 7], [50, 25, 2], [10, 20, 30]]
     alone, none = voxel_downsample(points, None, 1.0)
     assert none is None and len(alone) == 2  # x = -0.02 lies in the cell below 0
+
+
+def test_rotation_between_maps_one_direction_onto_another():
+    for a, b in (([1.0, 2.0, 3.0], [0.0, 1.0, 0.0]), ([0.0, 0.0, 1.0], [0.0, 0.0, -1.0]),
+                 ([0.0, 1.0, 0.0], [0.0, 1.0, 0.0])):
+        R = rotation_between(a, b)
+        assert np.allclose(R @ (np.array(a) / np.linalg.norm(a)), b, atol=1e-12)
+        assert np.allclose(R @ R.T, np.eye(3)) and np.isclose(np.linalg.det(R), 1)
+
+
+@pytest.mark.parametrize("yaw, expected_yaw, swapped", [(0, 0, False), (30, 30, False),
+                                                        (-20, -20, False), (60, -30, True)])
+def test_floor_obb_recovers_a_turned_box(yaw, expected_yaw, swapped):
+    rng = np.random.default_rng(0)
+    local = rng.uniform(-1, 1, (3000, 3)) * [1.0, 0.4, 0.25]  # 2.0 x 0.8 x 0.5 m
+    points = local @ rotation_y(yaw).T + [1.0, 2.0, 3.0]
+    obb = floor_obb(points)
+    assert obb["yaw_deg"] == pytest.approx(expected_yaw, abs=0.5)
+    w, h, d = obb["extents"]
+    assert (w, h, d) == pytest.approx((0.5, 0.8, 2.0) if swapped else (2.0, 0.8, 0.5), abs=0.02)
+    assert obb["center"] == pytest.approx([1.0, 2.0, 3.0], abs=0.02)
+    # every point inside the box: express the points in the box frame
+    inside = (points - obb["center"]) @ rotation_y(obb["yaw_deg"])
+    assert np.all(np.abs(inside) <= np.array(obb["extents"]) / 2 + 1e-3)
+    corners = obb_corners(obb)
+    assert corners.shape == (8, 3) and np.allclose(corners.mean(0), obb["center"])
+
+
+def test_floor_obb_degenerate_inputs():
+    line = floor_obb(np.array([[0.0, 0.0, 0.0], [1.0, 0.5, 1.0], [2.0, 1.0, 2.0]]))
+    assert line["extents"][1] == pytest.approx(1.0) and min(line["extents"]) == 0.0
+    assert floor_obb(np.zeros((0, 3)))["extents"] == [0.0, 0.0, 0.0]

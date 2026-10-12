@@ -254,7 +254,9 @@ def far_from_surfaces(occupied: np.ndarray, voxel: float, margin: float) -> np.n
     return ndimage.distance_transform_edt(~occupied, sampling=voxel) > margin
 
 
-def candidate_masks(states: Sequence[np.ndarray], far: Sequence[np.ndarray]) -> dict[str, np.ndarray]:
+def candidate_masks(
+    states: Sequence[np.ndarray], far: Sequence[np.ndarray]
+) -> dict[str, np.ndarray]:
     """Raw candidate voxels per type from the two state grids and the "far from the
     other recording's surfaces" masks (both indexed 0 = before, 1 = after)."""
     masks = {}
@@ -474,7 +476,7 @@ def run_visibility(out_dir: str | Path, cfg: Mapping[str, Any]) -> dict[str, Any
     times["labelling"] = time.perf_counter() - t0
 
     t0 = time.perf_counter()
-    for kind, (own, other) in CANDIDATE_TYPES.items():
+    for kind, (_, other) in CANDIDATE_TYPES.items():
         sel = [r for r in records if r["type"] == kind]
         if not sel:
             continue

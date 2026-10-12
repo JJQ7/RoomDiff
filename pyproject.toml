@@ -50,3 +50,22 @@ packages = ["roomdiff"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+# Pinned explicitly: ruff >= 0.17 enables ~400 rules by default and older versions far
+# fewer, so without this the result depends on the ruff version. Check:
+#   uvx ruff check roomdiff tests scripts
+select = [
+    "E", "F", "W", "B", "I",           # pycodestyle, pyflakes, bugbear, isort
+    "UP", "C4", "SIM", "PIE", "PERF",  # modern syntax, simpler comprehensions / logic
+    "PLE", "PLW", "FURB", "RUF",       # pylint errors and warnings, refurb, ruff
+    "BLE", "TRY004",                   # blind except, TypeError for wrong types
+]
+ignore = [
+    "B905",     # zip() without strict=: the lengths match by construction here
+    "PLW2901",  # re-binding a loop variable (`pts = pts[mask]`) is the numpy idiom
+    "RUF005",   # `a + [b]` and `[*a, b]` are both fine
+]

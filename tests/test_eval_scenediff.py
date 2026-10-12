@@ -17,10 +17,10 @@ from pycocotools import mask as mask_utils
 from test_changes import SETTINGS, make_scene
 from typer.testing import CliRunner
 
+from roomdiff import eval_scenediff
 from roomdiff.changes import run_changes
 from roomdiff.cli import app
 from roomdiff.config import load_config
-from roomdiff import eval_scenediff
 from roomdiff.eval_scenediff import (
     EVALUATOR,
     GUARD,

@@ -83,7 +83,7 @@ def load_segments(path: str | Path) -> dict[str, Any]:
     with open(path, "rb") as f:
         data = _DataOnlyUnpickler(f).load()
     if not isinstance(data, dict):
-        raise ValueError(f"{path}: expected a dict at the top level")
+        raise TypeError(f"{path}: expected a dict at the top level")
     return data
 
 
@@ -271,7 +271,8 @@ def run_pipeline(
     start = time.perf_counter()
     log.parent.mkdir(parents=True, exist_ok=True)
     with open(log, "w") as f:
-        rc = subprocess.run(cmd, cwd=ROOT, stdout=f, stderr=subprocess.STDOUT).returncode
+        rc = subprocess.run(cmd, cwd=ROOT, stdout=f, stderr=subprocess.STDOUT,
+                            check=False).returncode
     out.mkdir(parents=True, exist_ok=True)
     (out / RUN_MARKER).write_text(json.dumps(
         {"rc": rc, "seconds": round(time.perf_counter() - start, 1), "cmd": cmd}, indent=1))
@@ -367,7 +368,8 @@ def evaluate(
            "--output_path", str(result_path), "--visualize", "False",
            "--splits", "val", "--sets", "all"]
     start = time.perf_counter()
-    proc = subprocess.run(cmd, cwd=work, capture_output=True, text=True, timeout=timeout)
+    proc = subprocess.run(cmd, cwd=work, capture_output=True, text=True, timeout=timeout,
+                          check=False)
     log = pred_root / "evaluator_log.txt"
     log.write_text(proc.stdout + proc.stderr)
     if proc.returncode != 0:
@@ -382,7 +384,7 @@ def evaluate(
     summary = {
         "pairs": list(pairs),
         "not_predicted": [p for p in pairs if p not in predicted],
-        "evaluator_errors": re.findall(r"^Error .*$", proc.stdout, flags=re.M),
+        "evaluator_errors": re.findall(r"^Error .*$", proc.stdout, flags=re.MULTILINE),
         "metrics": parse_result(result_file.read_text()),
         "result_file": str(result_file),
         "evaluator_log": str(log),

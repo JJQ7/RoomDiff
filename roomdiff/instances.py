@@ -33,7 +33,7 @@ import numpy as np
 from scipy import ndimage
 from scipy.spatial import cKDTree
 
-from roomdiff.geometry import unproject_depth, voxel_downsample
+from roomdiff.geometry import floor_obb, unproject_depth, voxel_downsample
 from roomdiff.models import Featurizer, Segmenter
 from roomdiff.paths import RECORDINGS, OutputPaths
 from roomdiff.projection import best_views, project_aabb, project_to_pixels
@@ -574,6 +574,7 @@ def instance_record(inst: Instance, recon: Mapping[str, Any]) -> dict[str, Any]:
         "centroid": inst.points.mean(0).round(4).tolist(),
         "aabb": [lo.round(4).tolist(), hi.round(4).tolist()],
         "extents": (hi - lo).round(4).tolist(),
+        "obb": floor_obb(inst.points),
         "views": [{"frame": v.frame, "file": str(recon["files"][v.frame]), "box": list(v.box),
                    "mask_box": list(mask_box(v.mask)), "score": round(v.score, 4)}
                   for v in inst.views],
@@ -602,10 +603,11 @@ def write_recording(
     cls = np.stack([i.cls for i in instances]) if instances else np.zeros((0, dim))
     np.save(folder / f"{name}_feats.npy", feats.astype(np.float32))
     np.save(folder / f"{name}_cls.npy", cls.astype(np.float32))
+    empty = [np.zeros((0, 3))]
     np.savez_compressed(
         folder / f"{name}_points.npz",
-        points=np.concatenate([i.points for i in instances] or [np.zeros((0, 3))]).astype(np.float32),
-        colors=np.concatenate([i.colors for i in instances] or [np.zeros((0, 3))]).astype(np.uint8),
+        points=np.concatenate([i.points for i in instances] or empty).astype(np.float32),
+        colors=np.concatenate([i.colors for i in instances] or empty).astype(np.uint8),
         instance=np.concatenate([np.full(len(i.points), i.id) for i in instances]
                                 or [np.zeros(0)]).astype(np.int32))
     entries = [(str(recon["files"][f]), i.id, s, rle["counts"])
@@ -713,7 +715,7 @@ def run_instances(
     times["merge"] = time.perf_counter() - t0
 
     t0 = time.perf_counter()
-    for rec, instances in enumerate(final):
+    for instances in final:
         for inst in instances:
             describe_features(inst, recon, featurizer, params["mask_erode_px"],
                               params["cls_box_enlarge"])

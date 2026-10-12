@@ -2,8 +2,12 @@
 
 All stages read/write under one output directory `<out>` (see `roomdiff/paths.py`).
 Coordinates: OpenCV camera convention (x right, y down, z forward); world frame = the
-shared frame produced by the joint reconstruction; units = metres as estimated by the
-reconstruction model (approximately metric; a `scale_factor` override exists).
+shared frame produced by the joint reconstruction, levelled by M2 (`recon.level_world`,
+default on; `levelled` in `recon/meta.json`): +Y up (against gravity), the floor plane at
+y = 0 and the first before-camera's optical axis projected onto +Z (so +X is to its left).
+Without levelling the frame is Pi3X's (roughly the first camera). Units = metres as
+estimated by the reconstruction model (approximately metric; a `scale_factor` override
+exists).
 
 ## M1 ingest -> `<out>/keyframes/`
 `before/*.jpg`, `after/*.jpg`, `index.json` (per recording: video info, per-keyframe file,
@@ -24,7 +28,19 @@ source frame index, timestamp, sharpness, size). Implemented.
 | `metric_scale` | float | scale factor reported by the model |
 `meta.json`: model name, resolution, frame counts, runtime, VRAM, alignment diagnostics
 (median nearest-neighbour distance of confident before-points to the after cloud and vice
-versa, fraction under 3 cm / 10 cm), and the chosen `scale_factor`.
+versa, fraction under 3 cm / 10 cm), and the chosen `scale_factor`. Levelling (after the
+joint pass or the separate-mode alignment, before `scale_factor`): `levelled` (bool);
+when true also `up_axis_original` (the up direction in the model frame that became +Y),
+`floor_inliers_fraction` (share of the floor candidates within 2 cm of the fitted floor
+plane, null if no plane was found) and `level` {`method` ("ransac floor plane" | "camera
+up (no floor plane)"), `camera_up` (initial estimate: mean camera down axis without its
+components along the camera x axes), `floor_vs_camera_up_deg`, `floor_offset_m`,
+`points_used`, `transform` (4x4, model frame -> levelled frame)}. Up = camera estimate
+refined by the floor plane: MSAC (RANSAC with truncated squared residuals, 2 cm cap;
+points clearly below a candidate plane cost double) on the lowest 10 % of the valid
+points (every 4th pixel) along the camera up, planes within 20 degrees of it only, then
+least squares on the inliers; no such plane -> the camera up and the median of the lowest
+5 % of the points as floor height.
 `before.ply`, `after.ply`: voxel-downsampled coloured clouds (viewer / debugging).
 World points are recomputed from `depth`, `K`, `cam2world` (helper in `roomdiff/geometry.py`).
 
@@ -68,7 +84,13 @@ kinds first, then by point count).
 
 `instances/<rec>.json`: `{recording, image_size [W, H], instances: [...]}`; per instance:
 `id`, `recording`, `kind` (disappeared / appeared / unverified), `label` ("object" until
-M5), `blob_ids`, `n_points`, `centroid`, `aabb [[min], [max]]`, `extents`, `views` (per
+M5), `blob_ids`, `n_points`, `centroid`, `aabb [[min], [max]]`, `extents`, `obb`
+(oriented box with a vertical axis: `center` [x, y, z], `extents` [w, h, d] with w / d
+along the box's own x / z axes and h along y, `yaw_deg` in (-45, 45]: the box is an
+axis-aligned box of these extents rotated about +Y by `yaw_deg`, three.js `rotation.y`
+convention, i.e. its x axis points along (cos, 0, -sin); footprint = minimum-area
+rectangle of the points projected on the x-z (floor) plane, height = their y range; it is
+gravity-aligned when the recon frame is levelled), `views` (per
 prompted keyframe: `frame` index into recon.npz, `file`, prompt `box`, `mask_box`
 [x0,y0,x1,y1] at recon resolution, SAM `score`), `mask_scores`, `mask_score_mean`,
 `view_consistency` (mean pairwise cosine of the per-view features, null for one view),
@@ -97,7 +119,9 @@ matrices of the moved candidates and the accepted pairs.
     {"id": 1, "type": "moved|added|removed|unverified", "label": "office chair",
      "confidence": 0.86,
      "before": {"instance_id": 3, "centroid": [x,y,z], "aabb": [[x0,y0,z0],[x1,y1,z1]],
-                "extents": [dx,dy,dz], "n_points": 5120, "blob_ids": [9, 14]},
+                "extents": [dx,dy,dz],
+                "obb": {"center": [x,y,z], "extents": [w,h,d], "yaw_deg": 12.5},
+                "n_points": 5120, "blob_ids": [9, 14]},
      "after":  {"instance_id": 7, "centroid": [x,y,z], "aabb": [[...],[...]], ...},
      "transform": {"translation_m": 0.92, "rotation_deg": 31.0, "R": [[...]], "t": [...],
                    "icp_fitness": 0.82, "icp_rmse": 0.012},
@@ -109,7 +133,8 @@ matrices of the moved candidates and the accepted pairs.
   "summary": "3 changes detected: 1 moved, 1 added, 1 removed; 1 region unverified."
 }
 ```
-Every change has all keys; `before` / `after` is null on the side where the object does
+Every change has all keys; `obb` is the instance's oriented box (`aabb` / `extents` are
+kept for compatibility); `before` / `after` is null on the side where the object does
 not exist (removed: after, added: before, unverified: the recording that never observed
 it) and `transform` is null unless moved. `R`, `t` map before points to after points
 (`x_after = R x_before + t`); `translation_m` = displacement of the before centroid;
@@ -132,8 +157,10 @@ own recording with mask outline and box; the other side shows the other recordin
 at the same 3D box (the empty place or the new object). Moved objects have both object
 crops plus `<id>_before_place.jpg` / `<id>_after_place.jpg` (the other recording at the old
 / new place). A side is missing if no keyframe of that recording sees the box.
-`changes.rrd` / `scene.rrd`: boxes per change coloured by type, instance points, moved
-arrows (`roomdiff/viz_rerun.py`).
+`changes.rrd` / `scene.rrd`: boxes per change coloured by type (the `obb` when present,
+else the AABB), labelled "<id> <type>: <label>", instance points, moved arrows from the
+before to the after box centre (`roomdiff/viz_rerun.py`); world view coordinates LUF
+(y up) for a levelled reconstruction, else RDF.
 
 ## M5 semantics -> `<out>/changes.json` (rewritten), `<out>/semantics/`, `<out>/report.md`
 Implemented (`roomdiff/semantics.py`, `roomdiff/vlm.py`, `roomdiff/report.py`, command
@@ -153,6 +180,20 @@ or merged); M5 sets or adds:
   "rigid" | "deformed" | "unknown" and `evidence.vlm_motion_reason` (`motion_kind` is null
   for the other types). Unverified regions are rejected unless the VLM sees a distinct
   object (not wall / floor / door frame / window / mirror reflection / shadow / lighting).
+* A `moved` change (M4 geometric match or re-pairing) whose match the judge rejects is not
+  dropped: it is split into a `removed` change (its `before` side; id = the moved id, or
+  the first merged candidate's) and an `added` change (its `after` side; id = the second
+  merged candidate's, else the next unused id), each named again from its own crop, with
+  `confidence` = moved confidence x `split_factor` (0.6), `vlm_verdict` "unclear",
+  `vlm_reason` "appearance judge did not confirm the match: <judge reason>",
+  `evidence.split_from` = the moved id, `transform` / `motion_kind` null, crops: removed
+  `before` / `after` = moved `before` / `before_place`, added `after` / `before` = moved
+  `after` / `after_place`; the other evidence keys come from the instance record (as M4
+  writes them for removed / added) or, without it, from the moved per-place evidence
+  (`observing_views`, `mask_score`). The halves then go through re-pairing once more
+  (both steps below), only in pairs with another change, never with each other: a
+  wrong M4 match can so become the right one (office_1: wrong chair pair split, the small
+  chair's halves re-paired).
 * Re-paired removed R + added or after-only unverified A (matching labels: same label,
   head noun or synonym group; centroids < `repair_max_distance`; VLM: same object) -> one
   `moved` change with R's id: `before` = R's side, `after` = A's, `transform` from the
@@ -162,10 +203,12 @@ or merged); M5 sets or adds:
 * A moved change M absorbing an added change P (matching labels, gap between the after
   boxes <= `merge_max_distance`, VLM: parts of one object, e.g. a spread-out quilt):
   `after` = union box (`instance_ids` [M's, P's], `n_points` summed, point-weighted
-  centroid), transform = centroid translation (rotation null), confidence = mean,
-  `evidence.merged_from` [M, P], `evidence.merged_part_reason`, `crops.after_part`.
-* `description`: one sentence (label, type, distance in m with one decimal, size, coarse
-  place "far left part of the room" along the mean camera direction, height of the lowest
+  centroid, `obb` = oriented box around the corners of both `obb`s), transform =
+  centroid translation (rotation null), confidence = mean, `evidence.merged_from` [M, P],
+  `evidence.merged_part_reason`, `crops.after_part`.
+* `description`: one sentence (label, type, distance in m with one decimal, size (`obb`
+  extents if present, else the AABB's), coarse place "far left part of the room" along
+  the mean camera direction, height of the lowest
   observed part above the floor = median of the lowest 5 % of all valid points, evidence
   counts), polished by one text-only VLM call if every number and the label survived;
   `description_template` keeps the template sentence.
@@ -174,8 +217,10 @@ Top level: `rejected` (same schema, `vlm_verdict` "rejected" + reason), `summary
 "N changes: a moved, b added, c removed; d unverified." + a VLM paragraph.
 `semantics/meta.json`: model, params, runtime per step, VLM calls and seconds, counts in /
 out, rejected (id, type, label, reason), merges (every VLM pair check: ids, labels,
-distance or box gap, verdict, reason), verdict per id, polished / template-kept counts,
-scene frame (up vector, floor height), `peak_vram_gb`, `peak_ram_gb`.
+distance or box gap, verdict, reason), splits (rejected moved changes: `id`, `label`,
+`into` [removed id, added id], `labels`, `reason`), verdict per id, polished /
+template-kept counts, scene frame (up vector: +Y in a levelled frame, else the camera
+estimate; floor height), `peak_vram_gb`, `peak_ram_gb`.
 `semantics/log.jsonl`: one line per VLM call `{tag, images, prompt, answer, seconds}`.
 `report.md`: title, summary, counts table, one section per change (type badge, label,
 confidence, verdict, motion, description, evidence line, crops as relative markdown
@@ -185,7 +230,9 @@ images), collapsible rejected list with the VLM reasons, coverage note from
 ## M6 outputs
 `scene.rrd` (Rerun; written by `roomdiff viz`: reconstruction, M3 candidate blobs,
 changes), `viewer/` (`roomdiff viewer`: static web viewer assets: downsampled clouds,
-boxes, crops, changes.json).
+boxes, crops, changes.json; `scene.json: up_axis` = [0, 1, 0] for a levelled
+reconstruction, else the camera-based estimate). The viewer draws each change's `obb`
+when present (else its `aabb`) and the moved arrow between the box centres.
 
 ## Evaluation (SceneDiff) -> `<out-root>/`
 Implemented (`roomdiff/eval_scenediff.py`, `roomdiff eval`, parameters in

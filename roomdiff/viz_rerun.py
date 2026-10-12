@@ -7,8 +7,10 @@ Entities: `world/<rec>/points` (valid points coloured from the keyframes) and
 labelled "id:type") and `world/candidates/<type>/voxels` (subsampled voxel centres);
 `world/changes/<type>/<id>/<rec>/box` and `.../points` (box and subsampled instance
 points per change and side, coloured by change type: added green, removed red, moved
-blue, unverified yellow; labelled "id type") and `world/changes/moved/<id>/arrow` (old
-to new centroid).
+blue, unverified yellow; labelled "id type: label"; the oriented box `obb` when present,
+else the AABB) and `world/changes/moved/<id>/arrow` (old to new box centre).
+World axes: x left, y up, z forward (LUF) in a levelled reconstruction (recon/meta.json
+`levelled`), else the OpenCV axes of the model frame (RDF).
 
 Files: `<out>/scene.rrd` (everything), `<out>/recon/recon.rrd` (reconstruction only),
 `<out>/visibility/visibility.rrd` (candidates only), `<out>/changes.rrd` (changes only).
@@ -18,13 +20,14 @@ Open with `rerun <file>`.
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
 from roomdiff.paths import RECORDINGS, OutputPaths
-from roomdiff.recon import load_recon, recording_points
+from roomdiff.recon import is_levelled, load_recon, recording_points
 from roomdiff.visibility import CANDIDATE_TYPES, TYPE_COLORS
 
 if TYPE_CHECKING:
@@ -37,14 +40,36 @@ MAX_VOXELS_PER_TYPE = 50_000  # candidate voxel centres logged per type
 MAX_POINTS_PER_OBJECT = 5_000  # instance points logged per change side
 
 
-def _open_stream(rrd: Path) -> rr.RecordingStream:
-    """New recording saved to `rrd`, with OpenCV world axes (x right, y down)."""
+def _open_stream(rrd: Path, out_dir: Path) -> rr.RecordingStream:
+    """New recording saved to `rrd`; world axes LUF (y up) if the reconstruction in
+    `out_dir` is levelled, else OpenCV RDF (x right, y down)."""
     import rerun as rr
 
     stream = rr.RecordingStream("roomdiff")
     stream.save(rrd)
-    stream.log("world", rr.ViewCoordinates.RDF, static=True)
+    levelled = is_levelled(OutputPaths(out_dir).recon)
+    stream.log("world", rr.ViewCoordinates.LUF if levelled else rr.ViewCoordinates.RDF,
+               static=True)
     return stream
+
+
+def box_args(side: Mapping[str, Any]) -> dict[str, Any]:
+    """`rr.Boxes3D` geometry of one change side: its oriented box `obb` if present (a
+    rotation about +y), else its `aabb`."""
+    import rerun as rr
+
+    obb = side.get("obb")
+    if obb:
+        return {"centers": [obb["center"]], "half_sizes": [np.asarray(obb["extents"]) / 2],
+                "rotation_axis_angles": [rr.RotationAxisAngle(axis=(0.0, 1.0, 0.0),
+                                                              degrees=obb["yaw_deg"])]}
+    lo, hi = np.asarray(side["aabb"], np.float64)
+    return {"centers": [(lo + hi) / 2], "half_sizes": [(hi - lo) / 2]}
+
+
+def box_centre(side: Mapping[str, Any]) -> np.ndarray:
+    """Centre of the oriented box of a change side, else its centroid."""
+    return np.asarray((side.get("obb") or {}).get("center", side["centroid"]), np.float64)
 
 
 def _log_recon_entities(stream: rr.RecordingStream, out_dir: Path, max_points: int) -> int:
@@ -131,7 +156,7 @@ def log_recon(out_dir: str | Path, max_points: int = 2_000_000) -> Path:
     At most `max_points` points in total (random subset, half per recording).
     """
     rrd = OutputPaths(out_dir).recon / "recon.rrd"
-    stream = _open_stream(rrd)
+    stream = _open_stream(rrd, Path(out_dir))
     cameras = _log_recon_entities(stream, Path(out_dir), max_points)
     stream.flush()
     print(f"[viz] wrote {rrd} ({cameras} cameras)")
@@ -141,7 +166,7 @@ def log_recon(out_dir: str | Path, max_points: int = 2_000_000) -> Path:
 def log_visibility(out_dir: str | Path) -> Path:
     """Write `<out>/visibility/visibility.rrd` (candidate blobs only); returns its path."""
     rrd = OutputPaths(out_dir).visibility / "visibility.rrd"
-    stream = _open_stream(rrd)
+    stream = _open_stream(rrd, Path(out_dir))
     blobs = _log_visibility_entities(stream, Path(out_dir))
     stream.flush()
     print(f"[viz] wrote {rrd} ({blobs} candidate blobs)")
@@ -169,15 +194,14 @@ def _log_changes_entities(stream: rr.RecordingStream, out_dir: Path,
         kind = change["type"]
         color = np.array(CHANGE_COLORS.get(kind, (200, 200, 200)))
         base = f"world/changes/{kind}/{change['id']}"
-        label = f"{change['id']} {kind}"
+        label = f"{change['id']} {kind}: {change.get('label') or 'object'}"
         for name in RECORDINGS:
             side = change.get(name)
             if not side:
                 continue
             tint = color // 2 if kind == "moved" and name == "before" else color
-            lo, hi = np.asarray(side["aabb"], np.float64)
             stream.log(f"{base}/{name}/box",
-                       rr.Boxes3D(centers=[(lo + hi) / 2], half_sizes=[(hi - lo) / 2],
+                       rr.Boxes3D(**box_args(side),
                                   labels=[f"{label} ({name})" if kind == "moved" else label],
                                   colors=[tint]),
                        static=True)
@@ -189,8 +213,7 @@ def _log_changes_entities(stream: rr.RecordingStream, out_dir: Path,
                 stream.log(f"{base}/{name}/points",
                            rr.Points3D(pts, colors=tint, radii=POINT_RADIUS * 1.5), static=True)
         if kind == "moved" and change.get("before") and change.get("after"):
-            start = np.asarray(change["before"]["centroid"], np.float64)
-            end = np.asarray(change["after"]["centroid"], np.float64)
+            start, end = box_centre(change["before"]), box_centre(change["after"])
             stream.log(f"{base}/arrow",
                        rr.Arrows3D(origins=[start], vectors=[end - start], colors=[color],
                                    labels=[label]),
@@ -201,7 +224,7 @@ def _log_changes_entities(stream: rr.RecordingStream, out_dir: Path,
 def log_changes(out_dir: str | Path) -> Path:
     """Write `<out>/changes.rrd` (object-level changes only); returns its path."""
     rrd = Path(out_dir) / "changes.rrd"
-    stream = _open_stream(rrd)
+    stream = _open_stream(rrd, Path(out_dir))
     count = _log_changes_entities(stream, Path(out_dir))
     stream.flush()
     print(f"[viz] wrote {rrd} ({count} changes)")
@@ -214,7 +237,7 @@ def log_scene(out_dir: str | Path, max_points: int = 2_000_000) -> Path:
     out_dir = Path(out_dir)
     paths = OutputPaths(out_dir)
     rrd = out_dir / "scene.rrd"
-    stream = _open_stream(rrd)
+    stream = _open_stream(rrd, out_dir)
     cameras = _log_recon_entities(stream, out_dir, max_points)
     extra = []
     if (paths.visibility / "candidates.json").exists():

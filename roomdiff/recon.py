@@ -9,6 +9,11 @@ frame by a Sim(3) found through a third, small joint pass on `n_anchor` keyframe
 recording (Umeyama on the anchor cameras' centres and look-at points), optionally refined
 by point-to-plane ICP.
 
+Levelling (`level_world`, default on): the model's frame is arbitrary (roughly the first
+camera), so the result is rotated into a gravity-aligned frame: +Y up (camera up estimate
+refined by a RANSAC floor plane), the floor at y = 0 and the first before-camera looking
+along +Z (projected onto the floor), see `level_transform`.
+
 Writes `<out>/recon/recon.npz`, `meta.json`, `before.ply`, `after.ply`
 (docs/interfaces.md, M2) and prints a one-line alignment verdict.
 """
@@ -27,7 +32,10 @@ import numpy as np
 from scipy.spatial import cKDTree
 
 from roomdiff.geometry import (
+    estimate_up,
     project_points,
+    rotation_between,
+    rotation_y,
     se3_inverse,
     sim3_apply_to_poses,
     sim3_matrix,
@@ -46,6 +54,13 @@ ICP_MAX_DIST = 0.05  # m, max ICP correspondence distance
 OK_MEDIAN = 0.02  # m, max median nearest-neighbour distance
 OK_FRACTION = 0.9  # min fraction of points within 10 cm of the other cloud
 MIN_COVISIBLE = 0.1  # min fraction of a recording's points the other one could observe
+# levelling (`level_transform`)
+LEVEL_STRIDE = 4  # floor fit on every 4th valid pixel (rows and columns)
+FLOOR_BAND = 10.0  # floor candidates: the lowest 10 % of the points along the camera up
+FLOOR_MAX_TILT_DEG = 20.0  # a floor normal farther than this from the camera up is ignored
+FLOOR_INLIER_M = 0.02  # m, RANSAC inlier distance to the floor plane
+RANSAC_ITERATIONS = 500
+RANSAC_MAX_POINTS = 50_000  # floor candidates scored by RANSAC (random subset)
 
 # recon.npz contract (docs/interfaces.md): key -> dtype
 RECON_DTYPES: dict[str, Any] = {
@@ -315,6 +330,106 @@ def align_separate(
     return pred, info
 
 
+# ------------------------------------------------------------------- levelling
+
+
+def fit_floor(
+    points: np.ndarray, up: np.ndarray, seed: int = 0
+) -> tuple[np.ndarray, float, float] | None:
+    """Floor plane among the lowest `FLOOR_BAND` % of `points` (M, 3) along `up`.
+
+    MSAC (RANSAC scored by the truncated squared distance, cap `FLOOR_INLIER_M`) over
+    planes whose normal lies within `FLOOR_MAX_TILT_DEG` of `up`; points more than the cap
+    *below* a plane cost twice the cap, since the floor is the lowest large plane (this
+    stops a slightly tilted plane through part of the floor and some wall bottoms from
+    winning). Then least squares on all points within `FLOOR_INLIER_M` of the plane, kept
+    if it scores no worse. Returns `(normal (towards up), offset, inlier fraction of the
+    band)` with the floor at `normal @ x = offset`, or None if no such plane exists.
+    """
+    heights = points @ up
+    band = points[heights <= np.percentile(heights, FLOOR_BAND)].astype(np.float64)
+    if len(band) < 3:
+        return None
+    rng = np.random.default_rng(seed)
+    sample = band[rng.choice(len(band), RANSAC_MAX_POINTS, replace=False)] \
+        if len(band) > RANSAC_MAX_POINTS else band
+    min_cos = math.cos(math.radians(FLOOR_MAX_TILT_DEG))
+
+    def cost(normal: np.ndarray, offset: float) -> float:
+        r = sample @ normal - offset
+        cap = FLOOR_INLIER_M**2
+        return float(np.minimum(r**2, cap).sum() + cap * (r < -FLOOR_INLIER_M).sum())
+
+    best, best_cost = None, math.inf
+    for _ in range(RANSAC_ITERATIONS):
+        a, b, c = sample[rng.choice(len(sample), 3, replace=False)]
+        normal = np.cross(b - a, c - a)
+        norm = np.linalg.norm(normal)
+        if norm < 1e-12:
+            continue
+        normal = normal / norm if normal @ up >= 0 else -normal / norm
+        if normal @ up < min_cos:
+            continue
+        hypothesis = (normal, float(normal @ a))
+        if (value := cost(*hypothesis)) < best_cost:
+            best, best_cost = hypothesis, value
+    if best is None:
+        return None
+    normal, offset = best
+    near = points[np.abs(points @ normal - offset) < FLOOR_INLIER_M].astype(np.float64)
+    centre = near.mean(0)
+    refined = np.linalg.svd(near - centre, full_matrices=False)[2][-1]
+    refined = refined if refined @ up > 0 else -refined
+    if refined @ up >= min_cos and cost(refined, float(refined @ centre)) <= best_cost:
+        normal, offset = refined, float(refined @ centre)
+    inliers = float(np.mean(np.abs(band @ normal - offset) < FLOOR_INLIER_M))
+    return normal, offset, inliers
+
+
+def level_transform(recon: Mapping[str, Any]) -> tuple[np.ndarray, dict[str, Any]]:
+    """Rigid 4x4 transform from the model frame into the levelled world frame.
+
+    Up: the camera estimate (`estimate_up`), replaced by the normal of the RANSAC floor
+    plane (`fit_floor`) when there is one. The transform maps up to +Y, the floor plane
+    to y = 0 (without a plane: the median height of the lowest 5 % of the points) and turns
+    about Y so that the first before-camera's optical axis projects onto +Z. Uses
+    `cam2world`, `depth`, `K`, `valid`, `rec`. Returns the transform and a description.
+    """
+    cam2world = np.asarray(recon["cam2world"], np.float64)
+    camera_up = estimate_up(cam2world)
+    s = LEVEL_STRIDE
+    points = np.concatenate([np.zeros((0, 3), np.float32)] + [
+        unproject_depth(recon["depth"][i], recon["K"][i], cam2world[i])[::s, ::s][
+            recon["valid"][i][::s, ::s]] for i in range(len(cam2world))]).astype(np.float64)
+    floor = fit_floor(points, camera_up) if len(points) else None
+    if floor is None:
+        up, inliers, method = camera_up, None, "camera up (no floor plane)"
+        heights = points @ up if len(points) else np.zeros(1)
+        offset = float(np.median(heights[heights <= np.percentile(heights, 5.0)]))
+    else:
+        (up, offset, inliers), method = floor, "ransac floor plane"
+    R = rotation_between(up, [0.0, 1.0, 0.0])
+    first = cam2world[int(np.argmax(np.asarray(recon["rec"]) == 0))]  # first before-camera
+    forward = R @ first[:3, 2]
+    yaw = math.degrees(math.atan2(forward[0], forward[2])) if np.hypot(
+        forward[0], forward[2]) > 1e-6 else 0.0
+    T = np.eye(4)
+    T[:3, :3] = rotation_y(-yaw) @ R
+    T[1, 3] = -offset
+    tilt = math.degrees(math.acos(float(np.clip(camera_up @ up, -1.0, 1.0))))
+    info = {
+        "up_axis_original": np.round(up, 5).tolist(),
+        "floor_inliers_fraction": None if inliers is None else round(inliers, 4),
+        "method": method,
+        "camera_up": np.round(camera_up, 5).tolist(),
+        "floor_vs_camera_up_deg": round(tilt, 2),
+        "floor_offset_m": round(offset, 4),
+        "points_used": len(points),
+        "transform": T.round(6).tolist(),
+    }
+    return T, info
+
+
 # ----------------------------------------------------------------- point clouds
 
 
@@ -543,6 +658,14 @@ def run_recon(out_dir: str | Path, cfg: Mapping[str, Any]) -> dict[str, Any]:
     peak = _cuda_peak_gb()
     del model, tensor
 
+    level: dict[str, Any] = {"levelled": False}
+    if params["level_world"]:
+        t0 = time.perf_counter()
+        T, info = level_transform({**pred, "rec": rec})
+        pred["cam2world"], _ = sim3_apply_to_poses(T, pred["cam2world"])
+        level = {"levelled": True, "up_axis_original": info.pop("up_axis_original"),
+                 "floor_inliers_fraction": info.pop("floor_inliers_fraction"), "level": info}
+        times["level"] = time.perf_counter() - t0
     scale = params["scale_factor"]
     pred["cam2world"][:, :3, 3] *= scale
     pred["depth"] = pred["depth"] * scale
@@ -569,6 +692,7 @@ def run_recon(out_dir: str | Path, cfg: Mapping[str, Any]) -> dict[str, Any]:
         "runtime_s": {k: round(v, 2) for k, v in times.items()},
         "peak_vram_gb": peak,
         "alignment": alignment,
+        **level,
         "diagnostics": diag,
     }
     (paths.recon / "meta.json").write_text(json.dumps(meta, indent=2))
@@ -577,4 +701,15 @@ def run_recon(out_dir: str | Path, cfg: Mapping[str, Any]) -> dict[str, Any]:
           f"{pred['metric_scale']:.3f}, inference {times['inference']:.1f} s{vram}, "
           f"total {times['total']:.1f} s -> {paths.recon}")
     print(f"[recon] {verdict_line(diag)}")
+    if level["levelled"]:
+        info, fraction = level["level"], level["floor_inliers_fraction"]
+        print(f"[recon] levelled: {info['method']}, "
+              f"{info['floor_vs_camera_up_deg']:.1f} deg from the camera up"
+              + (f", {100 * fraction:.0f}% floor inliers" if fraction is not None else ""))
     return meta
+
+
+def is_levelled(recon_dir: str | Path) -> bool:
+    """`recon/meta.json` says the world frame is levelled (+Y up, floor at y = 0)."""
+    meta = Path(recon_dir) / "meta.json"
+    return meta.is_file() and bool(json.loads(meta.read_text()).get("levelled", False))

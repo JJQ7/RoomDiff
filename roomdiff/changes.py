@@ -217,7 +217,9 @@ class CropMaker:
         box = tuple(view["mask_box"]) if mask is None else mask_box(mask)
         return frame, box, mask  # type: ignore[return-value]
 
-    def place_view(self, points: np.ndarray, rec: int) -> tuple[int, tuple[int, int, int, int]] | None:
+    def place_view(
+        self, points: np.ndarray, rec: int
+    ) -> tuple[int, tuple[int, int, int, int]] | None:
         """Keyframe of recording `rec` that sees the 3D box of `points` best."""
         frames = np.flatnonzero(self.recon["rec"] == rec)
         chosen = select_views(points, frames, self.recon, 1, 0.05, 0.0)
@@ -266,8 +268,8 @@ class CropMaker:
 def side_record(record: Mapping[str, Any]) -> dict[str, Any]:
     """`before` / `after` entry of a change from an instance record."""
     return {"instance_id": record["id"], "centroid": record["centroid"], "aabb": record["aabb"],
-            "extents": record["extents"], "n_points": record["n_points"],
-            "blob_ids": record["blob_ids"]}
+            "extents": record["extents"], "obb": record.get("obb"),
+            "n_points": record["n_points"], "blob_ids": record["blob_ids"]}
 
 
 def _xyz(v: Sequence[float]) -> str:
@@ -323,7 +325,8 @@ def scene_info(paths: OutputPaths) -> dict[str, str]:
     return {**info, "units": UNITS}
 
 
-def _evidence(record: Mapping[str, Any]) -> dict[str, Any]:
+def instance_evidence(record: Mapping[str, Any]) -> dict[str, Any]:
+    """Evidence of a removed / added / unverified change from its instance record."""
     ev = record["evidence"]
     return {"free_rays": ev["free_rays"], "free_frames_mean": ev["free_frames_mean"],
             "observing_views": ev["observing_views"], "occ_points": ev["occ_points"],
@@ -383,7 +386,7 @@ def run_changes(out_dir: str | Path, cfg: Mapping[str, Any]) -> dict[str, Any]:
                 continue
             conf = confidence([r["mask_score_mean"]], [r["view_consistency"]],
                               [r["evidence"]["observing_views"]], params)
-            entries.append((kind, {side: side_record(r), "evidence": _evidence(r),
+            entries.append((kind, {side: side_record(r), "evidence": instance_evidence(r),
                                    "confidence": conf}))
     for name, doc in (("before", bef), ("after", aft)):
         for r in doc["instances"]:
@@ -391,7 +394,7 @@ def run_changes(out_dir: str | Path, cfg: Mapping[str, Any]) -> dict[str, Any]:
                 continue
             conf = confidence([r["mask_score_mean"]], [r["view_consistency"]], None, params)
             entries.append(("unverified", {name: side_record(r),
-                                           "evidence": {**_evidence(r), "seen_in": name},
+                                           "evidence": {**instance_evidence(r), "seen_in": name},
                                            "confidence": conf}))
     order = {t: k for k, t in enumerate(CHANGE_TYPES)}
     entries.sort(key=lambda e: (order[e[0]], -e[1]["confidence"]))

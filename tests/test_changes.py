@@ -40,7 +40,7 @@ SETTINGS = ["visibility.device=cpu", "visibility.voxel_size=0.02", "instances.de
 
 REQUIRED = {"id": int, "type": str, "label": str, "confidence": float, "evidence": dict,
             "description": str, "crops": dict}
-SIDE_KEYS = {"instance_id": int, "centroid": list, "aabb": list, "extents": list}
+SIDE_KEYS = {"instance_id": int, "centroid": list, "aabb": list, "extents": list, "obb": dict}
 TRANSFORM_KEYS = {"translation_m": float, "R": list, "t": list}
 
 
@@ -158,6 +158,11 @@ def test_changes_json_schema(scene):
             lo, hi = np.array(c[s]["aabb"])
             assert lo.shape == (3,) and np.all(lo <= c[s]["centroid"])
             assert np.all(np.array(c[s]["centroid"]) <= hi)
+            obb = c[s]["obb"]  # vertical box: same height as the AABB, footprint no larger
+            assert set(obb) == {"center", "extents", "yaw_deg"} and -45 < obb["yaw_deg"] <= 45
+            assert obb["extents"][1] == pytest.approx(hi[1] - lo[1], abs=1e-3)
+            w, _, d = obb["extents"]
+            assert w * d <= (hi[0] - lo[0]) * (hi[2] - lo[2]) + 1e-6
         if c["type"] == "moved":
             for key, kind in TRANSFORM_KEYS.items():
                 assert isinstance(c["transform"][key], kind)
@@ -292,3 +297,18 @@ def test_summary_text():
     assert summarize(changes) == "3 changes detected: 1 moved, 2 added, 0 removed; " \
         "1 region unverified."
     assert summarize([]).endswith("0 regions unverified.")
+
+
+def test_rerun_boxes_use_the_oriented_box():
+    from roomdiff.viz_rerun import box_args, box_centre
+
+    side = {"centroid": [0.0, 0.0, 0.0], "aabb": [[-1.0, 0.0, -1.0], [1.0, 1.0, 1.0]],
+            "obb": {"center": [0.1, 0.5, 0.0], "extents": [2.0, 1.0, 0.4], "yaw_deg": 30.0}}
+    args = box_args(side)
+    assert args["centers"] == [[0.1, 0.5, 0.0]] and np.allclose(args["half_sizes"], [[1, 0.5, 0.2]])
+    assert len(args["rotation_axis_angles"]) == 1
+    assert np.allclose(box_centre(side), [0.1, 0.5, 0.0])
+    del side["obb"]
+    args = box_args(side)
+    assert np.allclose(args["centers"], [[0, 0.5, 0]]) and "rotation_axis_angles" not in args
+    assert np.allclose(box_centre(side), [0, 0, 0])

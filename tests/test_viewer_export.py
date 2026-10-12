@@ -105,6 +105,16 @@ def test_export_writes_plys_manifest_and_app(tmp_path):
         assert (viewer / file).read_bytes() == (VIEWER_SRC / file).read_bytes()
 
 
+def test_levelled_recon_gives_the_y_up_axis(tmp_path):
+    """recon/meta.json `levelled`: +Y is up, whatever the cameras suggest (here z)."""
+    make_run(tmp_path)
+    (tmp_path / "recon" / "meta.json").write_text(json.dumps({"levelled": True}))
+    export_viewer(tmp_path, target_points=1000)
+    scene = json.loads((tmp_path / "viewer" / "scene.json").read_text())
+    assert scene["up_axis"] == [0.0, 1.0, 0.0]
+    assert abs(scene["view_dir"][1]) < 1e-9
+
+
 def test_export_respects_target_points(tmp_path):
     make_run(tmp_path)
     main([str(tmp_path), "--target-points", "500"])
@@ -197,4 +207,5 @@ def test_changes_from_candidates_maps_types():
     assert first["label"] == "region" and first["confidence"] is None and first["crops"] == {}
     assert "0.50 x 0.20 x 0.10 m" in first["description"] and "3 views" in first["description"]
     assert doc["scene"] == {"units": "m"}
-    assert doc["summary"].startswith("4 candidate regions") and "1 removed, 1 added, 2 unverified" in doc["summary"]
+    assert doc["summary"].startswith("4 candidate regions")
+    assert "1 removed, 1 added, 2 unverified" in doc["summary"]
