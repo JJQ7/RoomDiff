@@ -1,0 +1,19 @@
+# Ground truth of one capture scene. Copy to data/scenes/<scene>/gt.yaml and fill it in
+# while the changes are in front of you. Score a run with
+#   python scripts/score_gt.py outputs/<scene> data/scenes/<scene>/gt.yaml
+# Schema and matching rules: docs/capture_protocol.md, "Ground truth file".
+# Unknown keys are errors (they are usually typos).
+scene: bedroom_basic                # optional, defaults to the folder name
+notes: free text                    # optional: lighting, path taken, anything odd
+changes:                            # every change between before.mov and after.mov
+  - object: red office chair        # short noun phrase, as a person would name it
+    type: moved                     # moved | added | removed
+    displacement_m: 1.1             # moved only, tape measure, optional
+    rotation_deg: 90                # moved only, optional, approximate
+    size_m: [0.6, 0.6, 1.0]         # optional
+    where: next to the window       # free text
+  - object: backpack
+    type: added
+unchanged_but_only_in_one_video:    # objects deliberately visible in only one recording
+  - object: lamp on the desk
+    seen_in: before                 # before | after

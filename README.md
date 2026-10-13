@@ -165,6 +165,21 @@ Live example: <https://jjq7.github.io/RoomDiff/viewer/?scene=scenes/scenediff_li
 (a SceneDiff benchmark pair). Without `?scene=` the viewer loads `./scene.json` from its own
 folder. `*.ply` is gitignored except under `docs/viewer/scenes/` and `examples/`.
 
+## Capture-day tools
+
+CPU-only helpers for your own recordings; the `gt.yaml` schema and the matching rules are in
+`docs/capture_protocol.md` (template: `docs/gt_template.yaml`).
+* `python scripts/check_video.py before.mov after.mov [--json out.json]`: one PASS / WARN / FAIL
+  line per check (duration, orientation, codec / HDR, sharpness, usable keyframes, fast pans),
+  exit 1 on a hard failure; run it before leaving the room.
+* `python scripts/score_gt.py outputs/<scene> data/scenes/<scene>/gt.yaml [--json] [--scale S]`:
+  matches `changes.json` to the ground truth: found / type correct / missed, displacement and
+  rotation errors, false positives, objects deliberately seen in one video only.
+* `python scripts/lidar_check.py outputs/<scene> --before lidar/before.ply --after lidar/after.ply [--json]`:
+  fits a gravity-aligned Sim(3) between the reconstruction and iPhone LiDAR scans (3D Scanner
+  App PLY export): metric scale, yaw, residuals, before / after consistency, and the reported
+  distances and sizes converted to metres.
+
 ## Benchmark (SceneDiff validation subset)
 
 `roomdiff eval` runs the pipeline on pairs of the public
