@@ -250,14 +250,23 @@ def test_consistent_scene_is_supported(scene):
         "(0.90), absent from the old place in 2 after views" in report
 
 
-def test_unsupported_label_lowers_the_confidence(scene):
+def test_unsupported_label_is_evidence_only_by_default(scene):
     world = {"before": ["red", "cup0"], "after": ["cup1"]}  # SAM 3 misses the green ball
     doc = run_recheck(scene, load_config(overrides=ON), fake_sam(world))
     added = by_id(doc)[2]
     assert added["evidence"]["recheck"]["verdict"] == "unsupported"
     assert added["evidence"]["recheck"]["own"]["found"] is False
-    assert added["confidence"] == pytest.approx(0.9 * 0.9)
+    assert added["confidence"] == pytest.approx(0.9)  # unsupported_factor 1.0 by default
     assert added in doc["changes"]
+
+
+def test_unsupported_factor_lowers_the_confidence_when_set(scene):
+    world = {"before": ["red", "cup0"], "after": ["cup1"]}
+    doc = run_recheck(scene, load_config(overrides=ON + ["recheck.unsupported_factor=0.9"]),
+                      fake_sam(world))
+    added = by_id(doc)[2]
+    assert added["evidence"]["recheck"]["verdict"] == "unsupported"
+    assert added["confidence"] == pytest.approx(0.9 * 0.9)
 
 
 def test_one_contradicting_view_lowers_the_confidence(scene):
