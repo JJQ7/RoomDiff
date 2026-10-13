@@ -175,6 +175,27 @@ semantics:
   split_factor: 0.6      # a moved pair the judge rejects becomes removed + added, each judged
                          # again (removed / added prompt): confidence x this if "unclear"
 
+# Optional re-check after M5 (roomdiff/recheck.py, `roomdiff recheck`; part of `roomdiff run`
+# only when enabled): SAM 3 looks for each change's label on the object in its own views and
+# at its place in the other recording (evidence.recheck); it only rejects on strong evidence
+recheck:
+  enabled: false
+  model: facebook/sam3   # official sam3.pt checkpoint of third_party/sam3 (SAM 3, not 3.1)
+  device: cuda           # bf16 autocast on the GPU (3.3 GiB resident, about 5 GiB peak)
+  max_views: 2           # keyframes per check: own side, and per place in the other recording
+  score_min: 0.5         # a SAM 3 detection counts from this score (detection x presence) ...
+  overlap_min: 0.3       # ... with at least this mask IoU with the stored object mask (own side)
+                         # or with the projected place (other side) ...
+  depth_tol: 0.15        # ... and, at a place, half of its pixels there within this many metres
+                         # of the object's surface depth (not something behind or in front of it)
+  reject_views: 2        # contradicting views needed to move a change to `rejected` (a moved
+                         # change counts as contradicted only at both of its places); fewer
+                         # contradicting views only lower the confidence:
+  contradicted_factor: 0.6  # confidence x this when the label is found at the place
+  unsupported_factor: 1.0   # confidence x this when it is not found on the object itself
+                            # (1.0 = evidence only: SAM 3 misses many correct labels when the
+                            # wording is unusual, so 0.9 lowered the benchmark AP)
+
 # M6: Rerun recording and static web viewer assets
 viz: {}
 

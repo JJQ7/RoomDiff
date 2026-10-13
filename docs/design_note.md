@@ -87,6 +87,16 @@ each verdict), `report.md`, a Rerun session for inspection, and a self-contained
 viewer (three.js) that shows both clouds in the shared frame, the change boxes, the
 natural-language report and the before/after crops, and runs on GitHub Pages.
 
+## What we tried and did not keep as default
+*SAM 3 re-check.* After naming, SAM 3 is asked for the change's label (text prompt) on the
+object itself and at its place in the other video; a label found at a "now empty" place
+would contradict a removal, a label found at the new place supports a move. On the three
+reference scenes every correct change was supported and nothing was contradicted; on the 20
+benchmark pairs no contradiction fired either, and a small confidence penalty for labels
+SAM 3 could not find on the object lowered per-scene AP from 0.383 to 0.374, because SAM 3
+is sensitive to wording ("closed laptop" scores 0.06 where "laptop" scores 0.92). The stage
+stays in the code as optional evidence (`recheck.enabled`), without the penalty.
+
 ## Limitations we know about
 - Small, flat or thin objects are missed by the geometric channel; the appearance channel
   recovers many of them but depends on co-visible keyframes (at about 1 keyframe per

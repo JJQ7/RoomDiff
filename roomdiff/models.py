@@ -1,7 +1,8 @@
-"""Model wrappers for M4: SAM 2.1 box/point segmentation and DINOv3 features.
+"""Model wrappers: SAM 2.1 box/point segmentation and DINOv3 features (M4), SAM 3 text
+prompts (the optional re-check stage, roomdiff/recheck.py).
 
-Both are tiny classes with a numpy interface so that the instance stage can be tested on
-the CPU with `FakeSegmenter` / `FakeFeaturizer` (no weights, no torch).
+All are tiny classes with a numpy interface so that the stages can be tested on the CPU
+with `FakeSegmenter` / `FakeFeaturizer` / `FakeTextSegmenter` (no weights, no torch).
 
 * `Segmenter.segment(key, image, box, points)` -> candidate masks (K, H, W) bool and
   their predicted IoU scores (K,). `key` identifies the image so that image embeddings
@@ -9,12 +10,17 @@ the CPU with `FakeSegmenter` / `FakeFeaturizer` (no weights, no torch).
 * `Featurizer.patch_tokens(key, image)` -> (gh, gw, D) patch tokens of the whole image
   (resized to multiples of the patch size; the grid covers the image uniformly), and
   `Featurizer.cls_token(image)` -> (D,) global token of a crop.
+* `TextSegmenter.detect(key, image, prompts, size)` -> per prompt the masks (K, h, w)
+  bool of every instance found (resized to `size` = (h, w), default the image size) and
+  their scores (K,).
 """
 
 from __future__ import annotations
 
+import threading
 from collections import OrderedDict
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
+from pathlib import Path
 from typing import Any, Protocol
 
 import numpy as np
@@ -22,6 +28,8 @@ import numpy as np
 SAM_MODEL = "facebook/sam2.1-hiera-large"
 DINO_MODEL = "facebook/dinov3-vitl16-pretrain-lvd1689m"
 DINO_PREFIX_TOKENS = 5  # DINOv3 ViT-L/16: 1 CLS + 4 register tokens before the patches
+SAM3_MODEL = "facebook/sam3"
+SAM3_CHECKPOINT = "sam3.pt"  # official checkpoint of third_party/sam3 (not model.safetensors)
 
 
 class Segmenter(Protocol):
@@ -37,6 +45,13 @@ class Featurizer(Protocol):
     def patch_tokens(self, key: str, image: np.ndarray) -> np.ndarray: ...
 
     def cls_token(self, image: np.ndarray) -> np.ndarray: ...
+
+
+class TextSegmenter(Protocol):
+    def detect(
+        self, key: str, image: np.ndarray, prompts: Sequence[str],
+        size: tuple[int, int] | None = None,
+    ) -> dict[str, tuple[np.ndarray, np.ndarray]]: ...
 
 
 def _device(name: str) -> Any:
@@ -164,6 +179,85 @@ def load_models(params: Mapping[str, Any]) -> tuple[Sam2Segmenter, Dinov3Featuri
             Dinov3Featurizer(params["dino_model"], params["device"]))
 
 
+class Sam3TextSegmenter:
+    """SAM 3 (third_party/sam3, `Sam3Processor`) prompted with noun phrases: every instance
+    of the concept in an image, with its mask and score (detection x presence probability).
+    bf16 autocast as in the official notebooks.
+
+    Memory: the model is built and moved to the device first, then the checkpoint is
+    memory-mapped and copied into it tensor by tensor (the stock loader reads the whole
+    3.45 GB file into RAM next to the CPU-built model: 7.4 GiB peak RSS); the page cache
+    of the file is dropped while it streams in (WSL2: it costs host memory and so VRAM).
+    `min_score`: detections below it are not returned.
+    """
+
+    def __init__(self, model_id: str = SAM3_MODEL, device: str = "cuda", min_score: float = 0.1):
+        import torch
+        from huggingface_hub import hf_hub_download
+        from sam3.model.sam3_image_processor import Sam3Processor
+        from sam3.model_builder import build_sam3_image_model
+
+        from roomdiff.vlm import _drop_page_cache
+
+        self.torch = torch
+        self.device = _device(device)
+        self.model_id = model_id
+        self.checkpoint = Path(hf_hub_download(model_id, SAM3_CHECKPOINT,
+                                               local_files_only=True)).resolve()
+        done = threading.Event()
+
+        def dropper() -> None:  # keep the page cache small while the weights stream in
+            while not done.wait(1.0):
+                _drop_page_cache([self.checkpoint])
+
+        thread = threading.Thread(target=dropper, daemon=True)
+        thread.start()
+        try:
+            model = build_sam3_image_model(device=self.device.type, load_from_HF=False)
+            ckpt = torch.load(self.checkpoint, map_location="cpu", weights_only=True, mmap=True)
+            if "model" in ckpt and isinstance(ckpt["model"], dict):
+                ckpt = ckpt["model"]
+            detector = {k.replace("detector.", ""): v for k, v in ckpt.items() if "detector" in k}
+            missing, _ = model.load_state_dict(detector, strict=False)
+            del ckpt, detector
+        finally:
+            done.set()
+            thread.join()
+            _drop_page_cache([self.checkpoint])
+        self.missing_keys = len(missing)  # as in sam3.model_builder._load_checkpoint
+        self.model = model.eval()
+        self.processor = Sam3Processor(model, device=self.device.type,
+                                       confidence_threshold=min_score)
+
+    def detect(
+        self, key: str, image: np.ndarray, prompts: Sequence[str],
+        size: tuple[int, int] | None = None,
+    ) -> dict[str, tuple[np.ndarray, np.ndarray]]:
+        """Per prompt: masks (K, h, w) bool of all instances found (mask probabilities
+        area-resampled to `size` = (h, w), default the image size, then > 0.5) and their
+        scores (K,). The image is encoded once for all prompts."""
+        from PIL import Image
+
+        torch = self.torch
+        height, width = size or image.shape[:2]
+        pil = Image.fromarray(np.ascontiguousarray(image))
+        out: dict[str, tuple[np.ndarray, np.ndarray]] = {}
+        with torch.inference_mode(), torch.autocast(self.device.type, dtype=torch.bfloat16,
+                                                    enabled=self.device.type == "cuda"):
+            state = self.processor.set_image(pil)
+            for prompt in prompts:
+                self.processor.reset_all_prompts(state)
+                state = self.processor.set_text_prompt(prompt=prompt, state=state)
+                probs = state["masks_logits"].float()  # (K, 1, H, W), already sigmoid
+                if len(probs) and tuple(probs.shape[-2:]) != (height, width):
+                    probs = torch.nn.functional.interpolate(probs, size=(height, width),
+                                                            mode="area")
+                masks = (probs[:, 0] > 0.5).cpu().numpy() if len(probs) else \
+                    np.zeros((0, height, width), bool)
+                out[prompt] = (masks, state["scores"].float().cpu().numpy())
+        return out
+
+
 # ------------------------------------------------------------------ test fakes
 
 
@@ -220,3 +314,32 @@ class FakeFeaturizer:
 
     def cls_token(self, image: np.ndarray) -> np.ndarray:
         return self._feature(image)
+
+
+Detection = tuple[np.ndarray, float]
+
+
+class FakeTextSegmenter:
+    """Test double of `Sam3TextSegmenter`: `respond(key, prompt, (h, w))` returns the
+    detections `[(mask (h, w) bool, score), ...]` (default: none). Counts images and
+    prompts."""
+
+    def __init__(self, respond: Callable[[str, str, tuple[int, int]], Sequence[Detection]]
+                 | None = None):
+        self.respond = respond
+        self.images = 0
+        self.queries: list[tuple[str, str]] = []
+
+    def detect(
+        self, key: str, image: np.ndarray, prompts: Sequence[str],
+        size: tuple[int, int] | None = None,
+    ) -> dict[str, tuple[np.ndarray, np.ndarray]]:
+        self.images += 1
+        height, width = size or image.shape[:2]
+        out = {}
+        for prompt in prompts:
+            self.queries.append((key, prompt))
+            found = list(self.respond(key, prompt, (height, width))) if self.respond else []
+            masks = np.array([m for m, _ in found], bool).reshape(-1, height, width)
+            out[prompt] = (masks, np.array([s for _, s in found], np.float32))
+        return out

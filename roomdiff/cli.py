@@ -91,6 +91,13 @@ def describe(out: OutOpt, config: ConfigOpt = None, set_: SetOpt = None) -> None
 
 
 @app.command()
+def recheck(out: OutOpt, config: ConfigOpt = None, set_: SetOpt = None) -> None:
+    """Optional: SAM 3 re-detects each change's label on the object and at its place in the
+    other video; rewrites changes.json and report.md (needs --set recheck.enabled=true)."""
+    _recheck_stage(out, _load_config(config, set_))
+
+
+@app.command()
 def run(
     before: BeforeOpt,
     after: AfterOpt,
@@ -99,11 +106,12 @@ def run(
     set_: SetOpt = None,
 ) -> None:
     """Run ingest -> recon -> visibility -> appearance -> instances -> changes -> describe ->
-    viz -> viewer."""
+    (recheck, if recheck.enabled) -> viz -> viewer."""
     from roomdiff.ingest import ingest_pair
     from roomdiff.recon import run_recon
 
     cfg = _load_config(config, set_)
+    optional = {"recheck": lambda: _recheck_stage(out, cfg)} if cfg.recheck.enabled else {}
     stages = {
         "ingest": lambda: ingest_pair(before, after, out, cfg),
         "recon": lambda: run_recon(out, cfg),
@@ -112,6 +120,7 @@ def run(
         "instances": lambda: _instances_stage(out, cfg),
         "changes": lambda: _changes_stage(out, cfg),
         "describe": lambda: _describe_stage(out, cfg),
+        **optional,
         "viz": lambda: _viz_stage(out),
         "viewer": lambda: _viewer_stage(out, TARGET_POINTS),
     }
@@ -217,6 +226,14 @@ def _describe_stage(out: Path, cfg: Config) -> None:
     run_semantics(out, cfg)
     write_report(out)
     log_changes(out)
+
+
+def _recheck_stage(out: Path, cfg: Config) -> None:
+    from roomdiff.recheck import run_recheck  # SAM 3 loads only when needed
+    from roomdiff.viz_rerun import log_changes
+
+    if run_recheck(out, cfg) is not None:  # rewrites changes.json and report.md
+        log_changes(out)
 
 
 def _viewer_stage(out: Path, target_points: int) -> None:

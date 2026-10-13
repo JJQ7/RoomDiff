@@ -426,6 +426,81 @@ confidence, verdict, motion, description, evidence line, crops as relative markd
 images), collapsible rejected list with the VLM reasons, coverage note from
 `recon/meta.json`.
 
+## Re-check (optional) -> `<out>/changes.json` (rewritten), `<out>/recheck/`, `<out>/report.md`
+Implemented (`roomdiff/recheck.py`, SAM 3 wrapper `Sam3TextSegmenter` in
+`roomdiff/models.py`, command `roomdiff recheck`; parameters in `configs/default.yaml:
+recheck`; `enabled: false` by default: nothing is read or written, and `roomdiff run` runs
+the stage after `describe` only when it is true). SAM 3 (`third_party/sam3`, the official
+`facebook/sam3` `sam3.pt`; built on the GPU, then the checkpoint memory-mapped into it, bf16
+autocast) is prompted with each change's label on the full-resolution keyframes; its
+masks (detections from score 0.1) are compared at the reconstruction resolution. The first
+run backs the M5 document up to `recheck/changes_m5.json`; later runs start from that
+backup (re-run `roomdiff describe` to refresh it). In one `roomdiff run` process the stage
+refuses to load SAM 3 while more than 4 GiB are still allocated on the GPU (Qwen3-VL not
+freed), and frees SAM 3 when done.
+
+Every kept `removed`, `added` and `moved` change (VLM verdict confirmed or unclear) is
+checked; unverified changes are skipped and the M5 `rejected` list is left alone:
+1. Prompt = `label`; a label naming only a material or a vague thing (head noun fabric,
+   cloth, leather, wood, plastic, metal, paper, cardboard, glass, item, thing, object, ...)
+   falls back to the head noun of `object_description` (last word of its first noun
+   phrase: "A crumpled black jacket lying on the floor." -> "jacket"); none -> skipped.
+2. Own side (moved: both recordings): the `max_views` (2) best keyframes of the object's
+   recording with a stored per-keyframe mask (`instances/<rec>_masks.npz`, united over
+   `instance_ids`), ranked by view score x SAM score as the crops, viewing directions
+   `instances.min_view_angle` apart when possible (without stored masks: the best views
+   by the view scorer, reference = the projected instance points). Found = a detection
+   with score >= `score_min` (0.5) and mask IoU >= `overlap_min` (0.3) with the reference.
+3. Places in the other recording: removed -> after views of the old place, added -> before
+   views of the new place, moved -> both (old place in the after recording, new place in
+   the before recording). Views = the crop place views (`select_views`, not occluded, >=
+   15 % of the points visible), `max_views` per place. Place region = the instance points
+   projected into the view that are not hidden behind a nearer surface (observed depth >=
+   z - 5 cm), gaps between the 1 cm points closed by a morphological closing (square of
+   2 ceil(f 0.01 / z) + 1 px, 3..15), with the nearest point depth per pixel; moved:
+   minus the pixels of the object's other position (dilated by 2 px), a view keeping less
+   than 25 % of the place is replaced by the next one. A detection is at the place if
+   score >= `score_min`, IoU with the region >= `overlap_min` and >= 50 % of its pixels
+   inside the region (valid depth) lie within `depth_tol` (0.15 m) of the object's depth
+   (not an instance behind or in front of the place).
+4. Verdict: `skipped` (no prompt, no view or not checked), `contradicted` (>= 1 view with
+   the prompt at the place; moved: at both places, since one place alone is often a
+   sibling such as the other curtain of a window), `unsupported` (not found on the
+   object), else `supported`. Confidence x `unsupported_factor` (0.9) without own-side
+   support and x `contradicted_factor` (0.6) when contradicted (rounded to 3 decimals). A
+   change moves to `rejected` only when contradicted in >= `reject_views` (2) views: its
+   `vlm_verdict` / `vlm_reason` stay, `evidence.recheck_verdict` = "contradicted"; the
+   summary gets the new counts and a sentence naming the rejected changes.
+
+Changes keep the M5 schema, ids and order rules; every kept change (and every change the
+re-check rejected) gets `evidence.recheck`:
+```json
+{"prompt": "black jacket",
+ "own": {"views": [{"recording": "before", "frame": 43, "file": "before_00043.jpg",
+                    "detections": 2, "score": 0.84, "overlap": 0.986, "found": true}],
+         "found": true, "score": 0.84, "overlap": 0.986},
+ "other": {"views": [{"place": "old", "recording": "after", "frame": 52, "file": "...",
+                      "detections": 0, "score": null, "overlap": null, "at_place": null,
+                      "found": false}],
+           "found": false, "found_views": 0, "score": null, "overlap": null},
+ "verdict": "supported", "factor": 1.0,
+ "reason": "'black jacket' found on the object in 2 of 2 own views (0.84), absent from the old place in 2 after views"}
+```
+Per view: the best detection (found first, then by IoU and score; `score` / `overlap` /
+`at_place` null without detections), `reference` "points" on own views without a stored
+mask. `own.found`: found in every recording with own views (null without own views);
+`other.found`: the prompt is at a place in some view (null without place views),
+`found_views` = such views; skipped changes have `own` / `other` null.
+`recheck/log.jsonl`: one line per keyframe and prompt `{tag (role:id:recording|place, all
+checks using it), images [keyframe path below <out>], prompt, answer [{score, box [x0, y0,
+x1, y1] at recon resolution, area}], seconds}`. `recheck/meta.json`: model, checkpoint,
+`missing_keys`, params, runtime per step (load, plan, load_model, inference, decide,
+total), images / prompts, `seconds_per_image` {mean, median, max}, `counts` per verdict +
+rejected, `verdicts` and `confidence` [before, after] per id, `rejected` (id, type, label,
+reason), `peak_vram_gb`, `peak_ram_gb`. The report's evidence line adds "SAM 3 re-check
+<verdict>: <reason>" (not for skipped changes); its rejected list shows the re-check reason
+for changes the re-check rejected.
+
 ## M6 outputs
 `scene.rrd` (Rerun; written by `roomdiff viz`: reconstruction, M3 candidate blobs,
 appearance score maps (`world/<rec>/cam/<i>/appearance`: the keyframe dimmed with a
@@ -433,7 +508,9 @@ black-red-yellow-white heat map of the score, for the cameras logged with their 
 and clusters (`world/appearance/<rec>/<id>`, oriented boxes, "covered" if an M4 instance
 already held them), changes), `viewer/` (`roomdiff viewer`: static web viewer assets: downsampled clouds,
 boxes, crops, changes.json; `scene.json: up_axis` = [0, 1, 0] for a levelled
-reconstruction, else the camera-based estimate). The viewer draws each change's `obb`
+reconstruction, else the camera-based estimate; `view_dir` = the horizontal direction of
+the viewer's home view, chosen among 12 azimuths as the one whose home camera sees the
+largest unoccluded share of the points, `viewer_export.best_view_dir`). The viewer draws each change's `obb`
 when present (else its `aabb`) and the moved arrow between the box centres.
 
 ## Evaluation (SceneDiff) -> `<out-root>/`

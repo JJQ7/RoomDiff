@@ -81,6 +81,10 @@ roomdiff viewer --out outputs/scene1
 ```
 
 `roomdiff` is the console script of the package (`python -m roomdiff.cli` is the same).
+An optional last stage, `roomdiff recheck` (`--set recheck.enabled=true`), asks SAM 3 for
+each change's label on the object and at its place in the other video and records the
+answer as extra evidence; it is off by default because it did not improve the benchmark
+(see the design note).
 The results of a run are `outputs/scene1/report.md` (every change with its evidence and
 crops, a summary and the rejected candidates), `changes.json` (the machine-readable list,
 see `docs/interfaces.md`), `scene.rrd` (open with `rerun scene.rrd`) and `viewer/`.

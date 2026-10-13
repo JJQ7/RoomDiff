@@ -78,6 +78,9 @@ def evidence_line(change: Mapping[str, Any]) -> str:
     if ev.get("vlm_verdict"):
         reason = f" ({ev['vlm_reason']})" if ev.get("vlm_reason") else ""
         parts.append(f"VLM {ev['vlm_verdict']}{reason}")
+    recheck = ev.get("recheck") or {}
+    if recheck.get("verdict") not in (None, "skipped"):  # optional SAM 3 stage
+        parts.append(f"SAM 3 re-check {recheck['verdict']}: {recheck['reason']}")
     return "; ".join(parts)
 
 
@@ -155,9 +158,11 @@ def render_report(doc: Mapping[str, Any], title: str, coverage: Sequence[str]) -
             ev = c.get("evidence") or {}
             crop = next((p for p in (c.get("crops") or {}).values() if p), None)
             link = f" ([crop]({crop}))" if crop else ""
+            reason = ev.get("vlm_reason") or "no reason"
+            if ev.get("recheck_verdict") == "contradicted":
+                reason = f"SAM 3 re-check: {ev['recheck']['reason']} (VLM: {reason})"
             lines.append(f"- **{c['id']}** {c['type']} *{c.get('label', 'object')}*, "
-                         f"confidence {c['confidence']:.2f}: {ev.get('vlm_reason') or 'no reason'}"
-                         f"{link}")
+                         f"confidence {c['confidence']:.2f}: {reason}{link}")
         lines += ["", "</details>", ""]
     lines += ["## Coverage", ""]
     lines += list(coverage) or ["- No reconstruction diagnostics available."]
