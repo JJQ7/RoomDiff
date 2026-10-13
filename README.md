@@ -8,11 +8,11 @@ explicit geometric, appearance and visual-language evidence, and changes in spac
 other video never observed are reported as **unverified** instead of being guessed.
 See [docs/PLAN.md](docs/PLAN.md) for the design.
 
-![living_room_1: the after point cloud with the reported changes](docs/img/scenediff_living_room_1_overview.png)
+![The web viewer on SceneDiff pair living_room_1](docs/img/viewer/living_room_1_viewer.png)
 
-*SceneDiff pair living_room_1, after cloud: red / green / blue boxes = removed / added / moved (dashed = the old place), grey dashed = unverified; the arrows join the old and new places of the moved curtain and ladder shelf.*
+*The web viewer on SceneDiff pair living_room_1: both point clouds in one frame, a box per change (red removed, green added, blue moved with an arrow from the old place, yellow unverified) and the change list with its evidence and crops. Live: <https://jjq7.github.io/RoomDiff/viewer/?scene=scenes/scenediff_living_room_1>.*
 
-![living_room_1: cross-fade between the before and after point clouds](docs/img/scenediff_living_room_1_beforeafter.gif)
+![Orbit around the living_room_1 reconstruction](docs/img/viewer/living_room_1_orbit.gif)
 
 ## How it works
 
@@ -116,6 +116,10 @@ sees it best; "place" crops show the same spot in the other video.
 |---|---|---|
 | [![office_1 overview](docs/img/scenediff_office_1_overview.png)](examples/scenediff_office_1/report.md) | [![bedroom_1 overview](docs/img/scenediff_bedroom_1_overview.png)](examples/scenediff_bedroom_1/report.md) | [![living_room_1 overview](docs/img/scenediff_living_room_1_overview.png)](examples/scenediff_living_room_1/report.md) |
 
+*After clouds with the reported changes (`scripts/render_scene.py`): red / green / blue boxes = removed / added / moved (dashed = the old place), grey dashed = unverified. Below, the living room before and after:*
+
+![living_room_1: cross-fade between the before and after point clouds](docs/img/scenediff_living_room_1_beforeafter.gif)
+
 | office_1: moved chair, before / after | living_room_1: removed wallet, before / after |
 |---|---|
 | ![](examples/scenediff_office_1/crops/1_before.jpg) ![](examples/scenediff_office_1/crops/1_after.jpg) | ![](examples/scenediff_living_room_1/crops/3_before.jpg) ![](examples/scenediff_living_room_1/crops/3_after.jpg) |
@@ -144,6 +148,11 @@ cd outputs/scene1/viewer && python -m http.server 8000   # open http://localhost
 Keys: N / P next / previous change, R reset view. `changes.json` is taken from
 `<out>/changes.json`, or generated from `<out>/visibility/candidates.json` (geometry-only
 regions) when the change stage has not run yet.
+
+Figures for a report: `python scripts/shoot_viewer.py outputs/scene1 --out docs/img/viewer/scene1 --gif both`
+screenshots the viewer headlessly (Playwright with Chromium: the overview, one close-up
+per change, an orbit GIF and a before/after GIF), and `python scripts/render_scene.py
+outputs/scene1 --out docs/img/scene1 --gif` renders the same overview without a browser.
 
 GitHub Pages layout (several scenes, one copy of the app):
 

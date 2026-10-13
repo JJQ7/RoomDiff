@@ -3,6 +3,8 @@
 // Data (written by roomdiff/viewer_export.py): <scene folder>/scene.json, which names
 // before.ply, after.ply and changes.json; crops are relative to changes.json.
 // index.html?scene=scenes/<name> loads scenes/<name>/scene.json, otherwise ./scene.json.
+// ?select=<change id> opens the viewer on that change. Scripts drive the viewer through
+// window.roomdiff (see automationApi), e.g. scripts/shoot_viewer.py.
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -21,7 +23,8 @@ const FOV = 50; // vertical field of view, degrees
 const HOME_ELEVATION = THREE.MathUtils.degToRad(35);
 const FLY_MS = 900;
 const DIMMED = 0.25; // opacity of the boxes that are not selected
-const LABEL_HEIGHT = 0.045; // label height as a fraction of about the view height
+const LABEL_HEIGHT = 0.038; // label height as a fraction of about the view height
+const FIT_MARGIN = 0.06; // home view: empty border as a fraction of the view size
 
 const $ = (id) => document.getElementById(id);
 const statusEl = $('status');
@@ -33,6 +36,8 @@ const state = {
   viewDir: null, // horizontal viewing direction for the home view, display frame
   clouds: {}, // before / after THREE.Points
   baseSize: 0.025, // point size (m) at slider value 1
+  focusScale: 1, // point size factor while a change is focused (close-ups use smaller points)
+  sample: [], // display-frame sample of both clouds (home view fit)
   items: [], // one per change: {change, type, group, label, bounds, entry, materials}
   filters: Object.fromEntries(TYPES.map((t) => [t, true])),
   selected: -1,
@@ -140,6 +145,13 @@ function flyTo(view) {
   };
 }
 
+// Moves the camera to `view` at once, without the flight.
+function jump(view) {
+  state.tween = null;
+  controls.target.copy(view.target);
+  camera.position.copy(view.position);
+}
+
 // Smallest half field of view (vertical or horizontal), radians.
 function halfFov() {
   const vertical = THREE.MathUtils.degToRad(FOV / 2);
@@ -153,23 +165,131 @@ function toDisplay(point) {
 
 // Overview: the scene centre seen from behind the cameras' main direction and above.
 function homeView() {
+  state.focusScale = 1;
+  updateClouds();
   const target = toDisplay(state.box.getCenter(new THREE.Vector3()));
-  const radius = 0.5 * state.box.getSize(new THREE.Vector3()).length();
-  const distance = (0.7 * radius) / Math.sin(halfFov());
   const offset = state.viewDir.clone().multiplyScalar(-Math.cos(HOME_ELEVATION));
   offset.y = Math.sin(HOME_ELEVATION);
+  const corners = [];
+  for (const x of [state.box.min.x, state.box.max.x]) {
+    for (const y of [state.box.min.y, state.box.max.y]) {
+      for (const z of [state.box.min.z, state.box.max.z]) corners.push(toDisplay(new THREE.Vector3(x, y, z)));
+    }
+  }
+  let distance = fitDistance(corners, target, offset);
+  if (state.sample.length) distance = fitDistanceToPoints(state.sample, target, offset, distance);
+  const boxCorners = [];
+  for (const item of state.items) { // every change box stays in frame
+    if (!item.bounds) continue;
+    for (const x of [item.bounds.min.x, item.bounds.max.x]) {
+      for (const y of [item.bounds.min.y, item.bounds.max.y]) {
+        for (const z of [item.bounds.min.z, item.bounds.max.z]) boxCorners.push(new THREE.Vector3(x, y, z));
+      }
+    }
+  }
+  if (boxCorners.length) distance = Math.max(distance, fitDistance(boxCorners, target, offset));
   return { target, position: target.clone().addScaledVector(offset, distance) };
 }
 
-// Close-up of a display-frame box, keeping the current viewing direction but from above.
+// Refines `distance` (and recentres `target` in place) so that the 1st-99th percentiles of
+// the projected `sample` points fit the view with a margin: the box above is often set by
+// stray points far from the room, which would leave the room small in the middle.
+function fitDistanceToPoints(sample, target, direction, distance) {
+  const forward = direction.clone().negate();
+  const right = new THREE.Vector3().crossVectors(forward, new THREE.Vector3(0, 1, 0));
+  if (right.lengthSq() < 1e-6) right.set(1, 0, 0);
+  right.normalize();
+  const up = new THREE.Vector3().crossVectors(right, forward);
+  const tanV = Math.tan(THREE.MathUtils.degToRad(FOV / 2)) * (1 - 2 * FIT_MARGIN);
+  const tanH = tanV * camera.aspect;
+  const quantile = (sorted, f) => sorted[Math.min(sorted.length - 1, Math.floor(f * sorted.length))];
+  const rel = new THREE.Vector3();
+  for (let iteration = 0; iteration < 4; iteration++) {
+    const xs = [];
+    const ys = [];
+    for (const point of sample) {
+      rel.subVectors(point, target);
+      const z = distance + rel.dot(forward);
+      if (z < 0.05) continue;
+      xs.push(rel.dot(right) / z);
+      ys.push(rel.dot(up) / z);
+    }
+    if (xs.length < 10) break;
+    xs.sort((a, b) => a - b);
+    ys.sort((a, b) => a - b);
+    const [x0, x1, y0, y1] = [quantile(xs, 0.01), quantile(xs, 0.99), quantile(ys, 0.01), quantile(ys, 0.99)];
+    target.addScaledVector(right, 0.5 * (x0 + x1) * distance).addScaledVector(up, 0.5 * (y0 + y1) * distance);
+    const factor = Math.max((x1 - x0) / (2 * tanH), (y1 - y0) / (2 * tanV));
+    distance *= factor;
+    if (Math.abs(factor - 1) < 0.02) break;
+  }
+  return distance;
+}
+
+// Distance from `target` along the unit vector `direction` (towards the camera) at which
+// all display-frame `points` fit the view, with a margin; the camera looks at the target.
+function fitDistance(points, target, direction) {
+  const forward = direction.clone().negate();
+  const right = new THREE.Vector3().crossVectors(forward, new THREE.Vector3(0, 1, 0));
+  if (right.lengthSq() < 1e-6) right.set(1, 0, 0);
+  right.normalize();
+  const up = new THREE.Vector3().crossVectors(right, forward);
+  const tanV = Math.tan(THREE.MathUtils.degToRad(FOV / 2));
+  const tanH = tanV * camera.aspect;
+  let distance = 0.5;
+  for (const point of points) {
+    const rel = point.clone().sub(target);
+    const depth = rel.dot(forward); // beyond the target = further from the camera
+    distance = Math.max(distance, Math.abs(rel.dot(right)) / tanH - depth,
+      Math.abs(rel.dot(up)) / tanV - depth);
+  }
+  return 1.12 * distance;
+}
+
+// Close-up of a display-frame box, keeping the current viewing direction but from above
+// (steeper for small objects, so that nearby surfaces do not fill the view); the points
+// shrink with the distance so that a wallet is not hidden behind its own point squares.
 function focusView(bounds) {
   const target = bounds.getCenter(new THREE.Vector3());
-  const radius = Math.max(0.5 * bounds.getSize(new THREE.Vector3()).length(), 0.3);
+  const radius = Math.max(0.5 * bounds.getSize(new THREE.Vector3()).length(), 0.5);
   const direction = camera.position.clone().sub(controls.target).normalize();
-  direction.y = Math.max(direction.y, 0.5);
+  direction.y = Math.max(direction.y, radius < 0.6 ? 0.7 : 0.5);
   direction.normalize();
   const distance = (1.4 * radius) / Math.sin(halfFov());
+  state.focusScale = THREE.MathUtils.clamp(distance / 3.5, 0.5, 1);
+  updateClouds();
   return { target, position: target.clone().addScaledVector(direction, distance) };
+}
+
+// Labels whose boxes are close in the floor plane are stacked at different heights, with a
+// thin leader line back to the box, so that they do not hide each other in the overview.
+function spreadLabels() {
+  const spacing = 1.1; // m, floor-plane distance below which two labels are stacked
+  const step = 0.35; // m, vertical step between stacked labels
+  const placed = [];
+  const items = state.items.filter((item) => item.label)
+    .sort((a, b) => a.label.position.y - b.label.position.y);
+  for (const item of items) {
+    const anchor = item.label.position.clone();
+    let y = anchor.y;
+    for (let changed = true; changed;) {
+      changed = false;
+      for (const other of placed) {
+        const near = Math.hypot(anchor.x - other.x, anchor.z - other.z) < spacing;
+        if (near && Math.abs(y - other.y) < step) {
+          y = other.y + step;
+          changed = true;
+        }
+      }
+    }
+    placed.push({ x: anchor.x, y, z: anchor.z });
+    if (y <= anchor.y + 1e-6) continue;
+    item.label.position.y = y;
+    const geometry = new THREE.BufferGeometry().setFromPoints([anchor, item.label.position.clone()]);
+    const material = new THREE.LineBasicMaterial({ color: TYPE_COLORS[item.type], transparent: true, opacity: 0.8 });
+    scene3d.add(new THREE.Line(geometry, material));
+    item.materials.push(material);
+  }
 }
 
 function resetView() {
@@ -204,7 +324,7 @@ function updateClouds() {
     cloud.visible = show === 'both' || show === side;
     material.vertexColors = !tint && cloud.geometry.hasAttribute('color');
     material.color.set(tint ? TINT_COLORS[side] : '#ffffff');
-    material.size = state.baseSize * scale;
+    material.size = state.baseSize * scale * state.focusScale;
     material.needsUpdate = true;
   }
 }
@@ -461,6 +581,53 @@ function onKey(event) {
   action();
 }
 
+// ------------------------------------------------------------- automation
+
+// window.roomdiff: hook for scripts that drive the viewer (scripts/shoot_viewer.py).
+// Camera moves are immediate; `ready` is true once the scene is loaded.
+function automationApi() {
+  return {
+    ready: true,
+    count: state.items.length,
+    items: () => state.items.map((it, i) => ({
+      index: i, id: it.change.id, type: it.type, label: it.change.label, hidden: it.entry.hidden,
+    })),
+    jumpHome() {
+      select(-1);
+      jump(homeView());
+    },
+    jumpTo(index) {
+      const item = state.items[index];
+      if (!item) throw new Error(`jumpTo: there is no change at index ${index}`);
+      select(index);
+      item.entry.scrollIntoView({ block: 'nearest' }); // at once, ending the smooth scroll
+      if (item.bounds) jump(focusView(item.bounds));
+    },
+    // turns the camera about the vertical axis through the target (same distance, elevation)
+    orbit(deg) {
+      const offset = camera.position.clone().sub(controls.target);
+      offset.applyAxisAngle(new THREE.Vector3(0, 1, 0), THREE.MathUtils.degToRad(deg));
+      jump({ target: controls.target.clone(), position: controls.target.clone().add(offset) });
+    },
+    setClouds(mode) {
+      if (!['before', 'after', 'both'].includes(mode)) {
+        throw new Error(`setClouds: expected before, after or both, got ${mode}`);
+      }
+      document.querySelector(`input[name="show"][value="${mode}"]`).checked = true;
+      updateClouds();
+    },
+    // stops the render loop (false restarts it), so that only render() draws: software
+    // WebGL (headless Chromium) takes ~0.3 s per frame, and a running loop delays shots
+    pauseLoop(paused = true) {
+      renderer.setAnimationLoop(paused ? null : animate);
+    },
+    render() {
+      controls.update();
+      renderer.render(scene3d, camera);
+    },
+  };
+}
+
 // ------------------------------------------------------------------- main
 
 async function main() {
@@ -484,6 +651,14 @@ async function main() {
 
   addCloud(before, 'before');
   addCloud(after, 'after');
+  state.sample = [];
+  for (const geometry of [before, after]) { // display-frame sample for the home view fit
+    const positions = geometry.getAttribute('position');
+    const stride = Math.max(1, Math.floor(positions.count / 8000));
+    for (let i = 0; i < positions.count; i += stride) {
+      state.sample.push(toDisplay(new THREE.Vector3().fromBufferAttribute(positions, i)));
+    }
+  }
   if (scene.bbox_m) {
     state.box = new THREE.Box3(vec(scene.bbox_m[0]), vec(scene.bbox_m[1]));
   } else {
@@ -514,6 +689,7 @@ async function main() {
     state.items.push({ change, type, entry, ...objects });
   });
   if (!changes.length) list.append(el('li', 'empty', 'No changes in changes.json.'));
+  spreadLabels();
   buildHeader(scene, doc, counts);
   buildFilters(counts);
 
@@ -530,6 +706,14 @@ async function main() {
   controls.target.copy(home.target);
   camera.position.copy(home.position);
   setStatus('');
+
+  window.roomdiff = automationApi();
+  const selectId = new URLSearchParams(location.search).get('select');
+  if (selectId !== null) {
+    const index = state.items.findIndex((item) => String(item.change.id) === selectId);
+    if (index >= 0) window.roomdiff.jumpTo(index);
+    else console.warn(`select=${selectId}: there is no change with this id`);
+  }
 }
 
 main().catch(fail);
