@@ -104,9 +104,11 @@ see `docs/interfaces.md`), `scene.rrd` (open with `rerun scene.rrd`) and `viewer
 
 ## Example outputs
 
-Three pairs of the SceneDiff benchmark, run end to end with the default settings
-(`examples/<scene>/report.md`, `changes.json` and the crops; the point clouds are in the
-live viewer linked below). Each crop shows the object's mask outline in the keyframe that
+Three pairs of the SceneDiff benchmark, run end to end with the default settings of
+commit `ad1b585` (`examples/<scene>/report.md`, `changes.json` and the crops; the point
+clouds are in the live viewer linked below). The final judge prompt (`describe_first`,
+benchmark section) leaves office_1 identical, adds one "removed grey blanket" to bedroom_1
+and renames the living room's second curtain to "dark blanket". Each crop shows the object's mask outline in the keyframe that
 sees it best; "place" crops show the same spot in the other video.
 
 | scene | result | ground truth |
@@ -191,6 +193,14 @@ was never segmented. A suitcase that was not part of the staging and stands at a
 place in the second video came back as unverified, correctly: the first video never looked
 at that spot.
 
+These are the results of the first run, with the judge prompts of commit `ad1b585`;
+`examples/tabletop_*` hold that run. The final judge prompt (`semantics.describe_first`,
+adopted afterwards for its benchmark gain, see below) was then tried on the same
+reconstructions by re-running the describe stage only: it finds the biscuit box too
+(tabletop_1 becomes 3 / 3) but also accepts four table and chair regions seen from
+different viewpoints as changes (tabletop_1 + 3 false positives, tabletop_3 + 1,
+tabletop_2 unchanged). On close-range, top-down video it trades precision for recall.
+
 ## Web viewer
 
 A static three.js viewer (source in `viewer/`, no build step; three.js is loaded from
@@ -256,8 +266,23 @@ fixed keyframes every 1 s, RTX 5090:
 |---|---|---|---|---|---|
 | geometry channel only (commit `ce23def`) | 0.151 | 0.083 | 0.078 | 0.187 | 7 / 42 / 68 |
 | + appearance channel (commit `c660672`) | **0.395** | 0.352 | 0.238 | 0.331 | 30 / 53 / 45 |
-| same, keyframes every 0.5 s (commit `ad1b585`) | 0.394 | **0.383** | **0.256** | **0.351** | 32 / 61 / 43 |
+| same, keyframes every 0.5 s (commit `ad1b585`) | 0.394 | 0.383 | 0.256 | 0.351 | 32 / 61 / 43 |
+| + judges describe each box before deciding (commit `42c8055`, same runs, describe stage re-run) | **0.432** | **0.413** | **0.280** | **0.472** | 36 / 39 / 39 |
 | SceneDiff paper (full val set, for reference) | 0.496 | 0.463 | 0.255 | – | – |
+
+The last row changes only the VLM judge (`semantics.describe_first`): the removed / added
+and in-place judges first say what each box contains, and the in-place judge whether that
+is a movable object or a bare surface, before they decide; a "different" answer with a bare
+surface in the later image becomes "removed" instead of "removed + added". It was developed
+on a disjoint 20-pair subset of `val` / `varied` (pairs 21-40: per-scene AP 0.404 -> 0.459,
+typed AP 0.366 -> 0.401, TP / FP / FN 22 / 46 / 26 -> 25 / 42 / 23) and then applied once
+to the reported pairs by re-running the describe stage on their cached reconstructions.
+Two other things were measured on the same runs: submitting the SAM masks at the keyframe
+resolution instead of the reconstruction resolution (`eval.mask_resolution`) changed
+nothing to three decimals, and leaving unverified regions out of the submission
+(`eval.include_unverified`, now the default) leaves every AP unchanged and raises the pixel
+IoU, since they claim no change (the earlier rows include them: 0.351 -> 0.457 for the row
+above without them; the last row is 0.369 with them, 36 / 74 / 39).
 
 The paper numbers are on the whole validation set, ours on a 20-pair subset, so they are
 indicative only. Median run time per pair: 70 s at 1 s keyframes, 85 s at 0.5 s (RTX

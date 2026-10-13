@@ -81,6 +81,16 @@ here" and "appeared there" are re-paired into one *moved* object, and same-label
 object. No API keys are used;
 everything runs offline on one GPU.
 
+*Describe before deciding.* The judge's commonest mistake was to answer "same" or
+"rejected" for an object that is plainly in one image only (a biscuit box found by the
+appearance channel with confidence 0.9 was deleted this way). The removed / added and
+in-place prompts now ask for the content of each box first, in the JSON answer, before
+the verdict; the in-place judge also says whether that content is a movable object or a
+bare surface, which turns "different: red box vs. shelf" into "removed" rather than a
+removal plus a spurious "added shelf". On a disjoint 20-pair subset of SceneDiff val this
+raised per-scene AP from 0.40 to 0.46; on the reported 20 pairs from 0.38 to 0.41 (typed
+AP 0.26 -> 0.28, 4 more objects found).
+
 ## 5. Outputs
 `changes.json` (typed changes with 3D boxes, transforms, confidence and the evidence behind
 each verdict), `report.md`, a Rerun session for inspection, and a self-contained web
@@ -96,7 +106,10 @@ old place was seen empty while its new place, under the table edge, was never ob
 2 were missed (a biscuit box the VLM judge wrongly called present in both crops; a stool
 pushed under the table that was never segmented), with 1 false positive (a bin in the
 background "moved" 0.10 m). Three lessons. (1) The judge is the weakest link: a single wrong
-"same" answer deletes a change found with confidence 0.9. (2) Pi3X's metric scale is not
+"same" answer deletes a change found with confidence 0.9; the "describe before deciding"
+prompt of section 4 recovers that box when the describe stage is re-run on the same
+reconstructions, but on these close-range videos it also accepts four table and chair
+regions seen from different viewpoints, so here it trades precision for recall. (2) Pi3X's metric scale is not
 to be trusted on close-range, top-down video: `scripts/lidar_check.py` fits our clouds to
 the LiDAR meshes with 1.7-2.9 cm median residual, but at a scale of 0.55-0.57 for all six
 recordings (the two scans of a pair agree within 0.7-3.6 %), i.e. 1.8x too large, while
@@ -105,6 +118,18 @@ image size: mixed portrait / landscape pairs are handled by centre-cropping both
 squares (see below), with a warning from `scripts/check_video.py`.
 
 ## What we tried and did not keep as default
+*Masks at the keyframe resolution.* The benchmark evaluator matches masks at IoU 0.5 after
+resizing them to 1024 px, and ours come out of SAM at the reconstruction resolution
+(672 x 378), so coarse boundaries looked like a plausible loss. Prompting SAM with the
+1024 px keyframe instead (same internal size, no extra cost) and submitting those masks
+changed every metric by less than 0.001 on both 20-pair subsets. The option stays
+(`eval.mask_resolution`), the default is the cheaper one.
+
+*Submitting unverified regions.* They were submitted ranked last so that the AP metrics
+could use them; none of them matched a ground-truth object, every AP stayed identical
+without them, and the merged-mask pixel IoU rose from 0.37 to 0.47. They are no longer
+submitted (`eval.include_unverified`).
+
 *Turning one recording a quarter turn for mixed orientation.* Our first fix for a portrait
 + landscape pair rotated the after video's keyframes 90 degrees so that both sets had one
 shape without losing pixels. The joint reconstruction then aligned the two recordings less

@@ -203,8 +203,10 @@ viz: {}
 # SceneDiff benchmark evaluation (`roomdiff eval`, roomdiff/eval_scenediff.py)
 eval:
   data_root: data/scenediff/scenediff_benchmark  # pair folders in data/, splits in splits/
-  include_unverified: true  # also submit unverified changes (confidence <= 0.5, ranked last)
-  mask_resolution: full  # masks submitted at keyframe (full) or reconstruction (recon) resolution
+  include_unverified: false  # also submit unverified regions (they claim no change; including them
+                             # leaves the AP metrics unchanged and lowers the pixel IoU, 0.47 -> 0.37)
+  mask_resolution: recon  # masks submitted at keyframe (full) or reconstruction (recon) resolution;
+                          # measured identical to three decimals, recon is cheaper
   time_tol_s: 0.1        # sharp-mode keyframe -> benchmark frame round(t) if |t - round(t)| < this
   run_mem: 10G           # memory cap of each `roomdiff run` (scripts/run_guarded.sh -g -m)
   run_timeout_s: 1500    # timeout of each run in seconds (scripts/run_guarded.sh -t)
