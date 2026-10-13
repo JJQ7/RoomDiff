@@ -710,3 +710,39 @@ def test_three_chained_fragments_do_not_crash(tmp_path):
     asked = [p for p in vlm.prompts if "parts of one physical object" in p]
     assert len(asked) == 1  # the second pair shares a fragment with the first: skipped
 
+
+
+
+@pytest.mark.parametrize(("answer", "o1", "o2", "expected"), [
+    ("different", True, False, "removed"),   # red box -> bare shelf: a removal
+    ("different", False, True, "added"),
+    ("different", False, False, "same"),
+    ("different", True, True, "different"),
+    ("added", True, False, "same"),          # "added" window pane: nothing was added
+    ("removed", False, True, "same"),
+    ("removed", True, True, "removed"),
+    ("same", False, False, "same"),
+    ("different", None, None, "different"),  # flags missing: answer kept
+])
+def test_objectness_correction(answer, o1, o2, expected):
+    from roomdiff.semantics import objectness_correction
+    data = {"change": answer}
+    if o1 is not None:
+        data["object1"], data["object2"] = o1, str(o2)  # bools or "true" / "false" strings
+    fixed, reason = objectness_correction(data, answer, "r")
+    assert fixed == expected
+    assert (fixed != answer) == reason.startswith("r (answered")
+
+
+def test_in_place_answer_uses_the_objectness_flags(tmp_path):
+    from roomdiff.semantics import REPLACED_DESCRIBE_JSON, in_place_answer
+    assert '"object1"' in REPLACED_DESCRIBE_JSON and "movable object" in REPLACED_DESCRIBE_JSON
+    vlm = FakeVLM(lambda images, prompt: json.dumps(
+        {"image1": "red box", "object1": True, "image2": "tv stand shelf", "object2": False,
+         "reason": "the shelf is bare", "change": "different"}))
+    shown = [(Image.new("RGB", (8, 8)), "a.jpg"), (Image.new("RGB", (8, 8)), "b.jpg")]
+    assert in_place_answer(vlm, shown, "labels", "t", describe_first=True)[0] == "removed"
+    assert '"object2"' in vlm.prompts[0]
+    vlm = FakeVLM(lambda images, prompt: json.dumps({"reason": "r", "change": "different"}))
+    assert in_place_answer(vlm, shown, "labels", "t", describe_first=False)[0] == "different"
+    assert '"object2"' not in vlm.prompts[0]

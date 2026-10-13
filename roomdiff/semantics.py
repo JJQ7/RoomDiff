@@ -106,8 +106,15 @@ REPLACED_JSON = ('Answer with JSON only, reason first: {"reason": "one short sen
 DESCRIBE_FIRST = ('{"image1": "what lies inside the box in image 1, a few words", "image2": '
                   '"the same for image 2", ')
 DESCRIBE_JSON = VERDICT_JSON.replace("reason first: {", "in this order: " + DESCRIBE_FIRST)
-REPLACED_DESCRIBE_JSON = REPLACED_JSON.replace("reason first: {",
-                                               "in this order: " + DESCRIBE_FIRST)
+# the in-place judge also says, per image, whether the box holds a movable object at all:
+# a "different" answer with a bare surface in image 2 is a removal, not a replacement
+OBJECTNESS = ('{"image1": "what lies inside the box in image 1, a few words", "object1": '
+              'true | false, "image2": "the same for image 2", "object2": true | false, ')
+REPLACED_DESCRIBE_JSON = (
+    '"object1" / "object2": true if what lies inside the box of that image is a distinct '
+    "movable object, false if it is only a bare surface, an empty place or part of the "
+    f"room ({ROOM_PARTS}).\n"
+    + REPLACED_JSON.replace("reason first: {", "in this order: " + OBJECTNESS))
 
 
 def describing(prompt: str) -> str:
@@ -551,7 +558,33 @@ def in_place_answer(vlm: BaseVLM, shown: Sequence[tuple[Image.Image, str] | None
     reason = str(data.get("reason") or "").strip()
     if answer not in REPLACE_VERDICTS:
         answer, reason = "unclear", reason or f"unparsable answer: {data!r}"[:200]
+    if describe_first:
+        answer, reason = objectness_correction(data, answer, reason)
     return answer, reason
+
+
+def objectness_correction(data: Mapping[str, Any], answer: str, reason: str
+                          ) -> tuple[str, str]:
+    """Reconcile an in-place answer with the judge's own `object1` / `object2` flags: a
+    box that holds no movable object cannot be the removed, the added or a replaced object.
+    Flags that are missing or not boolean-like leave the answer alone."""
+    def flag(key: str) -> bool | None:
+        value = data.get(key)
+        if isinstance(value, bool):
+            return value
+        text = str(value or "").strip().lower()
+        return True if text == "true" else False if text == "false" else None
+
+    o1, o2 = flag("object1"), flag("object2")
+    fixed = answer
+    if answer == "different":
+        fixed = "same" if o1 is False and o2 is False else "removed" if o2 is False \
+            else "added" if o1 is False else answer
+    elif (answer == "removed" and o1 is False) or (answer == "added" and o2 is False):
+        fixed = "same"
+    if fixed != answer:
+        reason = f"{reason} (answered {answer}; object1={o1}, object2={o2}: {fixed})"
+    return fixed, reason
 
 
 def judge_replaced(vlm: BaseVLM, crops: Crops, removed: Mapping[str, Any],
