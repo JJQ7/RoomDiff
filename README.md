@@ -8,6 +8,9 @@ explicit geometric, appearance and visual-language evidence, and changes in spac
 other video never observed are reported as **unverified** instead of being guessed.
 See [docs/PLAN.md](docs/PLAN.md) for the design.
 
+*By Jingqi Jiang (Imperial College London), October 2026: a five-day take-home challenge,
+"What changed in the room?".*
+
 ![The web viewer on SceneDiff pair living_room_1](docs/img/viewer/living_room_1_viewer.png)
 
 *The web viewer on SceneDiff pair living_room_1: both point clouds in one frame, a box per change (red removed, green added, blue moved with an arrow from the old place, yellow unverified) and the change list with its evidence and crops. Live: <https://jjq7.github.io/RoomDiff/viewer/?scene=scenes/scenediff_living_room_1>.*
@@ -186,7 +189,9 @@ python -m roomdiff.cli viewer --out outputs/scene1 [--target-points 400000]
 cd outputs/scene1/viewer && python -m http.server 8000   # open http://localhost:8000/
 ```
 
-Keys: N / P next / previous change, R reset view. `changes.json` is taken from
+Keys: N / P next / previous change, R reset view. Unverified regions (often a patch of
+floor or table top that only one video observed) are drawn dimmed and get their label only
+when selected; the home view frames the confirmed changes. `changes.json` is taken from
 `<out>/changes.json`, or generated from `<out>/visibility/candidates.json` (geometry-only
 regions) when the change stage has not run yet.
 

@@ -12,6 +12,10 @@ import { PLYLoader } from 'three/addons/loaders/PLYLoader.js';
 
 const TYPES = ['added', 'removed', 'moved', 'unverified'];
 const TYPE_COLORS = { added: '#22a447', removed: '#e03131', moved: '#2f6fdf', unverified: '#e6b400' };
+// Unverified regions are often large patches of floor or table top that only one video
+// observed: their boxes are drawn dimmed, their labels appear only when selected, and the
+// home view does not zoom out for them.
+const UNVERIFIED_OPACITY = 0.55;
 const TINT_COLORS = { before: '#3b82f6', after: '#f97316' };
 const BACKGROUNDS = { dark: '#15171c', light: '#f3f4f6' };
 const EVIDENCE_LABELS = {
@@ -179,8 +183,8 @@ function homeView() {
   let distance = fitDistance(corners, target, offset);
   if (state.sample.length) distance = fitDistanceToPoints(state.sample, target, offset, distance);
   const boxCorners = [];
-  for (const item of state.items) { // every change box stays in frame
-    if (!item.bounds) continue;
+  for (const item of state.items) { // every confirmed change box stays in frame
+    if (!item.bounds || item.type === 'unverified') continue;
     for (const x of [item.bounds.min.x, item.bounds.max.x]) {
       for (const y of [item.bounds.min.y, item.bounds.max.y]) {
         for (const z of [item.bounds.min.z, item.bounds.max.z]) boxCorners.push(new THREE.Vector3(x, y, z));
@@ -267,7 +271,7 @@ function spreadLabels() {
   const spacing = 1.1; // m, floor-plane distance below which two labels are stacked
   const step = 0.35; // m, vertical step between stacked labels
   const placed = [];
-  const items = state.items.filter((item) => item.label)
+  const items = state.items.filter((item) => item.label && item.type !== 'unverified')
     .sort((a, b) => a.label.position.y - b.label.position.y);
   for (const item of items) {
     const anchor = item.label.position.clone();
@@ -543,9 +547,18 @@ function updateFilters() {
   for (const item of state.items) {
     const on = state.filters[item.type];
     item.entry.hidden = !on;
-    if (item.group) item.group.visible = item.label.visible = on;
+    if (item.group) item.group.visible = on;
   }
+  updateLabels();
   if (state.selected >= 0 && state.items[state.selected].entry.hidden) select(-1);
+}
+
+// A label is shown for every visible confirmed change and for the selected change.
+function updateLabels() {
+  state.items.forEach((item, i) => {
+    if (!item.label) return;
+    item.label.visible = !item.entry.hidden && (item.type !== 'unverified' || i === state.selected);
+  });
 }
 
 // -------------------------------------------------------------- selection
@@ -554,10 +567,12 @@ function select(index) {
   state.selected = index;
   state.items.forEach((item, i) => {
     item.entry.classList.toggle('selected', i === index);
-    const opacity = index < 0 || i === index ? 1 : DIMMED;
+    const base = item.type === 'unverified' ? UNVERIFIED_OPACITY : 1;
+    const opacity = i === index ? 1 : index < 0 ? base : DIMMED;
     for (const material of item.materials) material.opacity = opacity;
     if (item.label) item.label.scale.copy(item.label.userData.baseScale).multiplyScalar(i === index ? 1.3 : 1);
   });
+  updateLabels();
   if (index < 0) return;
   const item = state.items[index];
   showCrops(item);
