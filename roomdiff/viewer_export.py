@@ -93,6 +93,71 @@ def horizontal_view_dir(cam2world: np.ndarray, up: np.ndarray) -> np.ndarray:
     return forward / np.linalg.norm(forward)
 
 
+def visible_fraction(points: np.ndarray, eye: np.ndarray, forward: np.ndarray, up: np.ndarray,
+                     fov_deg: float = 50.0, width: int = 160, tol: float = 0.03) -> float:
+    """Share of the points in front of a pinhole camera (`eye`, `forward`, vertical and
+    horizontal field of view `fov_deg`, square image) that are not hidden behind nearer
+    points: one depth per cell of a coarse z-buffer `width` cells wide, a point counts as
+    visible within `tol` relative depth of its cell's nearest point."""
+    forward = np.asarray(forward, np.float64)
+    forward = forward / max(np.linalg.norm(forward), 1e-12)
+    right = np.cross(forward, up)
+    if np.linalg.norm(right) < 1e-6:
+        right = np.cross(forward, [1.0, 0.0, 0.0])
+    right /= np.linalg.norm(right)
+    cam_up = np.cross(right, forward)
+    rel = np.asarray(points, np.float64) - eye
+    z = rel @ forward
+    front = z > 1e-3
+    if not front.any():
+        return 0.0
+    f = 0.5 * width / np.tan(np.radians(fov_deg) / 2)
+    u = np.floor(f * (rel[front] @ right) / z[front] + width / 2)
+    v = np.floor(f * (rel[front] @ cam_up) / z[front] + width / 2)
+    inside = (u >= 0) & (u < width) & (v >= 0) & (v < width)
+    if not inside.any():
+        return 0.0
+    pix = (v[inside] * width + u[inside]).astype(np.int64)
+    zz = z[front][inside]
+    depth = np.full(width * width, np.inf)
+    np.minimum.at(depth, pix, zz)
+    return float(np.mean(zz <= depth[pix] * (1 + tol)))
+
+
+def best_view_dir(
+    points: np.ndarray, up: np.ndarray, cam2world: np.ndarray, n_azimuth: int = 12,
+    elevation_deg: float = 35.0, fov_deg: float = 50.0, max_points: int = 60_000,
+) -> np.ndarray:
+    """Horizontal unit vector for `scene.json: view_dir`. The viewer's home camera (see
+    `homeView` in viewer/app.js) sits behind the scene centre against this direction,
+    `elevation_deg` above the floor, and looks along it. Of `n_azimuth` candidate
+    directions the one whose home view shows the largest share of the points unoccluded
+    wins: a room filmed from inside is best seen from its open, unfilmed side, whereas the
+    mean camera direction (`horizontal_view_dir`) often faces the back of a filmed wall.
+    Ties keep the mean camera direction (candidate 0)."""
+    base = horizontal_view_dir(cam2world, up)
+    points = np.asarray(points, np.float64).reshape(-1, 3)
+    if len(points) < 20:
+        return base
+    if len(points) > max_points:
+        rng = np.random.default_rng(0)
+        points = points[rng.choice(len(points), max_points, replace=False)]
+    lo, hi = np.percentile(points, [1, 99], axis=0)
+    centre, radius = 0.5 * (lo + hi), max(0.5 * float(np.linalg.norm(hi - lo)), 0.1)
+    distance = 0.7 * radius / np.sin(np.radians(fov_deg) / 2)
+    side = np.cross(up, base)
+    elev = np.radians(elevation_deg)
+    best, best_score = base, -1.0
+    for k in range(n_azimuth):
+        angle = 2 * np.pi * k / n_azimuth
+        direction = np.cos(angle) * base + np.sin(angle) * side
+        eye = centre - direction * np.cos(elev) * distance + up * np.sin(elev) * distance
+        score = visible_fraction(points, eye, centre - eye, up, fov_deg)
+        if score > best_score + 1e-9:
+            best, best_score = direction, score
+    return best / np.linalg.norm(best)
+
+
 # ---------------------------------------------------------------------- changes
 
 
@@ -190,8 +255,9 @@ def scene_manifest(
 
     `bbox_m` is the 1st-99th percentile box of both clouds (robust to stray points),
     `up_axis` the unit vector against gravity (+Y in a `levelled` frame, else estimated
-    from the cameras) and `view_dir` the horizontal direction the cameras mostly looked in,
-    all in the world frame of recon.npz."""
+    from the cameras) and `view_dir` the horizontal direction of the viewer's home view
+    (`best_view_dir`: the one showing most of the points), all in the world frame of
+    recon.npz."""
     points = np.concatenate([p for p, _ in clouds])
     lo, hi = np.percentile(points, [1, 99], axis=0) if len(points) else np.zeros((2, 3))
     up = np.array([0.0, 1.0, 0.0]) if levelled else estimate_up(cam2world)
@@ -209,7 +275,7 @@ def scene_manifest(
         },
         "bbox_m": [lo.round(3).tolist(), hi.round(3).tolist()],
         "up_axis": up.round(4).tolist(),
-        "view_dir": horizontal_view_dir(cam2world, up).round(4).tolist(),
+        "view_dir": best_view_dir(points, up, cam2world).round(4).tolist(),
     }
 
 

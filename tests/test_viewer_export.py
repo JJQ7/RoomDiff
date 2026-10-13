@@ -209,3 +209,27 @@ def test_changes_from_candidates_maps_types():
     assert doc["scene"] == {"units": "m"}
     assert doc["summary"].startswith("4 candidate regions")
     assert "1 removed, 1 added, 2 unverified" in doc["summary"]
+
+
+def test_best_view_dir_prefers_the_open_side_of_a_room():
+    from roomdiff.viewer_export import best_view_dir, horizontal_view_dir
+
+    rng = np.random.default_rng(1)
+    n = 4000
+    floor = np.c_[rng.uniform(-2, 2, n), np.zeros(n), rng.uniform(-2, 2, n)]
+    back = np.c_[rng.uniform(-2, 2, n), rng.uniform(0, 2.5, n), np.full(n, 2.0)]
+    left = np.c_[np.full(n, -2.0), rng.uniform(0, 2.5, n), rng.uniform(-2, 2, n)]
+    right = np.c_[np.full(n, 2.0), rng.uniform(0, 2.5, n), rng.uniform(-2, 2, n)]
+    points = np.concatenate([floor, back, left, right])  # open towards -Z
+    up = np.array([0.0, 1.0, 0.0])
+    # cameras inside the room looking towards -Z: the mean direction faces the open side
+    # from behind the back wall, which hides the whole room from the home view
+    cam2world = np.tile(np.eye(4), (5, 1, 1))
+    cam2world[:, :3, :3] = np.diag([-1.0, 1.0, -1.0])
+    mean_dir = horizontal_view_dir(cam2world, up)
+    assert np.allclose(mean_dir, [0, 0, -1])
+    best = best_view_dir(points, up, cam2world)
+    assert np.dot(best, [0, 0, 1]) > 0.9  # look from the open side into the room
+    # cameras looking at the back wall already give the right answer and are kept
+    cam2world[:, :3, :3] = np.eye(3)
+    assert np.allclose(best_view_dir(points, up, cam2world), [0, 0, 1], atol=1e-6)
