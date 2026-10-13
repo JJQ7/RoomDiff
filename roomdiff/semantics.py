@@ -747,9 +747,11 @@ def merge_fragments(vlm: BaseVLM, crops: Crops, changes: list[dict[str, Any]],
     records: list[dict[str, Any]] = []
     used: set[int] = set()
     for gap, xid, yid, name in sorted(pairs):
+        if xid in used or yid in used:  # merged already (and the smaller one is gone from by_id)
+            continue
         x, y = by_id[xid], by_id[yid]
         shown = [crops.get(x, name), crops.get(y, name)]
-        if xid in used or yid in used or None in shown:
+        if None in shown:
             continue
         data = ask_images(vlm, shown, fill(JUDGE_FRAGMENTS, x["label"]),
                           f"fragments:{xid}+{yid}")

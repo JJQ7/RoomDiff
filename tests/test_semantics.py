@@ -676,3 +676,37 @@ def test_describe_first_prompts(split_scene):
     run_semantics(split_scene, load_config(overrides=["semantics.describe_first=false"]), vlm)
     assert not any('"image1"' in p for p in vlm.prompts)
 
+
+def test_three_chained_fragments_do_not_crash(tmp_path):
+    """Fragments 1 (top), 2 (middle) and 5 (bottom) of one chair, 5 cm apart in a chain:
+    once 1 + 2 are merged (2 is gone), the 2 + 5 pair must be skipped, not looked up."""
+    rng = np.random.default_rng(1)
+    pts = {1: rng.uniform([-0.25, 0.40, 1.75], [0.25, 1.00, 2.25], (3000, 3)),
+           2: rng.uniform([-0.30, 0.00, 1.70], [0.30, 0.35, 2.30], (800, 3)),
+           5: rng.uniform([-0.30, -0.40, 1.70], [0.30, -0.05, 2.30], (500, 3))}
+
+    def side_of(iid):
+        p = pts[iid]
+        return {"instance_id": iid, "centroid": p.mean(0).tolist(),
+                "aabb": [p.min(0).tolist(), p.max(0).tolist()], "extents": np.ptp(p, 0).tolist(),
+                "obb": floor_obb(p), "n_points": len(p), "blob_ids": [10 + iid]}
+
+    write_doc(tmp_path, [
+        change(i, "removed", before=side_of(i), conf=0.6,
+               crops={"before": crop(tmp_path, f"{i}_before", colour_),
+                      "after": crop(tmp_path, f"{i}_after", "grey")})
+        for i, colour_ in ((1, "red"), (2, "green"), (5, "green"))])
+    (tmp_path / "instances").mkdir()
+    np.savez_compressed(tmp_path / "instances" / "before_points.npz",
+                        points=np.concatenate(list(pts.values())).astype(np.float32),
+                        colors=np.zeros((sum(map(len, pts.values())), 3), np.uint8),
+                        instance=np.concatenate([np.full(len(p), i) for i, p in pts.items()]))
+    vlm = FakeVLM(chair_responder(
+        '{"reason": "parts of one chair", "verdict": "confirmed", "label": "office chair"}'))
+    doc = run_semantics(tmp_path, load_config(), vlm)
+    merged = [c for c in doc["changes"] if c["evidence"].get("merged_from")]
+    assert len(merged) == 1 and len(doc["changes"]) == 2  # one merge, the third part stays
+    assert merged[0]["evidence"]["merged_from"] in ([1, 2], [2, 5])
+    asked = [p for p in vlm.prompts if "parts of one physical object" in p]
+    assert len(asked) == 1  # the second pair shares a fragment with the first: skipped
+
