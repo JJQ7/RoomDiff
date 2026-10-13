@@ -12,9 +12,11 @@ Prediction per change (object id = change id): its before-instance masks at the 
 keyframes -> `video_1` entries, after-instance masks -> `video_2`; `cost` = change
 confidence x SAM mask score; `label` 1 for moved, else 0 (the evaluator recomputes it from
 the presence of both video keys, so a moved change keeps both keys even if one is empty).
-Masks are COCO RLE at the reconstruction resolution (upright, same aspect as the GT); the
-evaluator resizes them to its working size. Layout below `out_root`: `runs/<pair>/`
-(pipeline outputs), `logs/<pair>.log`, `pred/<pair>/object_masks.pkl` and
+Masks are COCO RLE, upright with the GT's aspect ratio, at the keyframe resolution
+(`eval.mask_resolution: full`, the default: `rle_full` of `instances/<rec>_masks.npz`, the
+reconstruction-resolution mask where there is none) or at the reconstruction resolution
+(`recon`); the evaluator resizes them to its working size. Layout below `out_root`:
+`runs/<pair>/` (pipeline outputs), `logs/<pair>.log`, `pred/<pair>/object_masks.pkl` and
 `prediction.json`, `pred/summary.json`, `pred/result_frame_dup_1_obj_dup_1.txt`.
 
 Evaluator quirks handled here: it imports `faiss` through `utils.py` (only needed for
@@ -54,6 +56,7 @@ VIDEO_STEMS = {"before": "original_video1", "after": "original_video2"}
 RESULT_SUFFIX = "_frame_dup_1_obj_dup_1"  # appended by the evaluator (default thresholds)
 FLOAT_METRICS = ("global_iou", "per_view_ap", "per_scene_ap", "per_scene_ap_type")
 RUN_MARKER = "eval_run.json"  # written by run_pipeline: return code and command
+MASK_RESOLUTIONS = ("full", "recon")  # eval.mask_resolution: keyframe or recon masks
 
 # Runs the official script unmodified. Its `from utils import process_video_to_frames`
 # would import third_party/scene_diff/utils.py, which needs faiss (not installed) and is
@@ -154,29 +157,46 @@ def benchmark_frames(frames: Sequence[Mapping[str, Any]], time_tol: float) -> di
     return {file: k for k, (_, file) in best.items()}
 
 
+def resize_nearest(mask: np.ndarray, height: int, width: int) -> np.ndarray:
+    """Bool mask resized to (height, width) by nearest neighbour (as is if it fits)."""
+    if mask.shape == (height, width):
+        return mask
+    rows = np.arange(height) * mask.shape[0] // height
+    cols = np.arange(width) * mask.shape[1] // width
+    return mask[np.ix_(rows, cols)]
+
+
 def side_masks(
     per_instance: Mapping[int, Mapping[int, tuple[float, dict[str, Any]]]], ids: Sequence[int]
 ) -> dict[int, tuple[float, dict[str, Any]]]:
     """Masks `{frame k: (score, RLE)}` of a change side made of the instances `ids` (parts
-    of one object after a merge): per frame the union of their masks with the best score."""
+    of one object after a merge): per frame the union of their masks (at the largest of
+    their sizes) with the best score."""
     out: dict[int, tuple[float, dict[str, Any]]] = {}
     for k in sorted({k for i in ids for k in per_instance.get(i, {})}):
         parts = [per_instance[i][k] for i in ids if k in per_instance.get(i, {})]
         if len(parts) == 1:
             out[k] = parts[0]
             continue
-        mask = np.logical_or.reduce([decode_rle(rle) for _, rle in parts])
+        decoded = [decode_rle(rle) for _, rle in parts]
+        height, width = max((m.shape for m in decoded), key=lambda s: s[0] * s[1])
+        mask = np.logical_or.reduce([resize_nearest(m, height, width) for m in decoded])
         out[k] = (max(score for score, _ in parts), encode_rle(mask))
     return out
 
 
 def write_prediction(
     out_dir: str | Path, pair_dir: str | Path, pred_dir: str | Path,
-    include_unverified: bool = True, time_tol: float = 0.1,
+    include_unverified: bool = True, time_tol: float = 0.1, mask_resolution: str = "full",
 ) -> dict[str, Any]:
     """Write `<pred_dir>/object_masks.pkl` (+ `prediction.json` stats) of one scene from a
     pipeline output `<out_dir>` (changes.json, instances/<rec>_masks.npz, keyframes/
-    index.json). `pair_dir` (its segments.pkl) gives the GT size. Returns the stats."""
+    index.json). `pair_dir` (its segments.pkl) gives the GT size. `mask_resolution`:
+    "full" submits the keyframe-resolution masks (the recon one where a mask has none),
+    "recon" the reconstruction-resolution ones. Returns the stats."""
+    if mask_resolution not in MASK_RESOLUTIONS:
+        raise ValueError(f"mask_resolution must be one of {MASK_RESOLUTIONS}, "
+                         f"got {mask_resolution!r}")
     paths, pred_dir = OutputPaths(out_dir), Path(pred_dir)
     doc = json.loads(paths.changes_json.read_text())
     index = json.loads(paths.keyframes_index.read_text())
@@ -192,11 +212,15 @@ def write_prediction(
         frame_of = benchmark_frames(index[rec]["frames"], time_tol)
         mapped[rec] = sorted(frame_of.values())
         per_instance: dict[int, dict[int, tuple[float, dict[str, Any]]]] = {}
-        for file, entries in load_masks(paths.instances / f"{rec}_masks.npz").items():
+        stored = load_masks(paths.instances / f"{rec}_masks.npz",
+                            full=mask_resolution == "full")
+        for file, entries in stored.items():
             if file not in frame_of:
                 continue
             for instance_id, score, rle in entries:
-                mask_size = (int(rle["size"][0]), int(rle["size"][1]))
+                size = (int(rle["size"][0]), int(rle["size"][1]))
+                if mask_size is None or size[0] * size[1] > mask_size[0] * mask_size[1]:
+                    mask_size = size  # the largest (sizes differ where "full" fell back)
                 frames = per_instance.setdefault(instance_id, {})
                 if frame_of[file] not in frames or score > frames[frame_of[file]][0]:
                     frames[frame_of[file]] = (score, rle)
@@ -240,6 +264,7 @@ def write_prediction(
     stats = {
         "pair": Path(pair_dir).name, "run_dir": str(out_dir), "objects": sum(kinds.values()),
         "by_type": dict(kinds), "include_unverified": include_unverified,
+        "mask_resolution": mask_resolution,
         "masks": {VIDEO_KEYS[r]: sum(len(o.get(VIDEO_KEYS[r], {})) for k, o in pred.items()
                                      if k not in ("H", "W")) for r in RECORDINGS},
         "benchmark_frames": {VIDEO_KEYS[r]: mapped[r] for r in RECORDINGS},
@@ -328,7 +353,7 @@ def run_pairs(
             stats = write_empty_prediction(pair_dir, pred_dir, f"run failed, see {log}")
         else:
             stats = write_prediction(out, pair_dir, pred_dir, params["include_unverified"],
-                                     params["time_tol_s"])
+                                     params["time_tol_s"], params.get("mask_resolution", "full"))
         results[pair] = {"run": state, **stats}
     return results
 

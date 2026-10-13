@@ -20,7 +20,9 @@ handled in its *owner* recording (where it is occupied):
    (`source: "appearance"`, kind disappeared / appeared by recording);
 6. each instance gets a DINOv3 feature (mask-pooled patch tokens, averaged over views)
    and a CLS token of its box crop, and SAM masks in every keyframe of its recording
-   where its points are visible (COCO RLE, for the SceneDiff evaluation).
+   where its points are visible (COCO RLE, for the SceneDiff evaluation); SAM sees the
+   full-resolution keyframe JPEG there, and each mask is kept at that resolution
+   (`rle_full`) and downsampled to the reconstruction resolution (`rle`).
 
 Writes `<out>/instances/<rec>.json`, `<rec>_feats.npy`, `<rec>_cls.npy`,
 `<rec>_points.npz`, `<rec>_masks.npz` and `meta.json` (docs/interfaces.md, M4).
@@ -57,6 +59,7 @@ SEED_SHARE = 0.1  # lifting keeps the components holding at least this share of 
 GROW_EDGE_PX = 2  # a mask within this many px of a prompt box side reaches it ...
 GROW_TOUCH_SPAN = 0.25  # ... if those pixels span this share of the mask's extent along the side
 GROW_KEEP = 0.8  # a re-prompted (grown) mask must contain this share of the previous one
+KEYFRAME_ASPECT_TOL = 0.1  # max aspect difference keyframe JPEG / recon image (frame_masks)
 
 PointTest = Callable[[np.ndarray], np.ndarray]  # world points (M, 3) -> bool (M,)
 
@@ -86,7 +89,10 @@ class Instance:
     feature: np.ndarray | None = None
     cls: np.ndarray | None = None
     view_consistency: float | None = None
-    frame_masks: list[tuple[int, dict[str, Any], float]] = field(default_factory=list)
+    # per-keyframe masks (`frame_masks`): frame, RLE at the recon resolution, SAM score,
+    # RLE at the keyframe resolution (None where SAM saw the recon image)
+    frame_masks: list[tuple[int, dict[str, Any], float, dict[str, Any] | None]] = field(
+        default_factory=list)
     merged_from: list[list[int]] = field(default_factory=list)  # blob ids per gap-merged part
     lift_fallback: bool = False  # some view's mask grew too far: bounded lifting was used
     lift_growth: list[float | None] = field(default_factory=list)  # per view (`growth`)
@@ -242,23 +248,34 @@ def prompt_points(cols: np.ndarray, rows: np.ndarray, k: int, seed: int = 0) -> 
     return pts[np.unique(nearest)]
 
 
+def pick_index(
+    masks: Sequence[np.ndarray], scores: Sequence[float], box: Sequence[int],
+    contain: np.ndarray | None = None,
+) -> int | None:
+    """Index of the highest-scoring non-empty mask with at least `MIN_MASK_IN_BOX` of its
+    pixels inside `box` (and, if given, `GROW_KEEP` of the pixels of the mask `contain`),
+    or None."""
+    x0, y0, x1, y1 = box
+    best = None
+    for i, (mask, score) in enumerate(zip(masks, scores)):
+        area = int(mask.sum())
+        if area == 0 or mask[y0:y1 + 1, x0:x1 + 1].sum() < MIN_MASK_IN_BOX * area:
+            continue
+        if contain is not None and (mask & contain).sum() < GROW_KEEP * contain.sum():
+            continue
+        if best is None or score > scores[best]:
+            best = i
+    return best
+
+
 def pick_mask(
     masks: np.ndarray, scores: np.ndarray, box: Sequence[int],
     contain: np.ndarray | None = None,
 ) -> tuple[np.ndarray, float] | None:
     """Highest-scoring non-empty mask with at least `MIN_MASK_IN_BOX` of its pixels inside
     `box` (and, if given, `GROW_KEEP` of the pixels of the mask `contain`), or None."""
-    x0, y0, x1, y1 = box
-    best = None
-    for mask, score in zip(masks, scores):
-        area = int(mask.sum())
-        if area == 0 or mask[y0:y1 + 1, x0:x1 + 1].sum() < MIN_MASK_IN_BOX * area:
-            continue
-        if contain is not None and (mask & contain).sum() < GROW_KEEP * contain.sum():
-            continue
-        if best is None or score > best[1]:
-            best = (mask, float(score))
-    return best
+    i = pick_index(masks, scores, box, contain)
+    return None if i is None else (masks[i], float(scores[i]))
 
 
 def touched_sides(
@@ -687,16 +704,65 @@ def decode_rle(rle: Mapping[str, Any]) -> np.ndarray:
         return mask_utils.decode(data).astype(bool)
 
 
+def downsample_mask(mask: np.ndarray, height: int, width: int) -> np.ndarray:
+    """Bool mask resized to (height, width) by area averaging: a pixel is set when more
+    than half of its area is."""
+    import cv2
+
+    if mask.shape == (height, width):
+        return mask.astype(bool)
+    resized = cv2.resize(mask.astype(np.float32), (width, height), interpolation=cv2.INTER_AREA)
+    return resized > 0.5
+
+
+def load_keyframe(path: str | Path) -> np.ndarray | None:
+    """RGB uint8 image (H, W, 3) of a keyframe JPEG, None if the file does not exist."""
+    from PIL import Image
+
+    if not Path(path).is_file():
+        return None
+    with Image.open(path) as image:
+        return np.asarray(image.convert("RGB"))
+
+
+def full_keyframe(
+    frame: int, recon: Mapping[str, Any], keyframes: Path, cache: dict[int, np.ndarray | None]
+) -> np.ndarray | None:
+    """Full-resolution image of keyframe `frame` (`keyframes / recon["files"][frame]`),
+    read once into `cache`; None if the file is missing or its aspect ratio differs from
+    the recon image's by more than `KEYFRAME_ASPECT_TOL` (another crop or orientation)."""
+    if frame not in cache:
+        image = load_keyframe(keyframes / str(recon["files"][frame]))
+        height, width = recon["depth"].shape[1:]
+        if image is not None and \
+                abs(image.shape[1] * height / (image.shape[0] * width) - 1) > KEYFRAME_ASPECT_TOL:
+            image = None
+        cache[frame] = image
+    return cache[frame]
+
+
 def frame_masks(
     inst: Instance, frames: Sequence[int], recon: Mapping[str, Any], segmenter: Segmenter,
     visible_frac: float, depth_tol: float, n_points: int, box_enlarge: float,
-) -> list[tuple[int, dict[str, Any], float]]:
-    """SAM masks `(frame, RLE, score)` of the instance in every keyframe where at least
-    `visible_frac` of its points are depth-consistent (|observed - projected depth| <=
-    `depth_tol`); prompt = up to `n_points` of those pixels plus their box."""
+    keyframes: str | Path | None = None,
+    full_images: dict[int, np.ndarray | None] | None = None,
+) -> list[tuple[int, dict[str, Any], float, dict[str, Any] | None]]:
+    """SAM masks `(frame, RLE, score, full RLE)` of the instance in every keyframe where at
+    least `visible_frac` of its points are depth-consistent (|observed - projected depth|
+    <= `depth_tol`); prompt = up to `n_points` of those pixels plus their box.
+
+    With `keyframes` (the recording's keyframe folder, file names `recon["files"]`) SAM is
+    prompted on the full-resolution keyframe JPEG, box and points scaled from recon pixels
+    by the width / height ratios (embedding key `full:<frame>`, never the recon image's
+    `<frame>`): the full RLE is its mask, the RLE that mask downsampled to the recon
+    resolution (`downsample_mask`; the mask is picked on it, as before), the score that of
+    this run. JPEGs are read once into `full_images` (one dict shared by the instances of a
+    recording). Without a usable JPEG (`full_keyframe`) the recon image is prompted as
+    before and the full RLE is None."""
     height, width = recon["depth"].shape[1:]
+    full_images = {} if full_images is None else full_images
     sample = subsample(inst.points, MAX_PROJECTED)
-    out = []
+    out: list[tuple[int, dict[str, Any], float, dict[str, Any] | None]] = []
     for frame in frames:
         col, row, z, _, depth, valid = project_with_depth(sample, frame, recon)
         consistent = valid & (np.abs(depth - z) <= depth_tol)
@@ -704,11 +770,23 @@ def frame_masks(
             continue
         c, r = col[consistent], row[consistent]
         box = enlarge_box((c.min(), r.min(), c.max(), r.max()), box_enlarge, width, height)
-        masks, scores = segmenter.segment(str(frame), recon["images"][frame], box,
-                                          prompt_points(c, r, n_points))
-        picked = pick_mask(masks, scores, box)
-        if picked is not None:
-            out.append((int(frame), encode_rle(picked[0]), picked[1]))
+        points = prompt_points(c, r, n_points)
+        full = None if keyframes is None else \
+            full_keyframe(int(frame), recon, Path(keyframes), full_images)
+        if full is None:
+            masks, scores = segmenter.segment(str(frame), recon["images"][frame], box, points)
+            picked = pick_mask(masks, scores, box)
+            if picked is not None:
+                out.append((int(frame), encode_rle(picked[0]), picked[1], None))
+            continue
+        sx, sy = full.shape[1] / width, full.shape[0] / height
+        big, scores = segmenter.segment(f"full:{frame}", full,
+                                        (box[0] * sx, box[1] * sy, box[2] * sx, box[3] * sy),
+                                        points * np.array([sx, sy]))
+        small = [downsample_mask(m, height, width) for m in big]
+        i = pick_index(small, scores, box)
+        if i is not None:
+            out.append((int(frame), encode_rle(small[i]), float(scores[i]), encode_rle(big[i])))
     return out
 
 
@@ -775,9 +853,12 @@ def write_recording(
     name = RECORDINGS[rec]
     height, width = recon["depth"].shape[1:]
     records = [instance_record(i, recon) for i in instances]
+    full = next((rle["size"] for i in instances for *_, rle in i.frame_masks
+                 if rle is not None), None)  # [H, W] of the keyframe-resolution masks
     (folder / f"{name}.json").write_text(json.dumps(
-        {"recording": name, "image_size": [int(width), int(height)], "instances": records},
-        indent=1))
+        {"recording": name, "image_size": [int(width), int(height)],
+         "image_size_full": None if full is None else [int(full[1]), int(full[0])],
+         "instances": records}, indent=1))
     feats = np.stack([i.feature for i in instances]) if instances else np.zeros((0, dim))
     cls = np.stack([i.cls for i in instances]) if instances else np.zeros((0, dim))
     np.save(folder / f"{name}_feats.npy", feats.astype(np.float32))
@@ -789,15 +870,30 @@ def write_recording(
         colors=np.concatenate([i.colors for i in instances] or empty).astype(np.uint8),
         instance=np.concatenate([np.full(len(i.points), i.id) for i in instances]
                                 or [np.zeros(0)]).astype(np.int32))
-    entries = [(str(recon["files"][f]), i.id, s, rle["counts"])
-               for i in instances for f, rle, s in i.frame_masks]
+    save_masks(folder / f"{name}_masks.npz", instances, recon["files"], height, width)
+
+
+def save_masks(
+    path: str | Path, instances: Sequence[Instance], files: Sequence[str], height: int,
+    width: int,
+) -> None:
+    """`<rec>_masks.npz`: one row per per-keyframe mask (`Instance.frame_masks`) of the
+    instances: `keyframe` (file name `files[frame]`), `instance_id`, SAM `score`, `rle`
+    (COCO RLE counts) at the recon resolution `size` [height, width], `rle_full` (counts at
+    the keyframe resolution, "" where SAM saw the recon image) and `size_full` ([H, W] of
+    each `rle_full`, [0, 0] without)."""
+    entries = [(str(files[f]), i.id, s, rle["counts"], full)
+               for i in instances for f, rle, s, full in i.frame_masks]
     np.savez_compressed(
-        folder / f"{name}_masks.npz",
+        path,
         keyframe=np.array([e[0] for e in entries], dtype=np.str_),
         instance_id=np.array([e[1] for e in entries], np.int32),
         score=np.array([e[2] for e in entries], np.float32),
         rle=np.array([e[3] for e in entries], dtype=np.str_),
-        size=np.array([height, width], np.int64))
+        size=np.array([height, width], np.int64),
+        rle_full=np.array([e[4]["counts"] if e[4] else "" for e in entries], dtype=np.str_),
+        size_full=np.array([e[4]["size"] if e[4] else [0, 0] for e in entries],
+                           np.int64).reshape(-1, 2))
 
 
 def load_instances(out_dir: str | Path, recording: str) -> dict[str, Any]:
@@ -817,15 +913,24 @@ def load_instances(out_dir: str | Path, recording: str) -> dict[str, Any]:
     }
 
 
-def load_masks(path: str | Path) -> dict[str, list[tuple[int, float, dict[str, Any]]]]:
-    """`<rec>_masks.npz` as {keyframe file: [(instance id, score, RLE), ...]}."""
+def load_masks(
+    path: str | Path, full: bool = False
+) -> dict[str, list[tuple[int, float, dict[str, Any]]]]:
+    """`<rec>_masks.npz` as {keyframe file: [(instance id, score, RLE), ...]}: RLEs at the
+    recon resolution, or with `full` the keyframe-resolution ones (`rle_full`) where there
+    are any (else the recon RLE, e.g. in files written before `rle_full` existed)."""
     out: dict[str, list[tuple[int, float, dict[str, Any]]]] = {}
     with np.load(path) as f:
         size = [int(s) for s in f["size"]]
-        for file, inst, score, counts in zip(f["keyframe"], f["instance_id"], f["score"],
-                                             f["rle"]):
-            out.setdefault(str(file), []).append(
-                (int(inst), float(score), {"size": size, "counts": str(counts)}))
+        n = len(f["keyframe"])
+        use_full = full and "rle_full" in f.files
+        counts_full = f["rle_full"] if use_full else np.full(n, "")
+        sizes_full = f["size_full"] if use_full else np.zeros((n, 2), np.int64)
+        for file, inst, score, counts, big_counts, big_size in zip(
+                f["keyframe"], f["instance_id"], f["score"], f["rle"], counts_full, sizes_full):
+            rle = {"size": [int(s) for s in big_size], "counts": str(big_counts)} \
+                if str(big_counts) else {"size": size, "counts": str(counts)}
+            out.setdefault(str(file), []).append((int(inst), float(score), rle))
     return out
 
 
@@ -921,10 +1026,12 @@ def run_instances(
 
     t0 = time.perf_counter()
     for rec, instances in enumerate(final):
+        full_images: dict[int, np.ndarray | None] = {}  # keyframe JPEGs, read once
         for inst in instances:
             inst.frame_masks = frame_masks(
                 inst, frames[rec], recon, segmenter, params["frame_visible_frac"],
-                params["frame_depth_tol"], params["frame_prompt_points"], params["box_enlarge"])
+                params["frame_depth_tol"], params["frame_prompt_points"], params["box_enlarge"],
+                paths.keyframes_of(RECORDINGS[rec]), full_images)
     times["frame_masks"] = time.perf_counter() - t0
 
     t0 = time.perf_counter()

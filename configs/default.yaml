@@ -165,6 +165,7 @@ semantics:
   max_new_tokens: 256    # per answer (greedy decoding); the one polishing call gets 90 per change
   image_max_side: 768    # px, every crop is resized to at most this on its longer side
   enable_judge: true     # paired-crop verdicts: rejected changes move to "rejected"
+  describe_first: true   # removed / added / in-place judges say what each box contains before deciding
   enable_fragment_merge: true  # merge removed + removed / added + added parts of one object
   fragment_gap_m: 0.15   # m, ... whose oriented boxes are at most this far apart (VLM: one object)
   enable_repair: true    # merge split changes of one object (removed + added -> moved, ...)
@@ -203,6 +204,7 @@ viz: {}
 eval:
   data_root: data/scenediff/scenediff_benchmark  # pair folders in data/, splits in splits/
   include_unverified: true  # also submit unverified changes (confidence <= 0.5, ranked last)
+  mask_resolution: full  # masks submitted at keyframe (full) or reconstruction (recon) resolution
   time_tol_s: 0.1        # sharp-mode keyframe -> benchmark frame round(t) if |t - round(t)| < this
   run_mem: 10G           # memory cap of each `roomdiff run` (scripts/run_guarded.sh -g -m)
   run_timeout_s: 1500    # timeout of each run in seconds (scripts/run_guarded.sh -t)

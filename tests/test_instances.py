@@ -11,17 +11,22 @@ from roomdiff.instances import (
     build_instance,
     connected_to_blob,
     decode_rle,
+    downsample_mask,
     encode_rle,
     enlarge_box,
+    frame_masks,
     grow_box,
     keep_near_blob,
     lift_view_points,
+    load_masks,
+    mask_iou,
     mean_pairwise_cosine,
     merge_close_fragments,
     merge_instances,
     pick_mask,
     pooled_feature,
     prompt_points,
+    save_masks,
     select_blobs,
     touched_sides,
 )
@@ -398,6 +403,69 @@ def test_rle_roundtrip_and_mask_choice():
     picked = pick_mask(np.stack([outside, mask]), np.array([0.99, 0.8]), (15, 5, 95, 55))
     assert picked is not None and picked[1] == pytest.approx(0.8)  # the best is outside
     assert pick_mask(np.stack([outside]), np.array([0.99]), (15, 5, 95, 55)) is None
+
+
+class PromptLog(FakeSegmenter):
+    """FakeSegmenter that records the key, image size, box and points of every prompt."""
+
+    def __init__(self):
+        super().__init__()
+        self.prompts = []
+
+    def segment(self, key, image, box, points):
+        self.prompts.append((key, image.shape[:2], np.asarray(box, float),
+                             np.asarray(points, float)))
+        return super().segment(key, image, box, points)
+
+
+def test_frame_masks_prompt_the_full_resolution_keyframes(tmp_path):
+    """Per-keyframe masks: SAM sees the keyframe JPEG (here twice the recon size) with the
+    box and points scaled, under its own embedding key; `rle_full` is its mask, `rle` that
+    mask downsampled to the recon size. A missing JPEG or one of another aspect ratio falls
+    back to the recon image. save_masks / load_masks round-trip both resolutions."""
+    from PIL import Image
+
+    recon, _ = make_recon()
+    big = recon["images"][0].repeat(2, 0).repeat(2, 1)
+    Image.fromarray(big).save(tmp_path / recon["files"][0])  # 2x the recon size: used
+    Image.fromarray(big[:, :W]).save(tmp_path / recon["files"][1])  # 2H x W: not used
+    points = box_surface_voxels().astype(np.float32)  # frame 2 has no JPEG
+    inst = Instance(0, "disappeared", [], points, points, np.zeros((len(points), 3), np.uint8),
+                    [], id=1)
+    args = (PARAMS["frame_visible_frac"], PARAMS["frame_depth_tol"],
+            PARAMS["frame_prompt_points"], PARAMS["box_enlarge"])
+    seg, ref, cache = PromptLog(), PromptLog(), {}
+    out = frame_masks(inst, [0, 1, 2], recon, seg, *args, tmp_path, cache)
+    old = frame_masks(inst, [0, 1, 2], recon, ref, *args)  # no keyframes: recon images only
+    assert [m[0] for m in out] == [m[0] for m in old] == [0, 1, 2]
+    assert [p[0] for p in seg.prompts] == ["full:0", "1", "2"]  # never the recon embedding
+    assert [p[0] for p in ref.prompts] == ["0", "1", "2"]
+    assert [p[1] for p in seg.prompts] == [(2 * H, 2 * W), (H, W), (H, W)]
+    (_, _, box, pts), (_, _, ref_box, ref_pts) = seg.prompts[0], ref.prompts[0]
+    assert np.allclose(box, 2 * ref_box) and np.allclose(pts, 2 * ref_pts) and len(pts) > 1
+    assert sorted(cache) == [0, 1, 2] and cache[0].shape == (2 * H, 2 * W, 3)
+    assert cache[1] is None and cache[2] is None  # read once, kept for the next instance
+
+    _, rle, score, full = out[0]
+    assert rle["size"] == [H, W] and full["size"] == [2 * H, 2 * W]
+    assert score == pytest.approx(0.9)
+    assert np.array_equal(decode_rle(rle), downsample_mask(decode_rle(full), H, W))
+    assert mask_iou(decode_rle(rle), decode_rle(old[0][1])) > 0.9  # the same mask
+    assert out[1:] == old[1:] and all(m[3] is None for m in old)
+
+    path = tmp_path / "before_masks.npz"
+    inst.frame_masks = out
+    save_masks(path, [inst], recon["files"], H, W)
+    recon_masks, full_masks = load_masks(path), load_masks(path, full=True)
+    assert sorted(recon_masks) == sorted(full_masks) == [str(f) for f in recon["files"]]
+    for frame, rle, score, full in out:
+        file = str(recon["files"][frame])
+        assert recon_masks[file] == [(1, pytest.approx(score), rle)]
+        assert full_masks[file] == [(1, pytest.approx(score), full or rle)]
+    with np.load(path) as f:  # a file written before rle_full existed: recon RLEs
+        old_file = {k: f[k] for k in ("keyframe", "instance_id", "score", "rle", "size")}
+    np.savez_compressed(tmp_path / "old_masks.npz", **old_file)
+    assert load_masks(tmp_path / "old_masks.npz", full=True) == recon_masks
 
 
 def test_box_and_prompt_helpers():

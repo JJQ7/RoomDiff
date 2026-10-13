@@ -208,7 +208,8 @@ already covered (listed in meta.json), the others become instances with ids N+1.
 point count), `source` "appearance", kind disappeared (before) / appeared (after), the
 cluster's views and masks, no blobs.
 
-`instances/<rec>.json`: `{recording, image_size [W, H], instances: [...]}`; per instance:
+`instances/<rec>.json`: `{recording, image_size [W, H], image_size_full [W, H] (keyframe
+size of the `rle_full` masks below, null if there are none), instances: [...]}`; per instance:
 `id`, `recording`, `kind` (disappeared / appeared / unverified), `label` ("object" until
 M5), `blob_ids`, `n_points`, `centroid`, `aabb [[min], [max]]`, `extents`, `obb`
 (oriented box with a vertical axis: `center` [x, y, z], `extents` [w, h, d] with w / d
@@ -238,9 +239,15 @@ float32 (1 cm voxels), `colors` (M, 3) uint8, `instance` (M,) int32 id.
 `instances/<rec>_masks.npz`: one row per (keyframe, instance) where the instance is
 visible (>= `frame_visible_frac` of its points depth-consistent; SAM prompted with the
 box and up to `frame_prompt_points` of those projected instance points, so the masks
-follow the grown instance): `keyframe` (file name),
-`instance_id`, `score` (SAM), `rle` (COCO RLE counts string), `size` [H, W] (recon
-resolution); read with `roomdiff.instances.load_masks` / `decode_rle`.
+follow the grown instance; on the full-resolution keyframe JPEG `keyframes/<rec>/<file>`,
+box and points scaled from recon pixels, or on the recon image if the JPEG is missing or
+of another aspect ratio): `keyframe` (file name), `instance_id`, `score` (SAM, of that
+run), `rle` (COCO RLE counts string) and `size` [H, W] at the recon resolution (the
+keyframe mask area-downsampled: set where it covers more than half of a pixel),
+`rle_full` (counts at the keyframe resolution, "" where the recon image was prompted) and
+`size_full` ([H, W] per row, [0, 0] without `rle_full`); read with
+`roomdiff.instances.load_masks` (`full=True`: the keyframe-resolution RLE where there is
+one) / `decode_rle`.
 `instances/meta.json`: parameters, selected / dropped blobs with the reason (small or
 too large unverified, hidden surface, no clear view, no mask, too few points), fragment
 and instance counts, `sources` (per recording: geometry / appearance instances),
@@ -525,7 +532,8 @@ Implemented (`roomdiff/eval_scenediff.py`, `roomdiff eval`, parameters in
 Layout: `runs/<pair>/` (one `roomdiff run` per pair with `ingest.mode=fixed`, GPU-locked
 through `scripts/run_guarded.sh -g`; pairs that already have `changes.json` are skipped),
 `logs/<pair>.log`, `pred/<pair>/object_masks.pkl` + `prediction.json` (objects per type,
-masks per video, mapped benchmark frames, mask / GT / target sizes, aspect check),
+masks per video, mapped benchmark frames, mask resolution, mask / GT / target sizes,
+aspect check),
 `pred/result_frame_dup_1_obj_dup_1.txt` (the evaluator appends the suffix),
 `pred/evaluator_log.txt`, `pred/summary.json` (`metrics`: `per_view_ap` = obj/im AP,
 `per_scene_ap` = obj/sc AP, `per_scene_ap_type` = obj/sc AP with type, `global_iou` =
@@ -562,9 +570,12 @@ the type from their presence), others have one. Unverified changes are included 
 the verified changes and can only add recall to AP, but their pixels count in the global
 IoU). `cost` = change confidence x SAM mask score (the evaluator ranks per-view
 detections by it and objects by its mean). Changes without a mask at any mapped frame are
-left out. Masks are COCO RLE at the reconstruction resolution (upright, same aspect as
-the GT, e.g. 672 x 378 for 1920 x 1080 portrait GT; checked in `prediction.json:
-aspect_ok`); the evaluator resizes them with nearest neighbour. A failed run gets an
+left out. Masks are COCO RLE (upright, same aspect as the GT; checked in
+`prediction.json: aspect_ok`) at the keyframe resolution with `eval.mask_resolution: full`
+(default; `rle_full` of `<rec>_masks.npz`, the recon-resolution mask where a row has none;
+e.g. 1024 x 576 for 1920 x 1080 portrait GT) or at the reconstruction resolution with
+`recon` (e.g. 672 x 378); the evaluator resizes them with nearest neighbour. A failed run
+gets an
 empty prediction (`{"H", "W"}` only) so its GT objects count as misses: the evaluator
 silently drops scenes without `object_masks.pkl`.
 

@@ -11,6 +11,7 @@ import os
 import pickle
 import shutil
 import subprocess
+from collections import Counter
 
 import numpy as np
 import pytest
@@ -119,6 +120,10 @@ def test_side_masks_unite_the_parts_of_a_merged_object():
     assert out[0][0] == 0.9 and np.array_equal(decode_rle(out[0][1]), seat | base)
     assert out[3] == per_instance[1][3] and out[5] == per_instance[2][5]
     assert side_masks(per_instance, [1]) == per_instance[1] and side_masks(per_instance, [9]) == {}
+    big_base = base.repeat(2, 0).repeat(2, 1)  # one part at twice the size: union at that size
+    mixed = side_masks({1: {0: (0.9, encode_rle(seat))}, 2: {0: (0.7, encode_rle(big_base))}},
+                       [1, 2])
+    assert np.array_equal(decode_rle(mixed[0][1]), seat.repeat(2, 0).repeat(2, 1) | big_base)
 
 
 def test_load_segments_refuses_globals(tmp_path):
@@ -163,6 +168,53 @@ def test_write_prediction_matches_the_evaluator_format(synthetic):
     verified = write_prediction(eval_root / "runs" / PAIR, bench / "data" / PAIR,
                                 eval_root / "pred_verified" / PAIR, include_unverified=False)
     assert "unverified" not in verified["by_type"] and verified["objects"] == 3
+
+
+def test_write_prediction_mask_resolution(synthetic, tmp_path):
+    """`mask_resolution` "full" submits the keyframe-resolution masks (`rle_full`, the recon
+    one where a row has none), "recon" the reconstruction-resolution ones."""
+    eval_root, bench, _ = synthetic
+    run, out = eval_root / "runs" / PAIR, tmp_path / "run"
+    (out / "instances").mkdir(parents=True)
+    (out / "keyframes").mkdir()
+    shutil.copy(run / "changes.json", out / "changes.json")
+    shutil.copy(run / "keyframes" / "index.json", out / "keyframes" / "index.json")
+    for rec in ("before", "after"):
+        with np.load(run / "instances" / f"{rec}_masks.npz") as f:
+            data = {k: f[k] for k in f.files}
+        assert not any(data["rle_full"])  # the synthetic run has no keyframe JPEGs
+        size = data["size"].tolist()
+        full = [encode_rle(decode_rle({"size": size, "counts": str(c)}).repeat(2, 0).repeat(2, 1))
+                for c in data["rle"]]
+        full[0] = None  # as for a keyframe without a JPEG: its recon mask is submitted
+        data["rle_full"] = np.array([r["counts"] if r else "" for r in full], dtype=np.str_)
+        data["size_full"] = np.array([r["size"] if r else [0, 0] for r in full], np.int64)
+        np.savez_compressed(out / "instances" / f"{rec}_masks.npz", **data)
+
+    stats, entries = {}, {}
+    for resolution in ("recon", "full"):
+        stats[resolution] = write_prediction(out, bench / "data" / PAIR, tmp_path / resolution,
+                                             mask_resolution=resolution)
+        with open(tmp_path / resolution / "object_masks.pkl", "rb") as f:
+            pred = pickle.load(f)
+        assert (pred["H"], pred["W"]) == (768, 1024)
+        entries[resolution] = {
+            (obj, video, k): e for obj, o in pred.items() if obj not in ("H", "W")
+            for video in ("video_1", "video_2") for k, e in o.get(video, {}).items()}
+        assert stats[resolution]["mask_resolution"] == resolution
+        assert stats[resolution]["aspect_ok"] is True
+    assert entries["recon"] and entries["full"].keys() == entries["recon"].keys()
+    assert {tuple(e["mask"]["size"]) for e in entries["recon"].values()} == {(240, 320)}
+    sizes = Counter(tuple(e["mask"]["size"]) for e in entries["full"].values())
+    assert set(sizes) <= {(480, 640), (240, 320)} and sizes[(240, 320)] <= 2  # the rows 0
+    assert stats["recon"]["mask_size"] == (240, 320) and stats["full"]["mask_size"] == (480, 640)
+    for key, entry in entries["full"].items():
+        small = mask_utils.decode(entries["recon"][key]["mask"])
+        big = mask_utils.decode(entry["mask"])
+        assert np.array_equal(big[::2, ::2] if big.shape != small.shape else big, small)
+        assert entry["cost"] == entries["recon"][key]["cost"]
+    with pytest.raises(ValueError, match="mask_resolution"):
+        write_prediction(out, bench / "data" / PAIR, tmp_path / "bad", mask_resolution="half")
 
 
 def test_write_prediction_rejects_swapped_videos(synthetic, tmp_path):

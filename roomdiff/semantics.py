@@ -98,6 +98,22 @@ ROOM_PARTS = ("wall, floor, ceiling, door, door frame, window, radiator, mirror 
               "reflection, shadow or lighting")
 VERDICT_JSON = ('Answer with JSON only, reason first: {"reason": "one short sentence", '
                 '"verdict": "confirmed" | "rejected" | "unclear"}')
+REPLACED_JSON = ('Answer with JSON only, reason first: {"reason": "one short sentence", "change": '
+                 '"same" | "different" | "removed" | "added" | "unclear"}')
+# "describe first" variants (`semantics.describe_first`): the judge must say what each box
+# contains before it compares them, which stops it from answering "same" / "rejected" for an
+# object that is plainly in one image only
+DESCRIBE_FIRST = ('{"image1": "what lies inside the box in image 1, a few words", "image2": '
+                  '"the same for image 2", ')
+DESCRIBE_JSON = VERDICT_JSON.replace("reason first: {", "in this order: " + DESCRIBE_FIRST)
+REPLACED_DESCRIBE_JSON = REPLACED_JSON.replace("reason first: {",
+                                               "in this order: " + DESCRIBE_FIRST)
+
+
+def describing(prompt: str) -> str:
+    """`prompt` with its answer format asking for a description of each image first."""
+    return (prompt.replace(VERDICT_JSON, DESCRIBE_JSON)
+            .replace(REPLACED_JSON, REPLACED_DESCRIBE_JSON))
 
 # ------------------------------------------------------------------ prompts
 
@@ -229,8 +245,7 @@ JUDGE_REPLACED = (
     "replaced by a different object; \"removed\" if image 1 shows an object there and image "
     "2 only the empty place; \"added\" if image 1 shows only the empty place and image 2 an "
     'object there; "unclear" if you cannot tell.\n'
-    'Answer with JSON only, reason first: {"reason": "one short sentence", "change": '
-    '"same" | "different" | "removed" | "added" | "unclear"}')
+    f"{REPLACED_JSON}")
 # answer of JUDGE_REPLACED -> (verdict of the removed change, verdict of the added change)
 REPLACE_VERDICTS = {
     "same": ("rejected", "rejected"),
@@ -458,10 +473,13 @@ def object_verdict(data: Mapping[str, Any] | None) -> tuple[str, str]:
     return verdict, reason
 
 
-def judge_change(vlm: BaseVLM, crops: Crops, change: dict[str, Any]) -> tuple[str, str]:
+def judge_change(vlm: BaseVLM, crops: Crops, change: dict[str, Any],
+                 describe_first: bool = False) -> tuple[str, str]:
     """Type-specific paired-crop question; returns (verdict, reason). For moved changes
-    also sets `motion_kind`. A missing view of the place falls back to the object test."""
+    also sets `motion_kind`. A missing view of the place falls back to the object test.
+    `describe_first`: the removed / added prompts ask what each box contains first."""
     kind, label, cid = change["type"], change["label"], change["id"]
+    style = describing if describe_first else (lambda prompt: prompt)
     owner = crops.get(change, owner_side(change))
     if kind == "moved":
         before, after = crops.get(change, "before"), crops.get(change, "after")
@@ -481,10 +499,10 @@ def judge_change(vlm: BaseVLM, crops: Crops, change: dict[str, Any]) -> tuple[st
     place = None
     if kind == "removed":
         place = crops.get(change, "after")
-        pair, prompt = [owner, place], fill(JUDGE_REMOVED, label)
+        pair, prompt = [owner, place], fill(style(JUDGE_REMOVED), label)
     elif kind == "added":
         place = crops.get(change, "before")
-        pair, prompt = [place, owner], fill(JUDGE_ADDED, label)
+        pair, prompt = [place, owner], fill(style(JUDGE_ADDED), label)
     if kind == "unverified" or place is None:
         verdict, reason = object_verdict(ask_images(vlm, [owner], JUDGE_UNVERIFIED,
                                                     f"judge_object:{cid}"))
@@ -521,12 +539,14 @@ def from_appearance(change: Mapping[str, Any]) -> bool:
 
 
 def in_place_answer(vlm: BaseVLM, shown: Sequence[tuple[Image.Image, str] | None],
-                    labels: str, tag: str) -> tuple[str, str] | None:
+                    labels: str, tag: str, describe_first: bool = False
+                    ) -> tuple[str, str] | None:
     """(answer, reason) of `JUDGE_REPLACED` on a before / after crop pair; anything
     unparsable is "unclear"; None if a crop is missing."""
     if None in shown:
         return None
-    data = ask_images(vlm, shown, JUDGE_REPLACED.replace("{labels}", labels), tag) or {}
+    prompt = describing(JUDGE_REPLACED) if describe_first else JUDGE_REPLACED
+    data = ask_images(vlm, shown, prompt.replace("{labels}", labels), tag) or {}
     answer = str(data.get("change", "")).strip().lower()
     reason = str(data.get("reason") or "").strip()
     if answer not in REPLACE_VERDICTS:
@@ -535,17 +555,18 @@ def in_place_answer(vlm: BaseVLM, shown: Sequence[tuple[Image.Image, str] | None
 
 
 def judge_replaced(vlm: BaseVLM, crops: Crops, removed: Mapping[str, Any],
-                   added: Mapping[str, Any]) -> tuple[str, str] | None:
+                   added: Mapping[str, Any], describe_first: bool = False
+                   ) -> tuple[str, str] | None:
     """In-place question on the owner crops of a candidate replacement pair (removed
     object in image 1, added object in image 2); None if a crop is missing."""
     labels = (f"the region is probably a {removed['label']} in image 1 and a "
               f"{added['label']} in image 2; a coloured outline traces it")
     return in_place_answer(vlm, [crops.get(removed, "before"), crops.get(added, "after")],
-                           labels, f"judge_replaced:{removed['id']}+{added['id']}")
+                           labels, f"judge_replaced:{removed['id']}+{added['id']}", describe_first)
 
 
-def judge_in_place(vlm: BaseVLM, crops: Crops, change: Mapping[str, Any]
-                   ) -> tuple[str, str] | None:
+def judge_in_place(vlm: BaseVLM, crops: Crops, change: Mapping[str, Any],
+                   describe_first: bool = False) -> tuple[str, str] | None:
     """In-place question for a single removed / added appearance change: its owner crop
     and the other recording's view of the place, in time order; None if one is missing."""
     owner = "before" if change["type"] == "removed" else "after"
@@ -553,7 +574,7 @@ def judge_in_place(vlm: BaseVLM, crops: Crops, change: Mapping[str, Any]
     labels = (f"the region in image {image} is probably a {change['label']}, traced by a "
               f"coloured outline; image {3 - image} shows the same place")
     shown = [crops.get(change, "before"), crops.get(change, "after")]
-    return in_place_answer(vlm, shown, labels, f"judge_in_place:{change['id']}")
+    return in_place_answer(vlm, shown, labels, f"judge_in_place:{change['id']}", describe_first)
 
 
 def surface_rejection(change: Mapping[str, Any]) -> str | None:
@@ -1049,6 +1070,7 @@ def run_semantics(out_dir: str | Path, cfg: Mapping[str, Any],
     """Name, judge, re-pair and describe the changes of `<out>/changes.json` (module
     docstring). Loads Qwen3-VL unless `vlm` is given. Returns the new changes document."""
     params = dict(cfg["semantics"])
+    describe_first = bool(params.get("describe_first", True))
     paths = OutputPaths(out_dir)
     folder = paths.root / "semantics"
     times: dict[str, float] = {}
@@ -1109,7 +1131,7 @@ def run_semantics(out_dir: str | Path, cfg: Mapping[str, Any],
         partner = linked_partner(c, by_id)
         if partner is not None and c["id"] not in replace_verdicts:
             removed, added = (c, partner) if c["type"] == "removed" else (partner, c)
-            judged = judge_replaced(vlm, crops, removed, added)
+            judged = judge_replaced(vlm, crops, removed, added, describe_first)
             if judged is not None:  # else each side is judged on its own
                 answer, why = judged
                 replacements.append({"ids": [removed["id"], added["id"]],
@@ -1119,7 +1141,7 @@ def run_semantics(out_dir: str | Path, cfg: Mapping[str, Any],
                     replace_verdicts[side["id"]] = (answer, verdict, f"in place: {answer}; {why}")
         if c["id"] not in replace_verdicts and partner is None and \
                 c["type"] in ("removed", "added") and from_appearance(c):
-            judged = judge_in_place(vlm, crops, c)
+            judged = judge_in_place(vlm, crops, c, describe_first)
             if judged is not None:  # else the usual removed / added question
                 answer, why = judged
                 verdict = REPLACE_VERDICTS[answer][0 if c["type"] == "removed" else 1]
@@ -1133,7 +1155,7 @@ def run_semantics(out_dir: str | Path, cfg: Mapping[str, Any],
             keep = apply_verdict(c, verdict, reason, params["unclear_factor"])
             (kept if keep else rejected).append(c)
             continue
-        verdict, reason = judge_change(vlm, crops, c)
+        verdict, reason = judge_change(vlm, crops, c, describe_first)
         surface = surface_rejection(c)
         if surface is not None and verdict != "rejected":
             verdict, reason = "rejected", f"{surface}: {reason}"
@@ -1143,7 +1165,8 @@ def run_semantics(out_dir: str | Path, cfg: Mapping[str, Any],
                 next_id += 1
             for half in halves:  # named and judged like any removed / added change
                 name_change(vlm, crops, half)
-                keep = apply_verdict(half, *judge_change(vlm, crops, half), params["split_factor"])
+                keep = apply_verdict(half, *judge_change(vlm, crops, half, describe_first),
+                                     params["split_factor"])
                 (kept if keep else rejected).append(half)
             splits.append({"id": c["id"], "label": c["label"], "into": [h["id"] for h in halves],
                            "labels": [h["label"] for h in halves], "reason": reason,
@@ -1161,7 +1184,7 @@ def run_semantics(out_dir: str | Path, cfg: Mapping[str, Any],
         merges += more
         for c in kept:
             if c["type"] == "moved" and c["motion_kind"] is None:  # new: verdict from repair
-                verdict, reason = judge_change(vlm, crops, c)  # asks for the motion kind
+                verdict, reason = judge_change(vlm, crops, c, describe_first)  # + motion kind
                 apply_verdict(c, verdict, reason, params["unclear_factor"])
     kept, rejected = sort_changes(kept), sort_changes(rejected)
     times["judge"] = time.perf_counter() - t0

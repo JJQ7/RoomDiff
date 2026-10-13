@@ -648,3 +648,31 @@ def test_cli_describe_and_viewer(tmp_path, monkeypatch):
     viewer_doc = json.loads((tmp_path / "viewer" / "changes.json").read_text())
     assert viewer_doc["summary"] == doc["summary"]
     assert (tmp_path / "viewer" / "index.html").is_file()
+
+
+def test_describe_first_prompts(split_scene):
+    """With `semantics.describe_first` the removed / added / in-place judges ask what each
+    box contains before the verdict; the answers keep parsing (extra fields are ignored)."""
+    from roomdiff.semantics import (
+        DESCRIBE_JSON,
+        JUDGE_ADDED,
+        JUDGE_REMOVED,
+        JUDGE_REPLACED,
+        REPLACED_JSON,
+        describing,
+    )
+    assert JUDGE_REPLACED.endswith(REPLACED_JSON)
+    for prompt in (JUDGE_REMOVED, JUDGE_ADDED, JUDGE_REPLACED):
+        styled = describing(prompt)
+        assert styled != prompt and '"image1"' in styled and '"image2"' in styled
+        assert styled.count('"reason"') == 1
+    assert DESCRIBE_JSON.endswith('"verdict": "confirmed" | "rejected" | "unclear"}')
+    vlm = FakeVLM(responder)
+    doc = run_semantics(split_scene, load_config(overrides=["semantics.describe_first=true"]), vlm)
+    assert [c["type"] for c in doc["changes"]] == ["moved", "removed", "added"]
+    paired = [p for p in vlm.prompts if "absent from that place" in p or "added between" in p]
+    assert paired and all('"image1"' in p for p in paired)
+    vlm = FakeVLM(responder)
+    run_semantics(split_scene, load_config(overrides=["semantics.describe_first=false"]), vlm)
+    assert not any('"image1"' in p for p in vlm.prompts)
+
