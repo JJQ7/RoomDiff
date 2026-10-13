@@ -8,6 +8,25 @@ explicit geometric, appearance and visual-language evidence, and changes in spac
 other video never observed are reported as **unverified** instead of being guessed.
 See [docs/PLAN.md](docs/PLAN.md) for the design.
 
+## How it works
+
+```mermaid
+flowchart LR
+    A[before.mov<br/>after.mov] --> B[ingest<br/>sharp keyframes, ~48 per video]
+    B --> C[recon<br/>one joint Pi3X pass: poses, depth,<br/>points of both videos in one metric frame]
+    C --> D[visibility<br/>occupied / free / unknown voxels per video,<br/>ray carving: disappeared, appeared, unverified blobs]
+    C --> E[appearance<br/>DINOv3 patch reprojection + see-through depth cue<br/>between co-visible keyframes: small / flat changes]
+    D --> F[instances<br/>SAM 2.1 masks lifted to 3D,<br/>DINOv3 features per object]
+    E --> F
+    F --> G[changes<br/>Hungarian matching: moved + ICP transform,<br/>removed, added, unverified, confidence]
+    G --> H[describe<br/>Qwen3-VL names, judges paired crops,<br/>writes descriptions and report.md]
+    H --> I[viz / viewer<br/>Rerun .rrd, static three.js viewer]
+```
+
+Geometry proposes, appearance fills in what geometry cannot see, the vision-language
+model judges and names. A change is only `removed` or `added` if the other video looked
+at that place and saw it empty; space the other video never observed is `unverified`.
+
 ## Install
 
 Tested on Ubuntu 24.04 under WSL2 with Python 3.12 and an RTX 5090 (the pipeline needs a
