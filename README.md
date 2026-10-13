@@ -8,6 +8,12 @@ explicit geometric, appearance and visual-language evidence, and changes in spac
 other video never observed are reported as **unverified** instead of being guessed.
 See [docs/PLAN.md](docs/PLAN.md) for the design.
 
+![living_room_1: the after point cloud with the reported changes](docs/img/scenediff_living_room_1_overview.png)
+
+*SceneDiff pair living_room_1, after cloud: red / green / blue boxes = removed / added / moved (dashed = the old place), grey dashed = unverified; the arrows join the old and new places of the moved curtain and ladder shelf.*
+
+![living_room_1: cross-fade between the before and after point clouds](docs/img/scenediff_living_room_1_beforeafter.gif)
+
 ## How it works
 
 ```mermaid
@@ -99,8 +105,12 @@ sees it best; "place" crops show the same spot in the other video.
 | scene | result | ground truth |
 |---|---|---|
 | [office_1](examples/scenediff_office_1/report.md) | 1 chair removed, 1 chair moved 0.6 m and turned 54 deg | exactly that |
-| [bedroom_1](examples/scenediff_bedroom_1/report.md) | jacket removed, bedding moved (deformed), tissue box moved; bedside table unverified | pyjamas also moved (missed: judged "same") |
+| [bedroom_1](examples/scenediff_bedroom_1/report.md) | jacket removed, bedding moved (deformed), tissue box moved (labelled "cardboard box"); bedside table unverified | pyjamas also moved (missed: judged "same") |
 | [living_room_1](examples/scenediff_living_room_1/report.md) | bag and wallet removed, hairbrush added, ladder shelf and one curtain moved, second curtain removed | second curtain was moved, not removed |
+
+| [office_1](examples/scenediff_office_1/report.md) | [bedroom_1](examples/scenediff_bedroom_1/report.md) | [living_room_1](examples/scenediff_living_room_1/report.md) |
+|---|---|---|
+| [![office_1 overview](docs/img/scenediff_office_1_overview.png)](examples/scenediff_office_1/report.md) | [![bedroom_1 overview](docs/img/scenediff_bedroom_1_overview.png)](examples/scenediff_bedroom_1/report.md) | [![living_room_1 overview](docs/img/scenediff_living_room_1_overview.png)](examples/scenediff_living_room_1/report.md) |
 
 | office_1: moved chair, before / after | living_room_1: removed wallet, before / after |
 |---|---|
