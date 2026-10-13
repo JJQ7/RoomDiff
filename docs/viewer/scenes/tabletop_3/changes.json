@@ -1,0 +1,682 @@
+{
+  "scene": {
+    "before": "before.mov",
+    "after": "after.mov",
+    "units": "metres (approx.)"
+  },
+  "changes": [
+    {
+      "id": 1,
+      "type": "moved",
+      "label": "blue laundry detergent",
+      "confidence": 0.952,
+      "before": {
+        "instance_id": 1,
+        "centroid": [
+          -0.1688999980688095,
+          0.9750000238418579,
+          -0.5426999926567078
+        ],
+        "aabb": [
+          [
+            -0.23559999465942383,
+            0.7763000130653381,
+            -0.6704999804496765
+          ],
+          [
+            -0.10849999636411667,
+            1.1937999725341797,
+            -0.392300009727478
+          ]
+        ],
+        "extents": [
+          0.12710000574588776,
+          0.41749998927116394,
+          0.2782000005245209
+        ],
+        "obb": {
+          "center": [
+            -0.1717,
+            0.9851,
+            -0.5317
+          ],
+          "extents": [
+            0.1266,
+            0.4175,
+            0.2785
+          ],
+          "yaw_deg": -1.29
+        },
+        "n_points": 3888,
+        "blob_ids": [
+          4
+        ],
+        "source": "geometry"
+      },
+      "after": {
+        "instance_id": 1,
+        "centroid": [
+          0.14499999582767487,
+          0.9516000151634216,
+          -0.08959999680519104
+        ],
+        "aabb": [
+          [
+            0.050999999046325684,
+            0.7756999731063843,
+            -0.23880000412464142
+          ],
+          [
+            0.21469999849796295,
+            1.184499979019165,
+            0.04019999876618385
+          ]
+        ],
+        "extents": [
+          0.16369999945163727,
+          0.40880000591278076,
+          0.27900001406669617
+        ],
+        "obb": {
+          "center": [
+            0.1419,
+            0.9801,
+            -0.1023
+          ],
+          "extents": [
+            0.1316,
+            0.4088,
+            0.2997
+          ],
+          "yaw_deg": -25.21
+        },
+        "n_points": 3987,
+        "blob_ids": [
+          5
+        ],
+        "source": "geometry"
+      },
+      "transform": {
+        "translation_m": 0.527,
+        "rotation_deg": 24.16,
+        "rotation_reliable": true,
+        "R": [
+          [
+            0.912389,
+            0.019498,
+            -0.40886
+          ],
+          [
+            -0.019233,
+            0.999804,
+            0.004761
+          ],
+          [
+            0.408873,
+            0.003519,
+            0.912585
+          ]
+        ],
+        "t": [
+          0.05665,
+          -0.01853,
+          0.44222
+        ],
+        "icp_fitness": 0.9977,
+        "icp_rmse": 0.0089
+      },
+      "evidence": {
+        "free_rays": 61562,
+        "observing_views": 30,
+        "observing_views_before_place": 23,
+        "observing_views_after_place": 38,
+        "appearance_similarity": 0.9596,
+        "cls_similarity": 0.7721,
+        "mask_score": 0.9635,
+        "icp_fitness": 0.9977,
+        "vlm_verdict": "confirmed",
+        "vlm_reason": "The blue laundry detergent bottle is identical in color, label, shape, and material in both images, indicating it is the same object.",
+        "vlm_motion_reason": "The blue detergent bottle appears unchanged in shape and orientation between the two images, indicating it was moved as a whole."
+      },
+      "description": "The blue laundry detergent (blue plastic with white cap; about 0.4 x 0.3 x 0.1 m) was shifted 0.5 m, from near the front of the room to the middle (0.8 m above the floor both times) and rotated about 24 degrees; the later video shows its old spot empty from 23 viewpoints and the earlier video shows the new spot empty from 38 viewpoints.",
+      "crops": {
+        "before": "crops/1_before.jpg",
+        "before_place": "crops/1_before_place.jpg",
+        "after": "crops/1_after.jpg",
+        "after_place": "crops/1_after_place.jpg"
+      },
+      "attributes": "blue plastic with white cap",
+      "object_description": "a blue plastic bottle of laundry detergent with a white cap, sitting on a wooden table.",
+      "motion_kind": "rigid",
+      "description_template": "The blue laundry detergent (blue plastic with white cap; about 0.4 x 0.3 x 0.1 m) moved 0.5 m, from the near part of the room to the middle of the room (0.8 m above the floor both times) and turned by about 24 degrees; the after recording saw the old place empty from 23 viewpoints and the before recording saw the new place empty from 38 viewpoints."
+    },
+    {
+      "id": 2,
+      "type": "removed",
+      "label": "canned food",
+      "confidence": 0.95,
+      "before": {
+        "instance_id": 2,
+        "centroid": [
+          -0.5320000052452087,
+          0.9340000152587891,
+          -0.3253999948501587
+        ],
+        "aabb": [
+          [
+            -0.6055999994277954,
+            0.7782999873161316,
+            -0.4422999918460846
+          ],
+          [
+            -0.40849998593330383,
+            1.0221999883651733,
+            -0.2467000037431717
+          ]
+        ],
+        "extents": [
+          0.19709999859333038,
+          0.24400000274181366,
+          0.1956000030040741
+        ],
+        "obb": {
+          "center": [
+            -0.5061,
+            0.9002,
+            -0.3422
+          ],
+          "extents": [
+            0.1908,
+            0.244,
+            0.1998
+          ],
+          "yaw_deg": -24.43
+        },
+        "n_points": 1973,
+        "blob_ids": [
+          6
+        ],
+        "source": "geometry"
+      },
+      "after": null,
+      "transform": null,
+      "evidence": {
+        "free_rays": 14265,
+        "free_frames_mean": 22.43,
+        "observing_views": 23,
+        "occ_points": 146881,
+        "mask_score": 0.9655,
+        "view_consistency": 0.8663,
+        "vlm_verdict": "confirmed",
+        "vlm_reason": "The object highlighted in image 1 is a can, and image 2 shows the same spot on the floor with no can present, indicating the object is absent."
+      },
+      "description": "The canned food (yellow and black metal; about 24 x 20 x 19 cm), located 0.8 m above the floor on the right side of the room, was no longer there: the later video shows that spot empty from 23 viewpoints.",
+      "crops": {
+        "before": "crops/2_before.jpg",
+        "after": "crops/2_after.jpg"
+      },
+      "attributes": "yellow and black metal",
+      "object_description": "a cylindrical metal can with a black lid, likely containing food, sitting on a wooden surface.",
+      "motion_kind": null,
+      "description_template": "The canned food (yellow and black metal; about 24 x 20 x 19 cm), which was 0.8 m above the floor on the right side of the room, was removed: the after recording looked at that spot from 23 viewpoints and saw it empty."
+    },
+    {
+      "id": 7,
+      "type": "unverified",
+      "label": "blue suitcase",
+      "confidence": 0.483,
+      "before": null,
+      "after": {
+        "instance_id": 2,
+        "centroid": [
+          -1.085800051689148,
+          0.7860000133514404,
+          0.5333999991416931
+        ],
+        "aabb": [
+          [
+            -1.146399974822998,
+            0.31139999628067017,
+            0.10029999911785126
+          ],
+          [
+            -0.8666999936103821,
+            1.0303000211715698,
+            0.7567999958992004
+          ]
+        ],
+        "extents": [
+          0.27959999442100525,
+          0.7189000248908997,
+          0.6564000248908997
+        ],
+        "obb": {
+          "center": [
+            -1.0618,
+            0.6708,
+            0.454
+          ],
+          "extents": [
+            0.2615,
+            0.7189,
+            0.6708
+          ],
+          "yaw_deg": 11.79
+        },
+        "n_points": 3547,
+        "blob_ids": [
+          8
+        ],
+        "source": "geometry"
+      },
+      "transform": null,
+      "evidence": {
+        "free_rays": 0,
+        "free_frames_mean": 0.0,
+        "observing_views": 0,
+        "occ_points": 19192,
+        "mask_score": 0.9587,
+        "view_consistency": 0.9719,
+        "seen_in": "after",
+        "vlm_verdict": "confirmed",
+        "vlm_reason": "The contour covers a blue suitcase, a distinct movable object."
+      },
+      "description": "The blue suitcase (blue hard-shell; about 0.7 x 0.7 x 0.3 m), positioned 0.4 m above the floor in the far right of the room, appeared only in the later video; the earlier video never captured that spot, so this change cannot be confirmed.",
+      "crops": {
+        "after": "crops/7_after.jpg",
+        "before": "crops/7_before.jpg"
+      },
+      "attributes": "blue hard-shell",
+      "object_description": "a blue hard-shell suitcase with a handle and zipper.",
+      "motion_kind": null,
+      "description_template": "A blue suitcase (blue hard-shell; about 0.7 x 0.7 x 0.3 m), 0.4 m above the floor in the far right part of the room, was seen only in the after recording; the before recording never looked at that spot, so this possible change cannot be verified."
+    },
+    {
+      "id": 8,
+      "type": "unverified",
+      "label": "donna butter cookies",
+      "confidence": 0.466,
+      "before": null,
+      "after": {
+        "instance_id": 3,
+        "centroid": [
+          -0.15629999339580536,
+          0.23659999668598175,
+          1.4592000246047974
+        ],
+        "aabb": [
+          [
+            -0.25450000166893005,
+            0.13420000672340393,
+            1.343400001525879
+          ],
+          [
+            -0.02889999933540821,
+            0.36070001125335693,
+            1.552299976348877
+          ]
+        ],
+        "extents": [
+          0.22550000250339508,
+          0.226500004529953,
+          0.20890000462532043
+        ],
+        "obb": {
+          "center": [
+            -0.1337,
+            0.2475,
+            1.4443
+          ],
+          "extents": [
+            0.2104,
+            0.2265,
+            0.2018
+          ],
+          "yaw_deg": -15.26
+        },
+        "n_points": 1415,
+        "blob_ids": [
+          7
+        ],
+        "source": "geometry"
+      },
+      "transform": null,
+      "evidence": {
+        "free_rays": 0,
+        "free_frames_mean": 0.0,
+        "observing_views": 0,
+        "occ_points": 10961,
+        "mask_score": 0.9374,
+        "view_consistency": 0.9257,
+        "seen_in": "after",
+        "vlm_verdict": "confirmed",
+        "vlm_reason": "The contour covers a small box of Danisa Butter Cookies on a wooden floor."
+      },
+      "description": "The donna butter cookies (blue and white cardboard; about 23 x 21 x 20 cm), 0.2 m above the floor in the far part of the room, was seen only in the after recording; the before recording never looked at that spot, so this possible change cannot be verified.",
+      "crops": {
+        "after": "crops/8_after.jpg",
+        "before": null
+      },
+      "attributes": "blue and white cardboard",
+      "object_description": "a small rectangular box of Donna brand butter cookies sitting on a wooden surface.",
+      "motion_kind": null,
+      "description_template": "The donna butter cookies (blue and white cardboard; about 23 x 21 x 20 cm), 0.2 m above the floor in the far part of the room, was seen only in the after recording; the before recording never looked at that spot, so this possible change cannot be verified."
+    }
+  ],
+  "rejected": [
+    {
+      "id": 3,
+      "type": "removed",
+      "label": "wooden table surface",
+      "confidence": 0.719,
+      "before": {
+        "instance_id": 5,
+        "centroid": [
+          0.4074999988079071,
+          0.7731000185012817,
+          -0.045899998396635056
+        ],
+        "aabb": [
+          [
+            0.3230000138282776,
+            0.7674000263214111,
+            -0.18440000712871552
+          ],
+          [
+            0.49480000138282776,
+            0.7800999879837036,
+            0.11710000038146973
+          ]
+        ],
+        "extents": [
+          0.17180000245571136,
+          0.01269999984651804,
+          0.30160000920295715
+        ],
+        "obb": {
+          "center": [
+            0.416,
+            0.7737,
+            -0.039
+          ],
+          "extents": [
+            0.1187,
+            0.0127,
+            0.3166
+          ],
+          "yaw_deg": 23.24
+        },
+        "n_points": 149,
+        "blob_ids": [],
+        "source": "appearance"
+      },
+      "after": null,
+      "transform": null,
+      "evidence": {
+        "free_rays": 0,
+        "free_frames_mean": 0.0,
+        "observing_views": 32,
+        "occ_points": 149,
+        "mask_score": 0.494,
+        "view_consistency": 0.5708,
+        "appearance": {
+          "cluster": 3,
+          "frames_supporting": 12,
+          "mean_score": 0.6372,
+          "feat_term": 0.6372,
+          "geom_term": 0.0,
+          "partners_visible": 9
+        },
+        "vlm_verdict": "rejected",
+        "vlm_reason": "in place: same; The region inside the contour in both images shows only the wooden table surface, with no objects present in either image.",
+        "vlm_replace_answer": "same"
+      },
+      "description": "An object about 0.17 x 0.01 x 0.30 m was removed from (0.41, 0.77, -0.05); the after recording saw that space empty in 32 views.",
+      "crops": {
+        "before": "crops/3_before.jpg",
+        "after": "crops/3_after.jpg"
+      },
+      "attributes": "light brown wood",
+      "object_description": "a section of a wooden table with visible grain patterns.",
+      "motion_kind": null
+    },
+    {
+      "id": 4,
+      "type": "removed",
+      "label": "shadow",
+      "confidence": 0.605,
+      "before": {
+        "instance_id": 4,
+        "centroid": [
+          0.23839999735355377,
+          0.011300000362098217,
+          -1.0540000200271606
+        ],
+        "aabb": [
+          [
+            -0.06360000371932983,
+            0.0066999997943639755,
+            -1.1527999639511108
+          ],
+          [
+            0.38670000433921814,
+            0.025299999862909317,
+            -0.9555000066757202
+          ]
+        ],
+        "extents": [
+          0.450300008058548,
+          0.01850000023841858,
+          0.19740000367164612
+        ],
+        "obb": {
+          "center": [
+            0.1646,
+            0.016,
+            -1.0859
+          ],
+          "extents": [
+            0.4658,
+            0.0185,
+            0.1787
+          ],
+          "yaw_deg": -16.76
+        },
+        "n_points": 575,
+        "blob_ids": [],
+        "source": "appearance"
+      },
+      "after": null,
+      "transform": null,
+      "evidence": {
+        "free_rays": 0,
+        "free_frames_mean": 0.0,
+        "observing_views": 4,
+        "occ_points": 575,
+        "mask_score": 0.4386,
+        "view_consistency": 0.8029,
+        "appearance": {
+          "cluster": 2,
+          "frames_supporting": 3,
+          "mean_score": 0.6433,
+          "feat_term": 0.6433,
+          "geom_term": 0.0,
+          "partners_visible": 2
+        },
+        "vlm_verdict": "rejected",
+        "vlm_reason": "in place: same; The region in both images shows the same floor area, with the same shadow pattern and no object present in either image.",
+        "vlm_replace_answer": "same"
+      },
+      "description": "An object about 0.45 x 0.02 x 0.20 m was removed from (0.24, 0.01, -1.05); the after recording saw that space empty in 4 views.",
+      "crops": {
+        "before": "crops/4_before.jpg",
+        "after": "crops/4_after.jpg"
+      },
+      "attributes": "dark grey, undefined shape",
+      "object_description": "A dark, irregular shadow cast on the tiled floor beneath a wooden table leg.",
+      "motion_kind": null
+    },
+    {
+      "id": 5,
+      "type": "added",
+      "label": "wooden table",
+      "confidence": 0.854,
+      "before": null,
+      "after": {
+        "instance_id": 4,
+        "centroid": [
+          -0.1302,
+          0.8517,
+          -0.3959
+        ],
+        "aabb": [
+          [
+            -0.9262,
+            0.438,
+            -1.1936
+          ],
+          [
+            0.6613,
+            1.1844,
+            0.4621
+          ]
+        ],
+        "extents": [
+          1.5874,
+          0.7464,
+          1.6557
+        ],
+        "obb": {
+          "center": [
+            -0.0123,
+            0.8112,
+            -0.3028
+          ],
+          "extents": [
+            1.1229,
+            0.7464,
+            1.7136
+          ],
+          "yaw_deg": 41.76
+        },
+        "n_points": 15397,
+        "blob_ids": [],
+        "source": "appearance",
+        "instance_ids": [
+          4,
+          5
+        ]
+      },
+      "transform": null,
+      "evidence": {
+        "free_rays": 35527,
+        "free_frames_mean": 13.0,
+        "observing_views": 45,
+        "occ_points": 15397,
+        "mask_score": 0.9539,
+        "view_consistency": 0.5597,
+        "appearance": {
+          "cluster": 4,
+          "frames_supporting": 44,
+          "mean_score": 0.9152,
+          "feat_term": 0.6608,
+          "geom_term": 0.2544,
+          "partners_visible": 23
+        },
+        "vlm_verdict": "rejected",
+        "vlm_reason": "in place: same; The same two objects (blue bottle and cookie tin) are present in both images, though their positions and the lighting differ.",
+        "merged_from": [
+          5,
+          6
+        ],
+        "merged_types": [
+          "added",
+          "added"
+        ],
+        "merged_part_reason": "The contour and rectangle both trace the same wooden table surface and legs, indicating they are parts of one continuous object.",
+        "fragment_gap_m": 0.028,
+        "vlm_replace_answer": "same"
+      },
+      "description": "",
+      "crops": {
+        "after": "crops/5_after.jpg",
+        "before": "crops/5_before.jpg",
+        "after_part": "crops/6_after.jpg"
+      },
+      "attributes": "light brown wood",
+      "object_description": "a light brown wooden table with a visible grain pattern and a few items on top.",
+      "motion_kind": null
+    },
+    {
+      "id": 9,
+      "type": "unverified",
+      "label": "wooden table",
+      "confidence": 0.434,
+      "before": {
+        "instance_id": 3,
+        "centroid": [
+          0.9991999864578247,
+          0.026799999177455902,
+          -2.081899881362915
+        ],
+        "aabb": [
+          [
+            -0.0658000037074089,
+            -0.15109999477863312,
+            -3.194700002670288
+          ],
+          [
+            1.7628999948501587,
+            0.10509999841451645,
+            -0.8515999913215637
+          ]
+        ],
+        "extents": [
+          1.8286999464035034,
+          0.25619998574256897,
+          2.343100070953369
+        ],
+        "obb": {
+          "center": [
+            0.9858,
+            -0.023,
+            -2.2255
+          ],
+          "extents": [
+            1.2376,
+            0.2562,
+            2.5755
+          ],
+          "yaw_deg": 35.93
+        },
+        "n_points": 23564,
+        "blob_ids": [
+          3
+        ],
+        "source": "geometry"
+      },
+      "after": null,
+      "transform": null,
+      "evidence": {
+        "free_rays": 0,
+        "free_frames_mean": 0.0,
+        "observing_views": 0,
+        "occ_points": 61948,
+        "mask_score": 0.914,
+        "view_consistency": 0.822,
+        "seen_in": "before",
+        "vlm_verdict": "rejected",
+        "vlm_reason": "The outline covers a wooden table with various items on it, including a bottle, a box, and a hair dryer."
+      },
+      "description": "An object about 1.83 x 0.26 x 2.34 m at (1.00, 0.03, -2.08) was seen only in the before recording; the after recording never observed that space, so no verdict is possible.",
+      "crops": {
+        "before": "crops/9_before.jpg",
+        "after": null
+      },
+      "attributes": "light brown wood",
+      "object_description": "a light brown wooden table with visible grain patterns and various items placed on it.",
+      "motion_kind": null
+    }
+  ],
+  "summary": "2 changes: 1 moved, 0 added, 1 removed; 2 unverified. The blue laundry detergent was moved from near the front to the middle of the room and slightly rotated. The canned food on the right side is no longer there. Two other items \u2014 a blue suitcase and a box of butter cookies \u2014 appear only in the later video, but their presence cannot be confirmed due to camera angles not capturing those spots in the earlier video."
+}

@@ -18,10 +18,13 @@ One PASS / WARN / FAIL line per check and video:
 * motion: `roomdiff.ingest.motion_score` (mean absolute difference of mean-free
   thumbnails) between consecutive samples, about one keyframe interval apart; above 0.2
   the two views barely overlap (fast pan): warns if more than 10 % of the pairs are.
-Pair: both videos need the same upright aspect ratio (one Pi3X pass takes one image size).
+Pair: both videos need the same upright aspect ratio (one Pi3X pass takes one image size);
+one portrait and one landscape video warns: ingest centre-crops the keyframes of both to
+squares (`roomdiff.ingest.reconcile_orientation`), so each loses its long-side margins.
 
-Exit status 1 if any check fails (unreadable, < 15 s, mixed orientation, < 24 usable
-keyframes), else 0. `--json` also writes every number to a file.
+Exit status 1 if any check fails (unreadable, < 15 s, different aspect ratios that are not
+a portrait / landscape pair, < 24 usable keyframes), else 0. `--json` also writes every
+number to a file.
 """
 
 from __future__ import annotations
@@ -232,20 +235,31 @@ def check_video(path: str, params: dict[str, Any]) -> dict[str, Any]:
 
 
 def check_pair(before: dict[str, Any], after: dict[str, Any]) -> dict[str, str]:
-    """Both recordings must have the same upright aspect ratio (one Pi3X image size)."""
-    def describe(info: dict[str, Any]) -> str:
-        shape = "portrait" if info["height"] > info["width"] else "landscape"
-        return f"{shape} {info['width']}x{info['height']}"
+    """Both recordings must have the same upright aspect ratio (one Pi3X image size); one
+    portrait and one landscape video (square matches either) warns: ingest centre-crops
+    the keyframes of both to squares."""
+    def shape(info: dict[str, Any]) -> str:
+        width, height = info["width"], info["height"]
+        return "portrait" if height > width else "landscape" if width > height else "square"
 
-    ra, rb = (i["width"] / i["height"] for i in (before, after))
+    def describe(info: dict[str, Any]) -> str:
+        return f"{shape(info)} {info['width']}x{info['height']}"
+
+    pair = f"before {describe(before)}, after {describe(after)}"
+    mixed = {shape(before), shape(after)} == {"portrait", "landscape"}
+    ra = before["width"] / before["height"]
+    rb = after["height"] / after["width"] if mixed else after["width"] / after["height"]
     if abs(ra - rb) > ASPECT_TOL * max(ra, rb):
         return {"check": "orientation", "status": "FAIL", "message":
-                f"before {describe(before)}, after {describe(after)}: mixed orientation; "
-                "record both videos the same way (one Pi3X pass needs one image size)"}
+                f"{pair}: different aspect ratios; record both videos in the same camera "
+                "mode (one Pi3X pass needs one image size)"}
+    if mixed:
+        return {"check": "orientation", "status": "WARN", "message":
+                f"{pair}: mixed orientation; ingest centre-crops the keyframes of both to "
+                "squares (each loses its long-side margins); record both the same way next time"}
     if (before["width"], before["height"]) != (after["width"], after["height"]):
         return {"check": "orientation", "status": "WARN", "message":
-                f"before {describe(before)}, after {describe(after)}: same orientation, "
-                "different resolutions (camera mode changed?)"}
+                f"{pair}: same orientation, different resolutions (camera mode changed?)"}
     return {"check": "orientation", "status": "PASS", "message": f"both {describe(before)}"}
 
 

@@ -1,0 +1,80 @@
+{
+  "scene": "tabletop_2",
+  "threshold": 0.6,
+  "scale": 1.0,
+  "gt": [
+    {
+      "gt": 1,
+      "object": "tea canister",
+      "type": "added",
+      "status": "found",
+      "type_correct": true,
+      "predictions": [
+        {
+          "id": 2,
+          "type": "added",
+          "label": "tea canister",
+          "confidence": 0.951,
+          "label_score": 1.0
+        }
+      ]
+    },
+    {
+      "gt": 2,
+      "object": "scissors",
+      "type": "removed",
+      "status": "found",
+      "type_correct": true,
+      "predictions": [
+        {
+          "id": 1,
+          "type": "removed",
+          "label": "scissors",
+          "confidence": 0.836,
+          "label_score": 1.0
+        }
+      ]
+    },
+    {
+      "gt": 3,
+      "object": "teal bucket",
+      "type": "moved",
+      "status": "partial",
+      "type_correct": false,
+      "predictions": [
+        {
+          "id": 3,
+          "type": "added",
+          "label": "green bucket",
+          "confidence": 0.93,
+          "label_score": 1.0
+        }
+      ],
+      "displacement_gt_m": null,
+      "displacement_pred_m": null,
+      "displacement_err_m": null,
+      "rotation_gt_deg": null,
+      "rotation_pred_deg": null,
+      "rotation_err_deg": null
+    }
+  ],
+  "unchanged": [],
+  "extra": [],
+  "extra_unverified": [
+    {
+      "id": 8,
+      "type": "unverified",
+      "label": "blue suitcase",
+      "confidence": 0.429
+    }
+  ],
+  "counts": {
+    "gt": 3,
+    "found": 2,
+    "type_correct": 2,
+    "missed": 1,
+    "false_positives": 0,
+    "unchanged_correct": 0,
+    "unchanged": 0
+  }
+}

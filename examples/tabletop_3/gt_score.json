@@ -1,0 +1,90 @@
+{
+  "scene": "tabletop_3",
+  "threshold": 0.6,
+  "scale": 1.0,
+  "gt": [
+    {
+      "gt": 1,
+      "object": "laundry detergent bottle",
+      "type": "moved",
+      "status": "found",
+      "type_correct": true,
+      "predictions": [
+        {
+          "id": 1,
+          "type": "moved",
+          "label": "blue laundry detergent",
+          "confidence": 0.952,
+          "label_score": 1.0
+        }
+      ],
+      "displacement_gt_m": null,
+      "displacement_pred_m": 0.527,
+      "displacement_err_m": null,
+      "rotation_gt_deg": null,
+      "rotation_pred_deg": 24.2,
+      "rotation_err_deg": null
+    },
+    {
+      "gt": 2,
+      "object": "tea canister",
+      "type": "moved",
+      "status": "partial",
+      "type_correct": false,
+      "predictions": [
+        {
+          "id": 2,
+          "type": "removed",
+          "label": "canned food",
+          "confidence": 0.95,
+          "label_score": 1.0
+        }
+      ],
+      "displacement_gt_m": null,
+      "displacement_pred_m": null,
+      "displacement_err_m": null,
+      "rotation_gt_deg": null,
+      "rotation_pred_deg": null,
+      "rotation_err_deg": null
+    },
+    {
+      "gt": 3,
+      "object": "wooden stool",
+      "type": "moved",
+      "status": "missed",
+      "type_correct": false,
+      "predictions": [],
+      "displacement_gt_m": null,
+      "displacement_pred_m": null,
+      "displacement_err_m": null,
+      "rotation_gt_deg": null,
+      "rotation_pred_deg": null,
+      "rotation_err_deg": null
+    }
+  ],
+  "unchanged": [],
+  "extra": [],
+  "extra_unverified": [
+    {
+      "id": 7,
+      "type": "unverified",
+      "label": "blue suitcase",
+      "confidence": 0.483
+    },
+    {
+      "id": 8,
+      "type": "unverified",
+      "label": "donna butter cookies",
+      "confidence": 0.466
+    }
+  ],
+  "counts": {
+    "gt": 3,
+    "found": 1,
+    "type_correct": 1,
+    "missed": 2,
+    "false_positives": 0,
+    "unchanged_correct": 0,
+    "unchanged": 0
+  }
+}

@@ -1,0 +1,97 @@
+{
+  "scene": "tabletop_1",
+  "threshold": 0.6,
+  "scale": 1.0,
+  "gt": [
+    {
+      "gt": 1,
+      "object": "box of biscuits",
+      "type": "added",
+      "status": "missed",
+      "type_correct": false,
+      "predictions": []
+    },
+    {
+      "gt": 2,
+      "object": "tea canister",
+      "type": "removed",
+      "status": "found",
+      "type_correct": true,
+      "predictions": [
+        {
+          "id": 3,
+          "type": "removed",
+          "label": "tea canister",
+          "confidence": 0.944,
+          "label_score": 1.0
+        }
+      ]
+    },
+    {
+      "gt": 3,
+      "object": "white product box",
+      "type": "moved",
+      "status": "found",
+      "type_correct": true,
+      "predictions": [
+        {
+          "id": 1,
+          "type": "moved",
+          "label": "white product box",
+          "confidence": 0.915,
+          "label_score": 1.0
+        }
+      ],
+      "displacement_gt_m": null,
+      "displacement_pred_m": 0.789,
+      "displacement_err_m": null,
+      "rotation_gt_deg": null,
+      "rotation_pred_deg": 53.7,
+      "rotation_err_deg": null
+    }
+  ],
+  "unchanged": [],
+  "extra": [
+    {
+      "id": 2,
+      "type": "moved",
+      "label": "silver trash can",
+      "confidence": 0.908
+    }
+  ],
+  "extra_unverified": [
+    {
+      "id": 9,
+      "type": "unverified",
+      "label": "wooden stool",
+      "confidence": 0.452
+    },
+    {
+      "id": 10,
+      "type": "unverified",
+      "label": "black office chair",
+      "confidence": 0.445
+    },
+    {
+      "id": 11,
+      "type": "unverified",
+      "label": "blue suitcase",
+      "confidence": 0.429
+    },
+    {
+      "id": 12,
+      "type": "unverified",
+      "label": "wooden stool",
+      "confidence": 0.401
+    }
+  ],
+  "counts": {
+    "gt": 3,
+    "found": 2,
+    "type_correct": 2,
+    "missed": 1,
+    "false_positives": 1,
+    "unchanged_correct": 0,
+    "unchanged": 0
+  }
+}

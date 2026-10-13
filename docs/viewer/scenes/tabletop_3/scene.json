@@ -1,0 +1,39 @@
+{
+  "name": "tabletop_3",
+  "units": "metres (approx.)",
+  "before_ply": "before.ply",
+  "after_ply": "after.ply",
+  "changes": "changes.json",
+  "stats": {
+    "points_before": 369203,
+    "points_after": 234974,
+    "extent_m": [
+      4.643,
+      1.091,
+      5.918
+    ],
+    "voxel_m": 0.0115
+  },
+  "bbox_m": [
+    [
+      -1.803,
+      -0.062,
+      -2.68
+    ],
+    [
+      2.84,
+      1.029,
+      3.238
+    ]
+  ],
+  "up_axis": [
+    0.0,
+    1.0,
+    0.0
+  ],
+  "view_dir": [
+    -0.9777,
+    0.0,
+    -0.2099
+  ]
+}

@@ -87,7 +87,33 @@ each verdict), `report.md`, a Rerun session for inspection, and a self-contained
 viewer (three.js) that shows both clouds in the shared frame, the change boxes, the
 natural-language report and the before/after crops, and runs on GitHub Pages.
 
+## 6. A held-out check on our own recordings
+Three pairs of iPhone videos around a low table (consecutive states; the staged changes
+were written down first, `examples/tabletop_*/gt.yaml`), each run once with the default
+settings. Of 9 staged changes, 5 came back with the right type and object, 2 as a change
+of one type only (a bucket's new place found but not its old one; a tea canister whose
+old place was seen empty while its new place, under the table edge, was never observed),
+2 were missed (a biscuit box the VLM judge wrongly called present in both crops; a stool
+pushed under the table that was never segmented), with 1 false positive (a bin in the
+background "moved" 0.10 m). Three lessons. (1) The judge is the weakest link: a single wrong
+"same" answer deletes a change found with confidence 0.9. (2) Pi3X's metric scale is not
+to be trusted on close-range, top-down video: `scripts/lidar_check.py` fits our clouds to
+the LiDAR meshes with 1.7-2.9 cm median residual, but at a scale of 0.55-0.57 for all six
+recordings (the two scans of a pair agree within 0.7-3.6 %), i.e. 1.8x too large, while
+the relative geometry (a 0.44 m move, a 54 deg turn) is fine. (3) One Pi3X pass needs one
+image size: mixed portrait / landscape pairs are handled by centre-cropping both videos to
+squares (see below), with a warning from `scripts/check_video.py`.
+
 ## What we tried and did not keep as default
+*Turning one recording a quarter turn for mixed orientation.* Our first fix for a portrait
++ landscape pair rotated the after video's keyframes 90 degrees so that both sets had one
+shape without losing pixels. The joint reconstruction then aligned the two recordings less
+well (points within 3 cm of the other recording: 74-80 % instead of 85-96 %) and the
+turned recording's table top sat a few centimetres off, so the voxel channel reported the
+whole table as "added" and the VLM, shown sideways crops, confirmed it (7 and 4 false
+positives on the two pairs). Centre-cropping both videos to squares costs 44 % of each
+frame but keeps every image upright: 0 false positives on the same pairs.
+
 *SAM 3 re-check.* After naming, SAM 3 is asked for the change's label (text prompt) on the
 object itself and at its place in the other video; a label found at a "now empty" place
 would contradict a removal, a label found at the new place supports a move. On the three
@@ -104,5 +130,6 @@ stays in the code as optional evidence (`recheck.enabled`), without the penalty.
 - Deformable changes (a curtain opened, a quilt spread out) get a "moved" verdict with an
   unreliable rotation; the judge marks them as deformed rather than rigid.
 - Mirrors create unverified regions behind the glass; a mirror mask would fix it.
-- Scale is approximately metric; distances are reported with that caveat.
+- Scale is approximately metric: 1.8x too large on our close-range tabletop videos (LiDAR
+  check), so distances are reported with that caveat and converted when a scan exists.
 - Each run takes about 2–2.5 minutes on an RTX 5090, a third of it model loading.

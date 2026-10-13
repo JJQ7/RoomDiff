@@ -1,0 +1,189 @@
+{
+  "out_dir": "outputs/tabletop_2",
+  "fits": {
+    "before": {
+      "scale": 0.55054,
+      "yaw_deg": -25.19,
+      "tilt_deg": 1.56,
+      "translation": [
+        0.7837,
+        -0.266,
+        0.1371
+      ],
+      "matrix": [
+        [
+          0.498086,
+          -0.013344,
+          -0.234156,
+          0.783662
+        ],
+        [
+          0.009173,
+          0.550338,
+          -0.011849,
+          -0.266034
+        ],
+        [
+          0.234356,
+          0.006818,
+          0.498123,
+          0.137142
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "score": 0.592,
+      "inliers_5cm": 0.8976,
+      "overlap_10cm": 0.9515,
+      "residual_median_m": 0.0166,
+      "residual_p90_m": 0.0362,
+      "coarse": {
+        "scale": 0.6,
+        "yaw_deg": 340.0,
+        "score": 0.5583,
+        "candidates": 1188
+      },
+      "floors": {
+        "ours": 0.009,
+        "lidar": -0.267
+      },
+      "seconds": 12.0,
+      "ours": "outputs/tabletop_2/viewer/before.ply",
+      "scan": "data/scenes/tabletop_2/lidar/before.obj"
+    },
+    "after": {
+      "scale": 0.54644,
+      "yaw_deg": -93.15,
+      "tilt_deg": 1.79,
+      "translation": [
+        -0.1866,
+        -0.4286,
+        -0.0883
+      ],
+      "matrix": [
+        [
+          -0.030101,
+          -0.013793,
+          -0.54544,
+          -0.186578
+        ],
+        [
+          0.009251,
+          0.546179,
+          -0.014322,
+          -0.42856
+        ],
+        [
+          0.545536,
+          -0.010023,
+          -0.029853,
+          -0.08828
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "score": 0.5598,
+      "inliers_5cm": 0.8881,
+      "overlap_10cm": 0.9702,
+      "residual_median_m": 0.0197,
+      "residual_p90_m": 0.0461,
+      "coarse": {
+        "scale": 0.6,
+        "yaw_deg": 270.0,
+        "score": 0.3525,
+        "candidates": 1188
+      },
+      "floors": {
+        "ours": -0.009,
+        "lidar": -0.411
+      },
+      "seconds": 14.7,
+      "ours": "outputs/tabletop_2/viewer/after.ply",
+      "scan": "data/scenes/tabletop_2/lidar/after.obj"
+    }
+  },
+  "consistency": {
+    "scale_ratio": 0.9926,
+    "differ": 0.0074,
+    "status": "PASS"
+  },
+  "scale": 0.54849,
+  "changes": [
+    {
+      "id": 1,
+      "type": "removed",
+      "label": "scissors",
+      "distance_m": null,
+      "distance_metric_m": null,
+      "size_m": [
+        0.7565,
+        0.0974,
+        0.2302
+      ],
+      "size_metric_m": [
+        0.415,
+        0.053,
+        0.126
+      ]
+    },
+    {
+      "id": 2,
+      "type": "added",
+      "label": "tea canister",
+      "distance_m": null,
+      "distance_metric_m": null,
+      "size_m": [
+        0.2016,
+        0.2435,
+        0.1962
+      ],
+      "size_metric_m": [
+        0.111,
+        0.134,
+        0.108
+      ]
+    },
+    {
+      "id": 3,
+      "type": "added",
+      "label": "green bucket",
+      "distance_m": null,
+      "distance_metric_m": null,
+      "size_m": [
+        0.4323,
+        0.2781,
+        0.2424
+      ],
+      "size_metric_m": [
+        0.237,
+        0.153,
+        0.133
+      ]
+    },
+    {
+      "id": 8,
+      "type": "unverified",
+      "label": "blue suitcase",
+      "distance_m": null,
+      "distance_metric_m": null,
+      "size_m": [
+        0.5226,
+        0.912,
+        0.9532
+      ],
+      "size_metric_m": [
+        0.287,
+        0.5,
+        0.523
+      ]
+    }
+  ]
+}

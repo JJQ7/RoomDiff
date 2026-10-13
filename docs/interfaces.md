@@ -14,7 +14,11 @@ exists).
 
 ## M1 ingest -> `<out>/keyframes/`
 `before/*.jpg`, `after/*.jpg`, `index.json` (per recording: video info, per-keyframe file,
-source frame index, timestamp, sharpness, size). Implemented.
+source frame index, timestamp, sharpness, size). Per recording `square_crop` (int) is 0,
+or the side of the central square the keyframes of both recordings were cropped to when
+one video is portrait and the other landscape (square matches either; one Pi3X pass needs
+one image size): the per-keyframe sizes are those of the cropped JPEGs while `video` still
+describes the source video. Implemented.
 
 ## M2 recon -> `<out>/recon/`
 `recon.npz` with keyframes of both recordings concatenated (before first, then after):

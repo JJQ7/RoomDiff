@@ -1,0 +1,20 @@
+# tabletop_2: state 2 -> state 3. Author's staging note: "add tea box, remove scissors, move bin".
+# The after video was recorded landscape (the other three portrait).
+scene: tabletop_2
+notes: >
+  Same table as tabletop_1. before.mov = tabletop_1/after.mov (portrait, 34 s); after.mov is
+  landscape (43 s). The tea canister removed in tabletop_1 comes back on the table. The teal
+  bucket on the floor (used as a bin) is moved to the other end of the table.
+changes:
+  - object: tea canister
+    aliases: [tea tin, tea caddy, tea box, tin, canister, can, canned food]
+    type: added
+    where: on the table
+  - object: scissors
+    aliases: [pair of scissors]
+    type: removed
+    where: on the table
+  - object: teal bucket
+    aliases: [bucket, bin, trash can, blue bucket, plastic bucket, waste bin]
+    type: moved
+    where: on the floor, to the other end of the table

@@ -11,6 +11,7 @@ import cv2
 import imageio_ffmpeg
 import numpy as np
 import pytest
+from PIL import Image
 from typer.testing import CliRunner
 
 from roomdiff import ingest
@@ -289,3 +290,30 @@ def test_cli_ingest_and_eval_arguments(tmp_path, pan_then_still_video):
 
     result = runner.invoke(app, ["eval"])  # needs --pairs or --split
     assert result.exit_code == 2 and "--pairs" in result.output
+
+
+def test_reconcile_orientation_crops_both_recordings_to_squares():
+    def keyframe(height: int, width: int) -> ingest.Keyframe:
+        image = np.zeros((height, width, 3), np.uint8)
+        image[height // 2, width // 2] = 255  # centre marker
+        return ingest.Keyframe(0, 0.0, image, 1.0)
+
+    before, after = [keyframe(32, 16), keyframe(32, 16)], [keyframe(16, 32), keyframe(16, 32)]
+    assert ingest.reconcile_orientation(before, after) == 16
+    for kf in before + after:
+        assert kf.image.shape == (16, 16, 3) and kf.image.flags.c_contiguous
+        assert kf.image[8, 8, 0] == 255  # the centre is kept
+    assert ingest.reconcile_orientation([keyframe(16, 32)], [keyframe(16, 32)]) == 0
+    assert ingest.reconcile_orientation([keyframe(16, 16)], [keyframe(16, 32)]) == 0  # square
+    assert ingest.reconcile_orientation([], after) == 0
+
+
+def test_ingest_pair_mixed_orientation_writes_squares(tmp_path, pan_then_still_video):
+    frames = [np.full((64, 48, 3), 40 + 3 * k, np.uint8) for k in range(60)]  # portrait
+    portrait = write_video(tmp_path / "after.mp4", frames)  # the fixture video is landscape
+    cfg = load_config(overrides=["ingest.num_keyframes=4", "ingest.min_motion=0"])
+    index = ingest_pair(pan_then_still_video, portrait, tmp_path / "out", cfg)
+    assert (index["before"]["square_crop"], index["after"]["square_crop"]) == (96, 48)
+    for name, side in (("before", 96), ("after", 48)):
+        sizes = {Image.open(p).size for p in (tmp_path / "out" / "keyframes" / name).glob("*.jpg")}
+        assert sizes == {(side, side)}

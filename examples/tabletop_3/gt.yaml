@@ -1,0 +1,23 @@
+# tabletop_3: state 3 -> state 4. Author's staging note: "move laundry detergent; hide (occlude)
+# the tea and the stool". The tea canister goes from the table to the floor beside the bucket
+# and the stool next to it, where the after video sees them only partly: a deliberate
+# occlusion test. Reporting them as "moved" is right; "unverified" is acceptable; "removed"
+# would be a wrong claim.
+scene: tabletop_3
+notes: >
+  before.mov = tabletop_2/after.mov (landscape, 43 s); after.mov portrait (31 s).
+changes:
+  - object: laundry detergent bottle
+    aliases: [detergent bottle, blue bottle, laundry detergent, bottle, jug]
+    type: moved
+    where: on the table
+  - object: tea canister
+    aliases: [tea tin, tea caddy, tea box, tin, canister, can, canned food]
+    type: moved
+    where: from the table to the floor beside the bucket, under the table edge
+    notes: deliberately placed where most after views cannot see it (occlusion test)
+  - object: wooden stool
+    aliases: [stool, small stool, footstool]
+    type: moved
+    where: to the floor beside the bucket, partly under the table
+    notes: deliberately placed where most after views cannot see it (occlusion test)

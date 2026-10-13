@@ -1,0 +1,189 @@
+{
+  "out_dir": "outputs/tabletop_3",
+  "fits": {
+    "before": {
+      "scale": 0.55119,
+      "yaw_deg": 140.99,
+      "tilt_deg": 0.96,
+      "translation": [
+        -0.1867,
+        -0.4343,
+        -0.1718
+      ],
+      "matrix": [
+        [
+          -0.428257,
+          -0.009037,
+          0.346872,
+          -0.186708
+        ],
+        [
+          -0.00569,
+          0.551108,
+          0.007333,
+          -0.434343
+        ],
+        [
+          -0.346943,
+          0.002117,
+          -0.428289,
+          -0.171786
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "score": 0.564,
+      "inliers_5cm": 0.9006,
+      "overlap_10cm": 0.9754,
+      "residual_median_m": 0.0185,
+      "residual_p90_m": 0.0439,
+      "coarse": {
+        "scale": 0.6,
+        "yaw_deg": 140.0,
+        "score": 0.3856,
+        "candidates": 1188
+      },
+      "floors": {
+        "ours": 0.011,
+        "lidar": -0.411
+      },
+      "seconds": 12.9,
+      "ours": "outputs/tabletop_3/viewer/before.ply",
+      "scan": "data/scenes/tabletop_3/lidar/before.obj"
+    },
+    "after": {
+      "scale": 0.57115,
+      "yaw_deg": 85.15,
+      "tilt_deg": 0.82,
+      "translation": [
+        -0.0251,
+        -0.3811,
+        0.8779
+      ],
+      "matrix": [
+        [
+          0.04826,
+          -0.007398,
+          0.569057,
+          -0.025121
+        ],
+        [
+          0.004065,
+          0.571089,
+          0.007079,
+          -0.381105
+        ],
+        [
+          -0.569091,
+          0.003452,
+          0.048308,
+          0.877918
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "score": 0.4961,
+      "inliers_5cm": 0.9613,
+      "overlap_10cm": 0.9991,
+      "residual_median_m": 0.0178,
+      "residual_p90_m": 0.0388,
+      "coarse": {
+        "scale": 0.6,
+        "yaw_deg": 90.0,
+        "score": 0.4227,
+        "candidates": 1188
+      },
+      "floors": {
+        "ours": 0.012,
+        "lidar": -0.347
+      },
+      "seconds": 11.5,
+      "ours": "outputs/tabletop_3/viewer/after.ply",
+      "scan": "data/scenes/tabletop_3/lidar/after.obj"
+    }
+  },
+  "consistency": {
+    "scale_ratio": 1.0362,
+    "differ": 0.0362,
+    "status": "WARN"
+  },
+  "scale": 0.56108,
+  "changes": [
+    {
+      "id": 1,
+      "type": "moved",
+      "label": "blue laundry detergent",
+      "distance_m": 0.527,
+      "distance_metric_m": 0.296,
+      "size_m": [
+        0.1266,
+        0.4175,
+        0.2785
+      ],
+      "size_metric_m": [
+        0.071,
+        0.234,
+        0.156
+      ]
+    },
+    {
+      "id": 2,
+      "type": "removed",
+      "label": "canned food",
+      "distance_m": null,
+      "distance_metric_m": null,
+      "size_m": [
+        0.1908,
+        0.244,
+        0.1998
+      ],
+      "size_metric_m": [
+        0.107,
+        0.137,
+        0.112
+      ]
+    },
+    {
+      "id": 7,
+      "type": "unverified",
+      "label": "blue suitcase",
+      "distance_m": null,
+      "distance_metric_m": null,
+      "size_m": [
+        0.2615,
+        0.7189,
+        0.6708
+      ],
+      "size_metric_m": [
+        0.147,
+        0.403,
+        0.376
+      ]
+    },
+    {
+      "id": 8,
+      "type": "unverified",
+      "label": "donna butter cookies",
+      "distance_m": null,
+      "distance_metric_m": null,
+      "size_m": [
+        0.2104,
+        0.2265,
+        0.2018
+      ],
+      "size_metric_m": [
+        0.118,
+        0.127,
+        0.113
+      ]
+    }
+  ]
+}

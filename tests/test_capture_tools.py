@@ -97,8 +97,9 @@ def test_check_video_hard_failures(tmp_path: Path) -> None:
     assert first["keyframes"] == "FAIL"  # camera at rest: every pick but the first
     assert report["videos"]["before"]["keyframes"]["usable"] == 1
     assert statuses(report["videos"]["after"])["duration"] == "WARN"  # 16 s
-    assert report["pair"][0]["status"] == "FAIL"  # mixed orientation
-    assert report["result"] == "FAIL"
+    assert report["pair"][0]["status"] == "WARN"  # mixed orientation: ingest crops squares
+    assert "squares" in report["pair"][0]["message"]
+    assert report["result"] == "FAIL"  # duration and keyframes
 
 
 def test_check_video_fast_pan_and_hdr_warn(tmp_path: Path, ingest_params: dict) -> None:
@@ -150,6 +151,9 @@ def test_check_video_unreadable(tmp_path: Path) -> None:
     ("pyjamas", "pajamas", True),
     ("lamp on the desk", "desk lamp", True),
     ("bookshelves", "bookshelf", True),
+    ("tea canister", "black tea tin", True),
+    ("hair dryer", "pink hairdryer", True),
+    ("bottle", "blue jug", True),
     ("coffee table", "coffee mug", False),
     ("chair cushion", "chair", False),
     ("book", "notebook", False),
@@ -226,6 +230,29 @@ def test_score_gt_matching() -> None:
     assert unchanged["mug"]["reported_as_change"][0]["id"] == 11
     scaled = score_gt.score(GT, PREDICTIONS, scale=1.1)["gt"][0]
     assert scaled["displacement_err_m"] == pytest.approx(0.0)
+
+
+def test_score_gt_aliases() -> None:
+    gt = {"changes": [{"object": "danisa tin", "aliases": ["biscuit box"], "type": "added"}],
+          "unchanged_but_only_in_one_video": [
+              {"object": "pail", "aliases": ["waste bin"], "seen_in": "after"}]}
+    preds = [change(1, "added", "biscuit box", 0.8, after=SIDE),
+             change(2, "unverified", "trash can", 0.4, after=SIDE)]
+    report = score_gt.score(gt, preds)
+    assert report["gt"][0]["status"] == "found"
+    assert report["unchanged"][0]["correct"] and report["unchanged"][0]["unverified"]
+    assert report["extra"] == [] and report["extra_unverified"] == []
+    gt["changes"][0].pop("aliases")
+    assert score_gt.score(gt, preds)["gt"][0]["status"] == "missed"
+
+
+def test_load_gt_rejects_bad_aliases(tmp_path: Path) -> None:
+    path = tmp_path / "gt.yaml"
+    path.write_text("changes:\n  - object: chair\n    type: moved\n    aliases: seat\n")
+    with pytest.raises(score_gt.GTError, match="aliases"):
+        score_gt.load_gt(path)
+    path.write_text("changes:\n  - object: chair\n    type: moved\n    aliases: [seat]\n")
+    assert score_gt.load_gt(path)["changes"][0]["aliases"] == ["seat"]
 
 
 def test_gt_template_is_valid() -> None:
@@ -327,6 +354,20 @@ def test_lidar_check_recovers_scale_and_yaw(tmp_path: Path, source: str,
     if len(ours) == 2:
         assert report["consistency"]["status"] == "PASS"
     print(capsys.readouterr().out)  # shown with pytest -s
+
+
+def test_read_obj_vertices(tmp_path: Path) -> None:
+    path = tmp_path / "scan.obj"
+    path.write_text("# Obj\nmtllib scan.mtl\nv 0.5 -0.2 1.0\nvt 0.1 0.2\nv 1 2 3\n"
+                    "vn 0 1 0\nv -1.5 0 2.5\nf 1/1/1 2/1/1 3/1/1\n")
+    points = lidar_check.read_ply(path)
+    assert points.shape == (3, 3) and points.dtype == np.float64
+    assert np.allclose(points, [[0.5, -0.2, 1.0], [1, 2, 3], [-1.5, 0, 2.5]])
+    z_up = lidar_check.read_ply(path, up="z")  # (x, y, z) Z-up -> (x, z, -y)
+    assert np.allclose(z_up[0], [0.5, 1.0, 0.2])
+    with pytest.raises(ValueError, match="no vertices"):
+        lidar_check.read_ply(tmp_path / "empty.obj") if (
+            tmp_path / "empty.obj").write_text("# nothing\n") else None
 
 
 def test_floor_height_prefers_floor_to_a_bed() -> None:

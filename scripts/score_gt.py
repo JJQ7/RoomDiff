@@ -7,7 +7,8 @@ matched to an unused prediction of `<out_dir>/changes.json` (not `rejected`) of 
 type whose label matches; among several, the most confident wins. A GT `moved` object
 left unmatched then accepts a removed + added pair whose labels both match ("type wrong";
 displacement = distance of the two centroids); a single matching half is "partial" and
-counts as missed. Objects under `unchanged_but_only_in_one_video` must not come back as
+counts as missed. A GT entry may list `aliases` (other names of the same object); its best-matching
+name counts. Objects under `unchanged_but_only_in_one_video` must not come back as
 removed / added / moved (reported as unverified, or not at all, is correct). Unmatched
 predictions are extra (false positives); unmatched unverified ones are listed apart, as
 they claim no change.
@@ -39,8 +40,9 @@ import yaml
 
 TYPES = ("moved", "added", "removed")
 TOP_KEYS = {"scene", "notes", "changes", "unchanged_but_only_in_one_video"}
-CHANGE_KEYS = {"object", "type", "displacement_m", "rotation_deg", "size_m", "where", "notes"}
-UNCHANGED_KEYS = {"object", "seen_in", "where", "notes"}
+CHANGE_KEYS = {"object", "aliases", "type", "displacement_m", "rotation_deg", "size_m", "where",
+               "notes"}
+UNCHANGED_KEYS = {"object", "aliases", "seen_in", "where", "notes"}
 STOP = {"a", "an", "the", "some", "of", "and", "pair", "piece"}
 CUT = {"on", "in", "with", "against", "at", "near", "under", "behind", "from", "beside",
        "by", "next", "inside", "onto", "above", "below", "underneath", "between", "into"}
@@ -66,7 +68,8 @@ SYNONYMS = {  # one word for each group of names of the same kind of object
     "bin": {"wastebasket", "dustbin", "trashcan"}, "pajama": {"pyjama"}, "pillow": {"cushion"},
     "cup": {"mug"}, "rug": {"carpet", "mat"}, "blanket": {"throw", "duvet", "quilt", "comforter"},
     "tv": {"television", "telly"}, "jacket": {"coat"}, "shoe": {"sneaker", "trainer"},
-    "plant": {"houseplant"},
+    "plant": {"houseplant"}, "tin": {"can", "canister", "caddy"}, "bottle": {"jug", "flask"},
+    "bucket": {"pail"}, "dryer": {"hairdryer", "blowdryer"},
 }
 CANONICAL = {word: key for key, words in SYNONYMS.items() for word in words}
 
@@ -125,6 +128,16 @@ def label_score(a: list[str], b: list[str]) -> float:
 # ------------------------------------------------------------------------ inputs
 
 
+def _alias_errors(item: dict[str, Any], where: str) -> list[str]:
+    aliases = item.get("aliases")
+    if aliases is None:
+        return []
+    if not isinstance(aliases, list) or not all(
+            isinstance(a, str) and a.strip() for a in aliases):
+        return [f"{where}: `aliases` must be a list of non-empty names"]
+    return []
+
+
 def load_gt(path: Path) -> dict[str, Any]:
     """Read and validate gt.yaml (unknown keys are errors: they are usually typos)."""
     data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
@@ -137,6 +150,7 @@ def load_gt(path: Path) -> dict[str, Any]:
             errors.append(f"{where}: needs a non-empty `object`")
             continue
         errors += [f"{where}: unknown key {x!r}" for x in sorted(set(item) - CHANGE_KEYS)]
+        errors += _alias_errors(item, where)
         if item.get("type") not in TYPES:
             errors.append(f"{where}: `type` must be one of {', '.join(TYPES)}")
         for key in ("displacement_m", "rotation_deg"):
@@ -155,6 +169,7 @@ def load_gt(path: Path) -> dict[str, Any]:
             errors.append(f"{where}: needs a non-empty `object`")
             continue
         errors += [f"{where}: unknown key {x!r}" for x in sorted(set(item) - UNCHANGED_KEYS)]
+        errors += _alias_errors(item, where)
         if item.get("seen_in") not in ("before", "after"):
             errors.append(f"{where}: `seen_in` must be before or after")
     if errors:
@@ -172,14 +187,24 @@ def summary_of(change: dict[str, Any], score: float | None = None) -> dict[str, 
     return out if score is None else {**out, "label_score": round(score, 3)}
 
 
+def name_tokens(item: dict[str, Any]) -> list[list[str]]:
+    """Token lists of a GT object's name and of each of its aliases."""
+    return [label_tokens(n) for n in [item["object"], *(item.get("aliases") or [])]]
+
+
+def names_score(names: list[list[str]], tokens: list[str]) -> float:
+    """Best `label_score` of a prediction's tokens over the GT names."""
+    return max((label_score(n, tokens) for n in names), default=0.0)
+
+
 def score(gt: dict[str, Any], changes: list[dict[str, Any]], threshold: float = 0.6,
           scale: float = 1.0) -> dict[str, Any]:
     """Match predictions to the GT (rules: module docstring); returns the full report."""
     tokens = {c["id"]: label_tokens(c.get("label")) for c in changes}
     used: set[int] = set()
 
-    def best(obj: list[str], types: set[str]) -> tuple[dict[str, Any], float] | None:
-        hits = [(c, label_score(obj, tokens[c["id"]])) for c in changes
+    def best(obj: list[list[str]], types: set[str]) -> tuple[dict[str, Any], float] | None:
+        hits = [(c, names_score(obj, tokens[c["id"]])) for c in changes
                 if c["id"] not in used and c.get("type") in types]
         hits = [(c, s) for c, s in hits if s >= threshold]
         return max(hits, key=lambda h: (h[0].get("confidence") or 0.0, h[1]), default=None)
@@ -187,13 +212,13 @@ def score(gt: dict[str, Any], changes: list[dict[str, Any]], threshold: float = 
     gt_changes = gt.get("changes") or []
     hits: list[list[tuple[dict[str, Any], float]]] = [[] for _ in gt_changes]
     for k, item in enumerate(gt_changes):  # pass 1: same type
-        hit = best(label_tokens(item["object"]), {item["type"]})
+        hit = best(name_tokens(item), {item["type"]})
         if hit:
             hits[k] = [hit]
             used.add(hit[0]["id"])
     for k, item in enumerate(gt_changes):  # pass 2: a moved object as removed + added
         if not hits[k] and item["type"] == "moved":
-            obj = label_tokens(item["object"])
+            obj = name_tokens(item)
             for kind in ("removed", "added"):
                 hit = best(obj, {kind})
                 if hit:
@@ -214,8 +239,8 @@ def score(gt: dict[str, Any], changes: list[dict[str, Any]], threshold: float = 
 
     unchanged = []
     for item in gt.get("unchanged_but_only_in_one_video") or []:
-        obj = label_tokens(item["object"])
-        found = [(c, label_score(obj, tokens[c["id"]])) for c in changes if c["id"] not in used]
+        obj = name_tokens(item)
+        found = [(c, names_score(obj, tokens[c["id"]])) for c in changes if c["id"] not in used]
         found = [(c, s) for c, s in found if s >= threshold]
         used.update(c["id"] for c, _ in found)
         wrong = [summary_of(c, s) for c, s in found if c.get("type") != "unverified"]

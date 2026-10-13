@@ -17,6 +17,13 @@ benchmark's own upright re-encode. The tests cover 0/90/180/270 degrees written 
 Two keyframe modes (`ingest.mode`): `sharp` (default, `select_keyframes`) and `fixed`
 (`select_fixed_keyframes`): the decoded frame closest to every multiple of
 `ingest.fixed_interval_s`, as needed for the SceneDiff benchmark (ground truth at 1 fps).
+
+If one video is portrait and the other landscape, `reconcile_orientation` centre-crops the
+keyframes of both to squares (`square_crop` in index.json: the side, or 0): one Pi3X pass
+needs one image size. Each recording loses the two margins of its long side (44 % of its
+pixels for 16:9) but stays upright; turning one recording a quarter turn instead keeps
+every pixel, but Pi3X then reconstructs the turned recording with a slight systematic
+offset (a table top came out as "added"), and its crops are sideways for the VLM.
 """
 
 from __future__ import annotations
@@ -375,6 +382,36 @@ def write_keyframes(
     return record
 
 
+def _orientation(height: int, width: int) -> str:
+    return "portrait" if height > width else "landscape" if width > height else "square"
+
+
+def _square_crop(image: np.ndarray) -> np.ndarray:
+    """The central square of an image (side = its shorter side)."""
+    h, w = image.shape[:2]
+    side = min(h, w)
+    y0, x0 = (h - side) // 2, (w - side) // 2
+    return np.ascontiguousarray(image[y0:y0 + side, x0:x0 + side])
+
+
+def reconcile_orientation(before: list[Keyframe], after: list[Keyframe]) -> int:
+    """Give both recordings one image shape; return the side of the square crop applied
+    to every keyframe of both, or 0 if nothing was done.
+
+    If one recording is portrait (height > width) and the other landscape, every image
+    of both is replaced by its central square (side = the shorter side of that
+    recording's images), in place. Square images match either orientation.
+    """
+    if not before or not after:
+        return 0
+    shapes = {_orientation(*keyframes[0].image.shape[:2]) for keyframes in (before, after)}
+    if shapes != {"portrait", "landscape"}:
+        return 0
+    for keyframe in before + after:
+        keyframe.image = _square_crop(keyframe.image)
+    return min(before[0].image.shape[:2])
+
+
 def ingest_pair(
     before_path: str | Path,
     after_path: str | Path,
@@ -384,7 +421,8 @@ def ingest_pair(
     """Select and write keyframes of both videos; write `<out>/keyframes/index.json`.
 
     `cfg` is the full config; only its `ingest` section is used (`mode`: "sharp", the
-    default, or "fixed"). Returns the index.
+    default, or "fixed"). Between selection and writing, `reconcile_orientation` gives
+    both recordings one image shape (`square_crop` per recording). Returns the index.
     """
     params = cfg["ingest"]
     mode = params.get("mode", "sharp")
@@ -394,6 +432,7 @@ def ingest_pair(
     start = time.perf_counter()
     index: dict[str, Any] = {"params": dict(params)}
 
+    selected: dict[str, tuple[VideoInfo, list[Keyframe], float]] = {}
     for name, video_path in zip(RECORDINGS, (before_path, after_path)):
         t0 = time.perf_counter()
         info = probe_video(video_path)
@@ -409,11 +448,8 @@ def ingest_pair(
                 sharpness_window=params["sharpness_window"],
                 min_motion=params["min_motion"],
             )
-        record = write_keyframes(
-            keyframes, paths.keyframes_of(name), name, info, params["jpeg_quality"]
-        )
         seconds = time.perf_counter() - t0
-        index[name] = {"dir": name, "wall_time_s": round(seconds, 2), **record}
+        selected[name] = (info, keyframes, seconds)
 
         if mode == "fixed":
             selection = f"one frame every {params['fixed_interval_s']} s"
@@ -430,6 +466,28 @@ def ingest_pair(
             f"{len(keyframes)} keyframes kept, mean sharpness {mean_sharpness:.1f}, "
             f"{seconds:.1f} s"
         )
+
+    square = reconcile_orientation(selected["before"][1], selected["after"][1])
+    if square:
+        b, a = selected["before"][0], selected["after"][0]
+        print(
+            f"[ingest] WARNING: before {_orientation(b.height, b.width)} {b.width}x{b.height}, "
+            f"after {_orientation(a.height, a.width)} {a.width}x{a.height}: mixed orientation, "
+            f"the keyframes of both are centre-cropped to {square}x{square} squares (one Pi3X "
+            "pass needs one image size); each recording loses its long-side margins"
+        )
+    for name, (info, keyframes, seconds) in selected.items():
+        t0 = time.perf_counter()
+        record = write_keyframes(
+            keyframes, paths.keyframes_of(name), name, info, params["jpeg_quality"]
+        )
+        seconds += time.perf_counter() - t0
+        index[name] = {
+            "dir": name,
+            "wall_time_s": round(seconds, 2),
+            "square_crop": min(keyframes[0].image.shape[:2]) if square and keyframes else 0,
+            **record,
+        }
 
     index["wall_time_s"] = round(time.perf_counter() - start, 2)
     paths.keyframes_index.write_text(json.dumps(index, indent=2))

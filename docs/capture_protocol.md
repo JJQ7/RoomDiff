@@ -4,7 +4,10 @@
 * Settings > Camera > Formats: **Most Compatible** (H.264, avoids HEVC decoding issues).
 * Settings > Camera > Record Video: **1080p at 30 fps**, **HDR Video off** (10-bit Dolby
   Vision complicates decoding and changes colours between takes).
-* Lock screen rotation; hold the phone **landscape** for both recordings of a scene.
+* Lock screen rotation; hold the phone **landscape** for both recordings of a scene. If
+  the two videos differ (one portrait, one landscape), the pipeline centre-crops the
+  keyframes of both to squares so the pair still runs (each video loses the margins of
+  its long side).
 * Clean the lens. Keep the same lighting for both recordings (same lamps, same curtains).
 
 ## Scene set-up
@@ -55,15 +58,17 @@ python scripts/check_video.py data/scenes/<scene>/before.mov data/scenes/<scene>
 ```
 One PASS / WARN / FAIL line per check and video, then the pair check and a `RESULT` line;
 exit status 1 on any FAIL. Re-record on FAIL: unreadable file, shorter than 15 s, the two
-videos in different orientations (one reconstruction pass needs one image size), or fewer
-than 24 usable keyframes (the keyframes `roomdiff.ingest` would pick with the default
-settings, minus blurry ones and the ones it only keeps while the camera was at rest).
-WARN lines are worth a re-take when it is cheap: duration outside 30-60 s, portrait,
-frame rate outside 24-60 fps, HEVC instead of H.264 (decodes fine) or HDR (10-bit / HLG /
-Dolby Vision: colours shift between takes), more than 20 % of ~60 evenly spaced frames
-blurry (variance of the Laplacian below 0.4 x the video's median) or soft overall, more
-than 10 % of consecutive samples with a frame difference above 0.2 (fast pans: the times
-are listed).
+videos with different aspect ratios other than a portrait / landscape pair (one
+reconstruction pass needs one image size), or fewer than 24 usable keyframes (the
+keyframes `roomdiff.ingest` would pick with the default settings, minus blurry ones and
+the ones it only keeps while the camera was at rest).
+WARN lines are worth a re-take when it is cheap: duration outside 30-60 s, portrait, one
+video portrait and the other landscape (ingest centre-crops the keyframes of both to
+squares, so each loses its long-side margins), frame rate outside 24-60 fps, HEVC instead of
+H.264 (decodes fine) or HDR (10-bit / HLG / Dolby Vision: colours shift between takes),
+more than 20 % of ~60 evenly spaced frames blurry (variance of the Laplacian below 0.4 x
+the video's median) or soft overall, more than 10 % of consecutive samples with a frame
+difference above 0.2 (fast pans: the times are listed).
 
 ### Optional LiDAR scans
 Scan each state with the "3D Scanner App" (LiDAR mode) right after its video, covering the
@@ -98,12 +103,13 @@ are in front of you:
 | `notes` | free text (optional) |
 | `changes` | list, one entry per changed object: |
 | `- object` | short noun phrase, as a person would name it ("red office chair") |
+| `- aliases` | optional list of other names for the same object ("desk chair", "chair"); a prediction matches if any name matches |
 | `- type` | `moved`, `added` or `removed` |
 | `- displacement_m` | moved only, optional: tape-measured distance between the old and the new place of the object's centre |
 | `- rotation_deg` | moved only, optional: approximate turn about the vertical |
 | `- size_m` | optional: [length, width, height] in metres, for reference |
 | `- where` | free text, e.g. "next to the window" |
-| `unchanged_but_only_in_one_video` | objects that did not change but are deliberately visible in only one recording: `object`, `seen_in` (`before` or `after`) |
+| `unchanged_but_only_in_one_video` | objects that did not change but are deliberately visible in only one recording: `object`, optional `aliases`, `seen_in` (`before` or `after`) |
 
 Unknown keys are errors (they are usually typos), as are distances or angles on objects
 that did not move.

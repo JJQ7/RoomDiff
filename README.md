@@ -131,6 +131,47 @@ viewpoints and the earlier video shows the new spot empty from 32 viewpoints."* 
 line follows (free-space views, appearance similarity, displacement, mask score and the
 VLM's reason), then the four crops.
 
+## Held-out scenes: our own recordings
+
+Three pairs recorded on 13 October 2026 with an iPhone 13 Pro (plain camera app, 31-43 s
+each, walking around a low table), four states in a row: each pair compares consecutive
+states, and the changes were staged and written down before any run
+(`examples/tabletop_*/gt.yaml`). The pipeline ran once per pair with the default settings;
+nothing was tuned on these videos. One detail was fixed after the first run: the third
+video was recorded landscape and the others portrait, which ingest handled by turning that
+recording a quarter turn; Pi3X then reconstructed the turned video with a slight offset and
+the whole table top came out as "added", so ingest now centre-crops both videos of a mixed
+pair to squares instead, and the two affected pairs were re-run once (see the design note).
+LiDAR scans of every state (3D Scanner App) were used only afterwards, to check the scale.
+
+| pair | staged changes | reported (`examples/<pair>/report.md`) | score (`gt_score.md`) |
+|---|---|---|---|
+| [tabletop_1](examples/tabletop_1/report.md) | biscuit box added, tea canister removed, white box moved | white box moved 0.44 m and turned 54 deg, tea canister removed; a bin in the background "moved" 0.10 m; the biscuit box was found but rejected by the VLM judge | 2 / 3 found, 1 false positive |
+| [tabletop_2](examples/tabletop_2/report.md) | tea canister added, scissors removed, bucket moved to the other end of the table | tea canister added, scissors removed, bucket added at its new place (its old place was not flagged) | 2 / 3 found, 1 half, 0 false positives |
+| [tabletop_3](examples/tabletop_3/report.md) | detergent bottle moved; tea canister and stool put on the floor under the table edge, where the second video barely sees them (an occlusion test) | detergent bottle moved 0.30 m and turned 24 deg; tea canister reported removed (its old place was seen empty, its new place never observed; named "canned food"); stool not detected; suitcase and cookie box unverified | 1 / 3 found, 1 half, 0 false positives |
+
+| [tabletop_1](examples/tabletop_1/report.md) | [tabletop_2](examples/tabletop_2/report.md) | [tabletop_3](examples/tabletop_3/report.md) |
+|---|---|---|
+| [![tabletop_1 overview](docs/img/tabletop_1_overview.png)](examples/tabletop_1/report.md) | [![tabletop_2 overview](docs/img/tabletop_2_overview.png)](examples/tabletop_2/report.md) | [![tabletop_3 overview](docs/img/tabletop_3_overview.png)](examples/tabletop_3/report.md) |
+
+Live viewer: [tabletop_1](https://jjq7.github.io/RoomDiff/viewer/?scene=scenes/tabletop_1),
+[tabletop_2](https://jjq7.github.io/RoomDiff/viewer/?scene=scenes/tabletop_2),
+[tabletop_3](https://jjq7.github.io/RoomDiff/viewer/?scene=scenes/tabletop_3).
+
+What the scans added (`examples/<pair>/lidar_check.md`): our clouds fit the LiDAR meshes
+with a median residual of 1.7-2.9 cm, but at a scale of 0.55-0.57 for all six recordings
+(the two scans of a pair agree within 0.7-3.6 %): on these close-range, top-down videos
+Pi3X's metric scale is 1.8x too large, so the distances above are the reported ones times
+that scale (`scripts/score_gt.py --scale`), and the reports keep saying "approx. metres".
+The misses are instructive too: the biscuit box was detected by the appearance channel
+with confidence 0.90 and then rejected because Qwen3-VL claimed the box was in both crops
+(`examples/tabletop_1/crops/7_*.jpg` show it is not); the bucket's and the tea canister's
+new places got a change of one type only, because the old place was seen empty but the
+new place was not (bucket) or never observed (canister); and the stool under the table
+was never segmented. A suitcase that was not part of the staging and stands at a different
+place in the second video came back as unverified, correctly: the first video never looked
+at that spot.
+
 ## Web viewer
 
 A static three.js viewer (source in `viewer/`, no build step; three.js is loaded from
@@ -161,9 +202,9 @@ docs/viewer/index.html, app.js, style.css       # copied from viewer/
 docs/viewer/scenes/<name>/                      # contents of outputs/<name>/viewer/
 ```
 
-Live example: <https://jjq7.github.io/RoomDiff/viewer/?scene=scenes/scenediff_living_room_1>
-(a SceneDiff benchmark pair). Without `?scene=` the viewer loads `./scene.json` from its own
-folder. `*.ply` is gitignored except under `docs/viewer/scenes/` and `examples/`.
+Live examples: <https://jjq7.github.io/RoomDiff/viewer/?scene=scenes/scenediff_living_room_1>
+(a SceneDiff benchmark pair) and `scenes/tabletop_1`, `tabletop_2`, `tabletop_3` (our own
+recordings). Without `?scene=` the viewer loads `./scene.json` from its own folder. `*.ply` is gitignored except under `docs/viewer/scenes/` and `examples/`.
 
 ## Capture-day tools
 
@@ -171,14 +212,17 @@ CPU-only helpers for your own recordings; the `gt.yaml` schema and the matching 
 `docs/capture_protocol.md` (template: `docs/gt_template.yaml`).
 * `python scripts/check_video.py before.mov after.mov [--json out.json]`: one PASS / WARN / FAIL
   line per check (duration, orientation, codec / HDR, sharpness, usable keyframes, fast pans),
-  exit 1 on a hard failure; run it before leaving the room.
+  exit 1 on a hard failure; run it before leaving the room. One portrait and one landscape
+  video only warns: ingest centre-crops both to squares.
 * `python scripts/score_gt.py outputs/<scene> data/scenes/<scene>/gt.yaml [--json] [--scale S]`:
-  matches `changes.json` to the ground truth: found / type correct / missed, displacement and
-  rotation errors, false positives, objects deliberately seen in one video only.
-* `python scripts/lidar_check.py outputs/<scene> --before lidar/before.ply --after lidar/after.ply [--json]`:
+  matches `changes.json` to the ground truth (each object may list `aliases`): found / type
+  correct / missed, displacement and rotation errors, false positives, objects deliberately
+  seen in one video only.
+* `python scripts/lidar_check.py outputs/<scene> --before lidar/before.obj --after lidar/after.obj [--json]`:
   fits a gravity-aligned Sim(3) between the reconstruction and iPhone LiDAR scans (3D Scanner
-  App PLY export): metric scale, yaw, residuals, before / after consistency, and the reported
-  distances and sizes converted to metres.
+  App export, PLY point cloud or OBJ mesh; a scan of part of the room is fine): metric scale,
+  yaw, residuals, before / after consistency, and the reported distances and sizes converted
+  to metres.
 
 ## Benchmark (SceneDiff validation subset)
 

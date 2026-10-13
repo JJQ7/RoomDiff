@@ -3,21 +3,25 @@
 Usage: python scripts/lidar_check.py <out_dir> --before lidar/before.ply
                                      --after lidar/after.ply [--json]
 
-Scans: "3D Scanner App" point clouds exported as PLY, in the ARKit world frame (metres,
-gravity-aligned, +Y up, arbitrary yaw and origin; `--lidar-up z` for a Z-up export).
+Scans: "3D Scanner App" exports, PLY point clouds or OBJ meshes (their vertices), in the
+ARKit world frame (metres, gravity-aligned, +Y up, arbitrary yaw and origin; `--lidar-up z`
+for a Z-up export).
 Ours: `<out>/viewer/<rec>.ply`, else `<out>/recon/<rec>.ply`, else the valid points of
 that recording in `<out>/recon/recon.npz` (levelled frame, +Y up, approximately metric).
 
 Per recording, both clouds are voxel-downsampled to 2 cm and the similarity
 x_lidar = s R x_ours + t is estimated from the points 0.1-2 m above each cloud's floor
 (walls and furniture; floor and ceiling fit almost any horizontal pose). Both frames are
-+Y up, so a coarse grid covers the scale s (0.80-1.25, step 0.025) and the yaw about +Y
++Y up, so a coarse grid covers the scale s (0.60-1.40, step 0.025) and the yaw about +Y
 (0-350 deg, step 10). Per candidate the vertical offset comes from the floor heights and
 the horizontal one from the cross-correlation of top-down occupancy maps (5 cm cells),
 which, unlike the centroids, still works when the scan covers more or less of the room
 than the video. Score = geometric mean of the fraction of our points within 5 cm of the
-scan and of the scan's points within 5 cm of ours (one direction alone favours shrinking
-our cloud into a scan that covers part of it). The three best distinct candidates get a
+scan, counted only over our points that land inside the scan's box (a scan cropped to
+part of the room, e.g. one table, must not punish the rest of ours; the height band also
+stops where the scan stops), and of the scan's points within 5 cm of ours (one direction
+alone favours shrinking our cloud into a scan that covers part of it). The three best
+distinct candidates get a
 local pattern search (steps from 2.5 % / 5 deg down to 0.3 % / 0.6 deg, scored at 3 cm)
 and a similarity ICP (Umeyama on mutual nearest neighbours within 8 -> 3 cm, so points
 beyond the edge of the other cloud do not bias the scale; the rotation is free, so a
@@ -51,7 +55,7 @@ from roomdiff.paths import RECORDINGS
 from roomdiff.recon import valid_points
 
 VOXEL = 0.02  # m, both clouds
-SCALES = np.round(np.arange(0.80, 1.25 + 1e-9, 0.025), 4)
+SCALES = np.round(np.arange(0.60, 1.40 + 1e-9, 0.025), 4)
 YAWS = np.arange(0.0, 360.0, 10.0)
 CELL = 0.05  # m, top-down occupancy cells
 BAND = (0.1, 2.0)  # m above the floor: walls and furniture, no floor and no ceiling
@@ -59,16 +63,35 @@ INLIER = 0.05  # m, coarse score: points this close count (tolerates the 10 deg 
 FINE = 0.03  # m, the same for the local search and the final choice: sharper in scale
 OVERLAP = 0.10  # m, residual statistics over our points this close to the scan
 N_BAND, N_SCORE, N_ICP = 30_000, 2_000, 30_000  # point budgets (random subsets)
+MIN_INSIDE = 200  # of the N_SCORE forward points must land inside the scan's box
 TOP = 3  # coarse candidates refined
 ICP_STEPS = (0.08, 0.05, 0.03)  # m, correspondence distances
 ICP_ITERATIONS = 20  # per distance
 CONSISTENT = 0.03  # before / after scales should agree within this fraction
 
 
+def read_obj_vertices(path: Path) -> np.ndarray:
+    """Vertex positions (N, 3) float64 of a Wavefront OBJ (`v x y z` lines; `vt`, `vn`,
+    faces, comments and material lines are skipped)."""
+    rows = []
+    with open(path, encoding="utf-8", errors="replace") as f:
+        for line in f:
+            if line.startswith("v "):
+                parts = line.split()
+                if len(parts) >= 4:
+                    rows.append(parts[1:4])
+    if not rows:
+        raise ValueError(f"{path}: no vertices")
+    return np.asarray(rows, np.float64)
+
+
 def read_ply(path: Path, up: str = "y") -> np.ndarray:
-    """Vertex positions (N, 3) float64 of a PLY file, converted to +Y up."""
-    vertex = PlyData.read(str(path))["vertex"]
-    points = np.column_stack([np.asarray(vertex[a], np.float64) for a in "xyz"])
+    """Vertex positions (N, 3) float64 of a PLY or OBJ file, converted to +Y up."""
+    if Path(path).suffix.lower() == ".obj":
+        points = read_obj_vertices(Path(path))
+    else:
+        vertex = PlyData.read(str(path))["vertex"]
+        points = np.column_stack([np.asarray(vertex[a], np.float64) for a in "xyz"])
     points = points[np.isfinite(points).all(1)]
     return points[:, [0, 2, 1]] * [1.0, 1.0, -1.0] if up == "z" else points
 
@@ -136,9 +159,11 @@ class Search:
         self.ours = ours
         self.floor_o, self.floor_l = floor_height(ours[:, 1]), floor_height(lidar[:, 1])
         h = lidar[:, 1] - self.floor_l
-        self.lidar = lidar[(h > BAND[0]) & (h < BAND[1])]
+        self.top = min(BAND[1], float(np.percentile(h, 99.5)) + 0.05)  # a cropped scan
+        self.lidar = lidar[(h > BAND[0]) & (h < self.top)]
         self.lidar = self.lidar if len(self.lidar) > 100 else lidar
         self.tree_l = cKDTree(self.lidar)
+        self.lo_l, self.hi_l = self.lidar.min(0), self.lidar.max(0)
         self.lidar_score = subset(self.lidar, N_SCORE, 4)
         band = self.lidar[:, [0, 2]]
         self.origin_l = band.min(0) - CELL
@@ -154,14 +179,22 @@ class Search:
         """Our points in the height band at scale s: all, a map subset, a score subset."""
         if s not in self.bands:
             h = s * (self.ours[:, 1] - self.floor_o)
-            pts = self.ours[(h > BAND[0]) & (h < BAND[1])]
+            pts = self.ours[(h > BAND[0]) & (h < self.top)]
             pts = pts if len(pts) > 100 else self.ours
             self.bands[s] = (pts, subset(pts, N_BAND), subset(pts, N_SCORE, 1))
         return self.bands[s]
 
     def score(self, M: np.ndarray, tol: float = INLIER) -> float:
+        """Geometric mean of the inlier fractions both ways; forward only over our points
+        that land inside the scan's box (a scan cropped to part of the room must not
+        punish the rest of ours), and 0 if fewer than `MIN_INSIDE` of them do."""
         s = float(np.cbrt(np.linalg.det(M[:3, :3])))
-        forward = inlier_fraction(M, self.band(round(s, 5))[2], self.tree_l, tol)
+        moved = self.band(round(s, 5))[2] @ M[:3, :3].T + M[:3, 3]
+        inside = ((moved >= self.lo_l - tol) & (moved <= self.hi_l + tol)).all(1)
+        if inside.sum() < MIN_INSIDE:
+            return 0.0
+        d, _ = self.tree_l.query(moved[inside], distance_upper_bound=tol, workers=-1)
+        forward = float(np.isfinite(d).mean())
         back = inlier_fraction(np.linalg.inv(M), self.lidar_score, self.tree_o, tol / s)
         return float(np.sqrt(forward * back))
 
@@ -287,8 +320,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("out_dir", type=Path, help="pipeline output directory")
-    parser.add_argument("--before", type=Path, help="LiDAR PLY of the before state")
-    parser.add_argument("--after", type=Path, help="LiDAR PLY of the after state")
+    parser.add_argument("--before", type=Path, help="LiDAR PLY or OBJ of the before state")
+    parser.add_argument("--after", type=Path, help="LiDAR PLY or OBJ of the after state")
     parser.add_argument("--lidar-up", choices=("y", "z"), default="y", help="scan up axis (y)")
     parser.add_argument("--json", action="store_true", help="also write <out>/lidar_check.json")
     args = parser.parse_args(argv)

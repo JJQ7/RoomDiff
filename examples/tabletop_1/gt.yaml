@@ -1,0 +1,20 @@
+# tabletop_1: state 1 (original) -> state 2. Author's staging note: "add biscuits, remove tea, move box".
+scene: tabletop_1
+notes: >
+  Low wooden table in a bedroom, filmed from above while walking around it with an iPhone 13 Pro
+  (portrait, 37 s and 34 s). Other things on the table: pink hair dryer, blue laundry detergent
+  bottle, scissors. On the floor: teal bucket (bin), wooden stool, suitcase. 3D Scanner App
+  LiDAR scans of both states in lidar/ (textured_output.obj).
+changes:
+  - object: box of biscuits
+    aliases: [biscuit tin, cookie tin, cookie box, biscuit box, Danisa butter cookies tin]
+    type: added
+    where: on the table
+  - object: tea canister
+    aliases: [tea tin, tea caddy, tea box, tin, canister, can, canned food]
+    type: removed
+    where: middle of the table
+  - object: white product box
+    aliases: [white box, cardboard box, product box, mouse box]
+    type: moved
+    where: on the table, towards the corner

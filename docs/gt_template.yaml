@@ -7,6 +7,7 @@ scene: bedroom_basic                # optional, defaults to the folder name
 notes: free text                    # optional: lighting, path taken, anything odd
 changes:                            # every change between before.mov and after.mov
   - object: red office chair        # short noun phrase, as a person would name it
+    aliases: [desk chair, chair]    # optional: other names a method might use for it
     type: moved                     # moved | added | removed
     displacement_m: 1.1             # moved only, tape measure, optional
     rotation_deg: 90                # moved only, optional, approximate
