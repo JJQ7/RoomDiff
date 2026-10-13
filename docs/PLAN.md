@@ -1,5 +1,11 @@
 # RoomDiff — implementation plan (frozen 2026-10-12, deadline 2026-10-16)
 
+*This is the plan as written on day 1, kept for the record. What was actually built, and
+how it did, is in the [README](../README.md) and the [design note](design_note.md); the
+schedule and risk tables below are as planned, not as it went (the LiDAR check and the
+benchmark subset were done, the 3DGS channel was not; the own scenes became three
+tabletop pairs recorded on 13 October).*
+
 Goal: compare two phone videos of the same room, build one shared 3D representation, and
 report what was **added / removed / moved**, with 3D location, semantic label and a
 natural-language description, while explicitly separating real change from viewpoint,

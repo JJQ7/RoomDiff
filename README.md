@@ -232,7 +232,7 @@ CPU-only helpers for your own recordings; the `gt.yaml` schema and the matching 
 ## Benchmark (SceneDiff validation subset)
 
 `roomdiff eval` runs the pipeline on pairs of the public
-[SceneDiff](https://github.com/scenediff/scene_diff) benchmark and scores them with the
+[SceneDiff](https://github.com/yuqunw/scene_diff) benchmark and scores them with the
 official evaluator (`third_party/scene_diff`). 20 pairs of the `val` / `varied` split,
 fixed keyframes every 1 s, RTX 5090:
 
