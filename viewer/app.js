@@ -272,11 +272,14 @@ function spreadLabels() {
   for (const item of items) {
     const anchor = item.label.position.clone();
     let y = anchor.y;
-    for (let changed = true; changed;) {
+    // A label within `step` of a placed neighbour goes one step above it. The tolerance
+    // matters: (other.y + step) - other.y can round to slightly less than step, which
+    // made this loop endless; the counter is a second guard.
+    for (let changed = true, rounds = 0; changed && rounds < 100; rounds++) {
       changed = false;
       for (const other of placed) {
         const near = Math.hypot(anchor.x - other.x, anchor.z - other.z) < spacing;
-        if (near && Math.abs(y - other.y) < step) {
+        if (near && Math.abs(y - other.y) < step - 1e-6) {
           y = other.y + step;
           changed = true;
         }
