@@ -161,6 +161,22 @@ Live viewer: [tabletop_1](https://jjq7.github.io/RoomDiff/viewer/?scene=scenes/t
 [tabletop_2](https://jjq7.github.io/RoomDiff/viewer/?scene=scenes/tabletop_2),
 [tabletop_3](https://jjq7.github.io/RoomDiff/viewer/?scene=scenes/tabletop_3).
 
+Inputs to run them yourself are in the [`data-v1` release](https://github.com/JJQ7/RoomDiff/releases/tag/data-v1):
+[tabletop_1.zip](https://github.com/JJQ7/RoomDiff/releases/download/data-v1/tabletop_1.zip),
+[tabletop_2.zip](https://github.com/JJQ7/RoomDiff/releases/download/data-v1/tabletop_2.zip),
+[tabletop_3.zip](https://github.com/JJQ7/RoomDiff/releases/download/data-v1/tabletop_3.zip)
+(37-39 MB each: both videos re-encoded to H.264 at about 3.7 Mbps, the two LiDAR meshes and
+`gt.yaml`), or `tabletop_<k>_original.zip` (142-154 MB, the untouched iPhone `.mov` files
+the results above come from; the re-encoded copies pick slightly different keyframes and
+gave the same found changes with 2 / 0 / 1 false positives instead of 1 / 0 / 0).
+
+```bash
+unzip tabletop_1.zip -d data/scenes/
+python -m roomdiff.cli run --before data/scenes/tabletop_1/before.mp4 --after data/scenes/tabletop_1/after.mp4 --out outputs/tabletop_1
+python scripts/score_gt.py outputs/tabletop_1 data/scenes/tabletop_1/gt.yaml
+python scripts/lidar_check.py outputs/tabletop_1 --before data/scenes/tabletop_1/lidar/before.obj --after data/scenes/tabletop_1/lidar/after.obj
+```
+
 What the scans added (`examples/<pair>/lidar_check.md`): our clouds fit the LiDAR meshes
 with a median residual of 1.7-2.9 cm, but at a scale of 0.55-0.57 for all six recordings
 (the two scans of a pair agree within 0.7-3.6 %): on these close-range, top-down videos
