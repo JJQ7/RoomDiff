@@ -47,6 +47,13 @@ Every candidate of both channels then goes to the VLM judge, which sees the obje
 where there is one, the other video's view of the place; an appearance change is asked
 what changed at that place, and "same" rejects it.
 
+The recon stage checks that the two reconstructions line up on the points both videos
+see (verdict OK / FAIR / WEAK in the report, with the share of those points within 3 cm);
+a WEAK verdict can turn every removed / added candidate of the geometry channel into
+`unverified` (`visibility.weak_alignment_demotes`), but that is off by default: on the one
+WEAK pair of each benchmark subset it removed the false changes and the correct ones with
+them (design note, section 2).
+
 ## Install
 
 Tested on Ubuntu 24.04 under WSL2 with Python 3.12 and an RTX 5090 (the pipeline needs a

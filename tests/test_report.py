@@ -96,6 +96,50 @@ def test_write_report_with_coverage(tmp_path):
     assert "- Reconstruction check: alignment OK." in text
 
 
+def test_coverage_note_on_the_alignment_gate(tmp_path):
+    """The 3 cm share of the weaker direction (recomputed for an older recon/meta.json
+    without `frac_lt_3cm_min`), and the M3 blobs demoted to unverified."""
+    (tmp_path / "changes.json").write_text(json.dumps(DOC))
+    (tmp_path / "recon").mkdir()
+    covis = {"before_to_after": {"fraction": 0.278, "median_m": 0.094, "frac_lt_3cm": 0.278},
+             "after_to_before": {"fraction": 0.177, "median_m": 0.074, "frac_lt_3cm": 0.293}}
+    reason = "co-visible median > 2 cm or < 90% within 10 cm"
+    (tmp_path / "recon" / "meta.json").write_text(json.dumps({"diagnostics": {
+        "nn_covisible": covis, "verdict": "alignment WEAK", "verdict_reason": reason}}))
+    (tmp_path / "visibility").mkdir()
+    (tmp_path / "visibility" / "meta.json").write_text(json.dumps({
+        "alignment_verdict": "alignment WEAK", "demoted": {"disappeared": 10, "appeared": 14},
+        "demotion_reason": "weak_alignment"}))
+    lines = write_report(tmp_path).read_text().splitlines()
+    assert f"- Reconstruction check: alignment WEAK ({reason}); in the weaker direction 28% " \
+        "of the co-visible points lie within 3 cm of the other video's points." in lines
+    assert "- 24 geometry candidates (10 disappeared and 14 appeared) were set to unverified " \
+        "because the two reconstructions disagree (alignment WEAK), so the other video " \
+        "seeing those places empty is no evidence of a change." in lines
+    (tmp_path / "recon" / "meta.json").write_text(json.dumps({"diagnostics": {
+        "nn_covisible": covis, "verdict": "alignment FAIR", "verdict_reason": "few within 3 cm",
+        "frac_lt_3cm_min": 0.774}}))
+    (tmp_path / "visibility" / "meta.json").write_text(json.dumps({
+        "alignment_verdict": "alignment FAIR", "demoted": {"disappeared": 0, "appeared": 0},
+        "demotion_reason": None}))
+    text = write_report(tmp_path).read_text()
+    assert "- Reconstruction check: alignment FAIR (few within 3 cm); in the weaker direction " \
+        "77% of the co-visible points" in text
+    assert "set to unverified" not in text
+
+
+def test_evidence_line_of_a_demoted_region():
+    change = {**DOC["changes"][2], "evidence": {"seen_in": "before",
+                                                "reason_class": "weak_alignment"}}
+    assert evidence_line(change).startswith(
+        "seen in the before video; the after video seemed to see the place empty, but the "
+        "reconstructions are too poorly aligned to trust it (alignment WEAK)")
+    never = {**DOC["changes"][2], "evidence": {"seen_in": "after",
+                                               "reason_class": "never_observed"}}
+    assert evidence_line(never).startswith("seen only in the after video; the before video "
+                                           "never observed the place")
+
+
 def test_report_without_changes_or_recon(tmp_path):
     doc = {"scene": {}, "changes": [], "rejected": [], "summary": "0 changes."}
     (tmp_path / "changes.json").write_text(json.dumps(doc))

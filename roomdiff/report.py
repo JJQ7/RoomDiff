@@ -17,6 +17,7 @@ from typing import Any
 
 from roomdiff.changes import CHANGE_TYPES
 from roomdiff.paths import OutputPaths
+from roomdiff.recon import frac_lt_3cm_min
 
 PLACES_NOTE = ("- Places (left / right, near / far) are as seen along the average camera "
                "direction; distances are in approximate metres from the reconstruction.")
@@ -57,6 +58,11 @@ def evidence_line(change: Mapping[str, Any]) -> str:
         rays = f" ({ev['free_rays']} free-space rays)" if ev.get("free_rays") is not None else ""
         parts.append(f"place seen empty from {ev.get('observing_views', 0)} views of the "
                      f"{other} video{rays}")
+    elif ev.get("reason_class") == "weak_alignment":
+        other = "after" if ev.get("seen_in") == "before" else "before"
+        parts.append(f"seen in the {ev.get('seen_in')} video; the {other} video seemed to see "
+                     "the place empty, but the reconstructions are too poorly aligned to trust "
+                     "it (alignment WEAK)")
     else:
         other = "after" if ev.get("seen_in") == "before" else "before"
         parts.append(f"seen only in the {ev.get('seen_in')} video; the {other} video never "
@@ -116,7 +122,8 @@ def change_section(change: Mapping[str, Any]) -> list[str]:
 
 
 def coverage_lines(paths: OutputPaths) -> list[str]:
-    """Coverage bullet points from `recon/meta.json` (empty if unavailable)."""
+    """Coverage bullet points from `recon/meta.json` and the M3 demotions of
+    `visibility/meta.json` (empty if unavailable)."""
     meta_file = paths.recon / "meta.json"
     if not meta_file.is_file():
         return []
@@ -131,8 +138,29 @@ def coverage_lines(paths: OutputPaths) -> list[str]:
                          f"distance there {100 * covis[key]['median_m']:.1f} cm).")
     if diag.get("verdict"):
         reason = f" ({diag['verdict_reason']})" if diag.get("verdict_reason") else ""
-        lines.append(f"- Reconstruction check: {diag['verdict']}{reason}.")
-    return lines
+        frac = diag.get("frac_lt_3cm_min", frac_lt_3cm_min(covis))  # older meta: recompute
+        within = "" if frac is None else (
+            f"; in the weaker direction {100 * frac:.0f}% of the co-visible points lie within "
+            "3 cm of the other video's points")
+        lines.append(f"- Reconstruction check: {diag['verdict']}{reason}{within}.")
+    return lines + demotion_lines(paths)
+
+
+def demotion_lines(paths: OutputPaths) -> list[str]:
+    """Coverage bullet on the M3 blobs demoted to unverified (`visibility/meta.json`)."""
+    meta_file = paths.visibility / "meta.json"
+    if not meta_file.is_file():
+        return []
+    meta = json.loads(meta_file.read_text())
+    counts = meta.get("demoted") or {}
+    n = sum(counts.values())
+    if not n:
+        return []
+    parts = " and ".join(f"{v} {k}" for k, v in counts.items() if v)
+    return [f"- {n} geometry candidate{'s' if n != 1 else ''} ({parts}) "
+            f"{'were' if n != 1 else 'was'} set to unverified because the two reconstructions "
+            f"disagree ({meta.get('alignment_verdict') or 'alignment WEAK'}), so the other "
+            "video seeing those places empty is no evidence of a change."]
 
 
 def render_report(doc: Mapping[str, Any], title: str, coverage: Sequence[str]) -> str:

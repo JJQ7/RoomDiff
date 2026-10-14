@@ -176,7 +176,10 @@ def describe_candidate(blob: dict[str, Any]) -> str:
     """One-line description of an M3 candidate blob from its geometry and evidence."""
     lo, hi = np.asarray(blob["aabb"], np.float64)
     size = " x ".join(f"{s:.2f}" for s in hi - lo)
-    text = f"Region {CANDIDATE_TEXT[blob['type']]}, box {size} m"
+    text = f"Region {CANDIDATE_TEXT[blob.get('demoted_from') or blob['type']]}"
+    if blob.get("demoted_from"):  # M3 demoted it to unverified (alignment WEAK)
+        text += " but the reconstructions are too poorly aligned to trust it"
+    text += f", box {size} m"
     evidence = blob.get("evidence", {})
     if "observing_views" in evidence:
         text += f", seen through by {evidence['observing_views']} views of the other video"

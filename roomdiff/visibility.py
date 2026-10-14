@@ -16,6 +16,13 @@ real objects too), and 26-connected components above a minimum size become candi
 blobs with evidence counts. Counting and ray carving run in torch (GPU), labelling in
 numpy / scipy.
 
+If the recon stage found the two reconstructions misaligned (verdict "alignment WEAK" in
+`recon/meta.json`), "seen empty" may only be misalignment: with
+`weak_alignment_demotes` (off by default, see configs/default.yaml) every disappeared /
+appeared blob becomes
+unverified_before / unverified_after (`demote_blobs`), so no removal or addition is
+claimed from the voxels.
+
 Writes `<out>/visibility/grid.npz`, `candidates.json`, `meta.json` and `debug/*.jpg`
 (docs/interfaces.md, M3).
 """
@@ -35,7 +42,7 @@ from scipy import ndimage
 
 from roomdiff.paths import RECORDINGS, OutputPaths
 from roomdiff.projection import best_views, project_to_pixels
-from roomdiff.recon import load_recon
+from roomdiff.recon import VERDICT_WEAK, load_recon
 
 if TYPE_CHECKING:
     import torch
@@ -50,6 +57,10 @@ CANDIDATE_TYPES: dict[str, tuple[int, int]] = {
     "unverified_after": (1, 0),
 }
 OPENED_TYPES = ("disappeared", "appeared")  # types cleaned by the binary opening
+# with a WEAK alignment verdict these types become the unverified type of the same
+# recording (`demote_blobs`, `weak_alignment_demotes`)
+DEMOTED_TYPES = {"disappeared": "unverified_before", "appeared": "unverified_after"}
+WEAK_ALIGNMENT = "weak_alignment"  # `demotion_reason` of those blobs
 TYPE_COLORS: dict[str, tuple[int, int, int]] = {
     "disappeared": (230, 40, 40),
     "appeared": (40, 200, 60),
@@ -329,6 +340,27 @@ def view_evidence(
     return views, dist
 
 
+def demote_blobs(
+    records: Sequence[dict[str, Any]], labelled: dict[str, np.ndarray], reason: str
+) -> dict[str, int]:
+    """Turn every disappeared / appeared blob into unverified_before / unverified_after
+    (`DEMOTED_TYPES`), in place: the record keeps all its fields and gets `demoted_from`
+    (its old type) and `demotion_reason`; its voxels move from the old type's label array
+    to the new one's (ids are unique across types and the two masks are disjoint: free
+    and unknown exclude each other). Returns the number of blobs demoted per old type."""
+    counts = {}
+    for kind, target in DEMOTED_TYPES.items():
+        labels = labelled[kind]
+        labelled[target] = np.where(labels > 0, labels, labelled[target])
+        labelled[kind] = np.zeros_like(labels)
+        counts[kind] = 0
+        for record in records:
+            if record["type"] == kind:
+                record.update(type=target, demoted_from=kind, demotion_reason=reason)
+                counts[kind] += 1
+    return counts
+
+
 # ---------------------------------------------------------------- debug crops
 
 
@@ -490,6 +522,11 @@ def run_visibility(out_dir: str | Path, cfg: Mapping[str, Any]) -> dict[str, Any
     for kind, labels in labelled.items():
         labelled[kind] = luts[kind][labels]
         candidate_voxels[kind]["in_blobs"] = int((labelled[kind] > 0).sum())
+    verdict = recon_meta.get("diagnostics", {}).get("verdict")
+    demoted, demotion_reason = dict.fromkeys(DEMOTED_TYPES, 0), None
+    if verdict == VERDICT_WEAK and params["weak_alignment_demotes"]:
+        demotion_reason = WEAK_ALIGNMENT
+        demoted = demote_blobs(records, labelled, demotion_reason)
     times["labelling"] = time.perf_counter() - t0
 
     t0 = time.perf_counter()
@@ -540,6 +577,9 @@ def run_visibility(out_dir: str | Path, cfg: Mapping[str, Any]) -> dict[str, Any
         "points": dict(zip(RECORDINGS, n_points)),
         "voxels_per_state": state_counts,
         "candidate_voxels": candidate_voxels,
+        "alignment_verdict": verdict,
+        "demoted": demoted,
+        "demotion_reason": demotion_reason,
         "blobs_per_type": blob_counts,
         "debug_crops": n_crops,
         "runtime_s": {k: round(v, 2) for k, v in times.items()},
@@ -549,5 +589,10 @@ def run_visibility(out_dir: str | Path, cfg: Mapping[str, Any]) -> dict[str, Any
     vram = f", peak VRAM {peak['allocated']:.2f} GB" if peak else ""
     print(f"[visibility] grid {'x'.join(map(str, grid.dims))} at {100 * grid.voxel_size:.2f} cm"
           f" ({voxel_source}), {times['total']:.1f} s{vram} -> {out}")
+    if verdict == VERDICT_WEAK:
+        print(f"[visibility] {verdict} in recon/meta.json: " + (
+            f"{demoted['disappeared']} disappeared / {demoted['appeared']} appeared blobs "
+            "demoted to unverified_before / unverified_after" if demotion_reason else
+            "blobs kept as they are (visibility.weak_alignment_demotes is off)"))
     print("[visibility] blobs: " + ", ".join(f"{k} {v}" for k, v in blob_counts.items()))
     return meta

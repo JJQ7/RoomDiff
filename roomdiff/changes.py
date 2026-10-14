@@ -9,7 +9,9 @@
   onto the after points, started from the centroid translation; the rotation is reported
   if the ICP fitness reaches icp_min_fitness and marked `rotation_reliable` from
   icp_reliable_fitness on), unmatched D -> `removed`, unmatched A -> `added`, unverified
-  instances -> `unverified` (with the recording that saw them).
+  instances -> `unverified` (with the recording that saw them, and `evidence.reason_class`:
+  "never_observed", or "weak_alignment" when M3 demoted the blobs because the two
+  reconstructions do not line up).
 * Appearance instances (`source` "appearance", roomdiff.appearance) are disappeared (before)
   or appeared (after) instances like the others. A before and an after appearance
   instance at the same place (oriented boxes grown by `REPLACE_PAD` overlapping more than
@@ -390,6 +392,11 @@ def describe(kind: str, change: Mapping[str, Any]) -> str:
                 f"{_xyz(b['centroid'])} to {_xyz(a['centroid'])}{rot}.")
     side = change[ev["seen_in"]]
     other = "after" if ev["seen_in"] == "before" else "before"
+    if ev.get("reason_class") == "weak_alignment":
+        return (f"An object about {_size(side['extents'])} m at {_xyz(side['centroid'])} was "
+                f"seen in the {ev['seen_in']} recording; the {other} recording seemed to see "
+                "that space empty, but the two reconstructions are too poorly aligned to trust "
+                "it, so no verdict is possible.")
     return (f"An object about {_size(side['extents'])} m at {_xyz(side['centroid'])} was seen "
             f"only in the {ev['seen_in']} recording; the {other} recording never observed that "
             "space, so no verdict is possible.")
@@ -427,6 +434,15 @@ def instance_evidence(record: Mapping[str, Any]) -> dict[str, Any]:
     if ev.get("appearance") is not None:
         out["appearance"] = ev["appearance"]
     return out
+
+
+def unverified_evidence(record: Mapping[str, Any], seen_in: str) -> dict[str, Any]:
+    """Evidence of an unverified change: `instance_evidence`, the recording that saw it
+    (`seen_in`) and `reason_class`: the M3 demotion reason of its blobs ("weak_alignment":
+    the other recording did look at the place, but the alignment verdict was WEAK, so its
+    "seen empty" is not trusted), else "never_observed" (it never looked there)."""
+    return {**instance_evidence(record), "seen_in": seen_in,
+            "reason_class": record.get("demoted") or "never_observed"}
 
 
 # ------------------------------------------------------------------ stage
@@ -507,7 +523,7 @@ def run_changes(out_dir: str | Path, cfg: Mapping[str, Any]) -> dict[str, Any]:
             conf = confidence([r["mask_score_mean"]], [r["view_consistency"]], None, params)
             conf = round(conf * appearance_support(r, params), 3)
             entries.append(("unverified", {name: side_record(r),
-                                           "evidence": {**instance_evidence(r), "seen_in": name},
+                                           "evidence": unverified_evidence(r, name),
                                            "confidence": conf}))
     order = {t: k for k, t in enumerate(CHANGE_TYPES)}
     entries.sort(key=lambda e: (order[e[0]], -e[1]["confidence"]))
