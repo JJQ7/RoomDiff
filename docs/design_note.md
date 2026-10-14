@@ -125,6 +125,26 @@ resizing them to 1024 px, and ours come out of SAM at the reconstruction resolut
 changed every metric by less than 0.001 on both 20-pair subsets. The option stays
 (`eval.mask_resolution`), the default is the cheaper one.
 
+*A bigger appearance backbone.* SceneDiff's own method uses DINOv3 ViT-H+/16, so we swapped
+it in for ViT-L/16 (`instances.dino_model`, both stages). On the 20-pair development
+subset per-view AP rose from 0.478 to 0.510, but per-scene AP fell from 0.459 to 0.373 and
+typed AP from 0.401 to 0.297, with twice the false positives (24 vs 11): the appearance
+channel's automatic threshold and clustering were shaped around ViT-L's score distribution,
+and the larger model is not a drop-in gain. Kept as an option.
+
+*A bigger judge.* Qwen3-VL-32B-Instruct in place of the 8B model, loaded with its
+language model in nf4 (`semantics.quantize_4bit`, 19.5 GiB; the pre-quantized Hub
+checkpoints do not load on transformers 5), same prompts, same reconstructions. On the
+development subset it answered the biscuit-box question right but did not help overall:
+per-view AP 0.481 vs 0.478, per-scene 0.396 vs 0.459, typed 0.342 vs 0.401, 23 / 12 / 25
+objects vs 25 / 11 / 23; it splits a few moved objects into removed + added pairs and
+drops a few removals the 8B kept. On the reported 20 pairs, run afterwards for
+completeness, it came out ahead instead (per-view AP 0.448 vs 0.432, per-scene 0.439 vs
+0.413, typed 0.285 vs 0.280, 38 / 35 / 37 vs 36 / 39 / 39). A change that helps one
+20-pair subset and hurts the other is noise at this sample size, and the development
+subset decides, so the 8B stays: the judge prompts and factors were developed with its
+answers, and a different model needs its own round of that. Kept as an option.
+
 *Submitting unverified regions.* They were submitted ranked last so that the AP metrics
 could use them; none of them matched a ground-truth object, every AP stayed identical
 without them, and the merged-mask pixel IoU rose from 0.37 to 0.47. They are no longer

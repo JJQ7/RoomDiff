@@ -284,6 +284,13 @@ nothing to three decimals, and leaving unverified regions out of the submission
 IoU, since they claim no change (the earlier rows include them: 0.351 -> 0.457 for the row
 above without them; the last row is 0.369 with them, 36 / 74 / 39).
 
+Two backbone swaps were also measured on the development subset and not adopted (details
+in the design note): DINOv3 ViT-H+/16 for the appearance channel (`instances.dino_model`:
+per-view AP up, per-scene and typed AP down, twice the false positives) and Qwen3-VL-32B
+as the judge (`semantics.model` with `semantics.quantize_4bit: true`, needs
+`pip install bitsandbytes`, 19.5 GiB: per-scene AP down on the development subset, up on
+the reported pairs, so no consistent gain). Both stay available as configuration options.
+
 The paper numbers are on the whole validation set, ours on a 20-pair subset, so they are
 indicative only. Median run time per pair: 70 s at 1 s keyframes, 85 s at 0.5 s (RTX
 5090). The remaining gap is recall on small objects in recordings with few co-visible
