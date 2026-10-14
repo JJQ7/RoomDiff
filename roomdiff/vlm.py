@@ -8,6 +8,10 @@ JSON-lines log (`open_log`). `ask_json` parses the first JSON object of the repl
 
 `FakeVLM` answers from a script (a callable or a list of strings) so that the semantics
 stage can be tested on the CPU without weights.
+
+`quantize_4bit` (config `semantics.quantize_4bit`) loads the language model's linear
+layers as bitsandbytes nf4 at load time, everything else (vision tower, merger, embeddings,
+head) in bf16: Qwen3-VL-32B-Instruct then takes about 19.5 GiB of GPU memory instead of 65.
 """
 
 from __future__ import annotations
@@ -156,18 +160,37 @@ def _weight_files(model_id: str) -> list[Path]:
     return [p.resolve() for p in folder.glob("*.safetensors")]
 
 
+def _bnb_config(model_id: str, torch: Any) -> Any:
+    """BitsAndBytesConfig: nf4 for the language model's linear layers, everything else
+    (vision tower, merger, embeddings, head) left in bf16, listed module by module since
+    transformers 5 matches `llm_int8_skip_modules` against full module names."""
+    from transformers import AutoConfig, BitsAndBytesConfig, Qwen3VLForConditionalGeneration
+
+    with torch.device("meta"):  # no weights, just the module names
+        meta = Qwen3VLForConditionalGeneration(AutoConfig.from_pretrained(model_id))
+    skip = [name for name, module in meta.named_modules()
+            if isinstance(module, torch.nn.Linear) and "language_model" not in name]
+    skip += ["model.visual", "visual", "lm_head", "model.language_model.embed_tokens"]
+    return BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4",
+                              bnb_4bit_compute_dtype=torch.bfloat16,
+                              bnb_4bit_use_double_quant=True, llm_int8_skip_modules=skip)
+
+
 class QwenVLM(BaseVLM):
-    """Qwen3-VL (transformers `Qwen3VLForConditionalGeneration`), bf16 on the GPU,
-    greedy decoding."""
+    """Qwen3-VL (transformers `Qwen3VLForConditionalGeneration`), bf16 on the GPU (or
+    its language model in nf4 with `quantize_4bit`), greedy decoding."""
 
     def __init__(self, model_id: str = QWEN_MODEL, device: str = "cuda",
-                 image_max_side: int = 768, max_new_tokens: int = 256) -> None:
+                 image_max_side: int = 768, max_new_tokens: int = 256,
+                 quantize_4bit: bool = False) -> None:
         super().__init__(image_max_side, max_new_tokens)
         import torch
         from transformers import AutoProcessor, Qwen3VLForConditionalGeneration
 
         self.torch = torch
         self.model_id = model_id
+        self.quantize_4bit = quantize_4bit
+        extra = {"quantization_config": _bnb_config(model_id, torch)} if quantize_4bit else {}
         files = _weight_files(model_id)
         done = threading.Event()
 
@@ -180,7 +203,8 @@ class QwenVLM(BaseVLM):
         try:
             self.processor = AutoProcessor.from_pretrained(model_id)
             self.model = Qwen3VLForConditionalGeneration.from_pretrained(
-                model_id, dtype=torch.bfloat16, device_map=device, low_cpu_mem_usage=True)
+                model_id, dtype=torch.bfloat16, device_map=device, low_cpu_mem_usage=True,
+                **extra)
         finally:
             done.set()
             thread.join()
@@ -207,7 +231,7 @@ class QwenVLM(BaseVLM):
 def load_vlm(params: Mapping[str, Any]) -> QwenVLM:
     """Qwen3-VL from the `semantics` config section."""
     return QwenVLM(params["model"], params["device"], params["image_max_side"],
-                   params["max_new_tokens"])
+                   params["max_new_tokens"], bool(params.get("quantize_4bit", False)))
 
 
 # ------------------------------------------------------------------ test fake

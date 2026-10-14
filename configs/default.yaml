@@ -162,6 +162,7 @@ changes:
 semantics:
   model: Qwen/Qwen3-VL-8B-Instruct  # Hugging Face model id (weights from the local HF cache)
   device: cuda           # bf16 on the GPU (16.3 GiB)
+  quantize_4bit: false   # language model in bitsandbytes nf4 (Qwen3-VL-32B-Instruct: 19.5 GiB)
   max_new_tokens: 256    # per answer (greedy decoding); the one polishing call gets 90 per change
   image_max_side: 768    # px, every crop is resized to at most this on its longer side
   enable_judge: true     # paired-crop verdicts: rejected changes move to "rejected"

@@ -746,3 +746,19 @@ def test_in_place_answer_uses_the_objectness_flags(tmp_path):
     vlm = FakeVLM(lambda images, prompt: json.dumps({"reason": "r", "change": "different"}))
     assert in_place_answer(vlm, shown, "labels", "t", describe_first=False)[0] == "different"
     assert '"object2"' not in vlm.prompts[0]
+
+
+def test_load_vlm_passes_the_4bit_flag(monkeypatch):
+    import roomdiff.vlm as vlm_module
+    calls = []
+
+    class Recorder:
+        def __init__(self, *args):
+            calls.append(args)
+
+    monkeypatch.setattr(vlm_module, "QwenVLM", Recorder)
+    base = {"model": "m", "device": "cpu", "image_max_side": 64, "max_new_tokens": 8}
+    vlm_module.load_vlm(base)
+    vlm_module.load_vlm({**base, "quantize_4bit": True})
+    assert calls == [("m", "cpu", 64, 8, False), ("m", "cpu", 64, 8, True)]
+
