@@ -762,3 +762,152 @@ def test_load_vlm_passes_the_4bit_flag(monkeypatch):
     vlm_module.load_vlm({**base, "quantize_4bit": True})
     assert calls == [("m", "cpu", 64, 8, False), ("m", "cpu", 64, 8, True)]
 
+
+# ------------------------------------------------------------------ re-pairing by features
+
+LADDER_NAMES = {"red": "Wooden Ladder", "green": "ladder shelf", "grey": "wall"}
+
+
+def unit(v):
+    v = np.asarray(v, float)
+    return v / np.linalg.norm(v)
+
+
+def ladder_responder(images, prompt):
+    """One ladder named differently in the two videos (red crop before, green after);
+    the strict same-object question is confirmed whenever neither crop is grey (wall)."""
+    cols = [colour(im) for im in images]
+    if '"label"' in prompt and "parts of one physical object" not in prompt:
+        return json.dumps({"label": LADDER_NAMES[cols[0]], "attributes": "pale wood",
+                           "description": "A ladder."})
+    if "same physical object" in prompt:
+        same = "grey" not in cols
+        return json.dumps({"verdict": "confirmed" if same else "rejected",
+                           "reason": "same rungs and wood" if same else "different"})
+    return responder(images, prompt)
+
+
+def ladder_scene(root, cosine=0.9, after_extents=(0.45, 1.5, 0.12), replaced=False,
+                 after_colour="green"):
+    """A removed ladder (1, red crop) and an added one 0.6 m away (2) with their DINOv3
+    features on disk: patch-token cosine `cosine`, CLS cosine 0.7071; instance boxes
+    0.4 x 1.4 x 0.1 m before and `after_extents` after. `replaced`: the two are also a
+    candidate in-place pair (`replaced_by` / `replaces`)."""
+    removed = change(1, "removed", before=side(1, [0, 0.7, 2], 0.3), conf=0.9,
+                     crops={"before": crop(root, "1_before", "red"),
+                            "after": crop(root, "1_after", "grey")})
+    added = change(2, "added", after=side(1, [0.6, 0.7, 2], 0.3), conf=0.7,
+                   crops={"after": crop(root, "2_after", after_colour),
+                          "before": crop(root, "2_before", "grey")})
+    if replaced:
+        removed["replaced_by"], added["replaces"] = 2, 1
+    write_doc(root, [removed, added])
+    folder = root / "instances"
+    folder.mkdir()
+    v, w = unit([1, 0, 0, 0]), unit([0, 1, 0, 0])
+    np.save(folder / "before_feats.npy", v[None])
+    np.save(folder / "after_feats.npy", (cosine * v + np.sqrt(1 - cosine**2) * w)[None])
+    np.save(folder / "before_cls.npy", v[None])
+    np.save(folder / "after_cls.npy", unit([1, 1, 0, 0])[None])
+    for name, extents in (("before", (0.4, 1.4, 0.1)), ("after", after_extents)):
+        record = {"id": 1, "extents": list(extents),
+                  "obb": {"center": [0, 0.7, 2], "extents": list(extents), "yaw_deg": 0.0}}
+        (folder / f"{name}.json").write_text(json.dumps({"instances": [record]}))
+
+
+FEATURES_ON = ["semantics.repair_min_similarity=0.85"]
+FEATURES_OFF = ["semantics.repair_min_similarity=2"]  # labels only (the behaviour before)
+
+
+def test_similar_features_re_pair_differently_named_halves(tmp_path):
+    """"wooden ladder" removed and "ladder shelf" added share no label, so only the
+    DINOv3 similarity (0.9 >= 0.85, sizes within the M4 gate) proposes the pair; the
+    strict same-object judge confirms it and the moved change records both cosines."""
+    ladder_scene(tmp_path)
+    doc = run_semantics(tmp_path, load_config(overrides=FEATURES_OFF), FakeVLM(ladder_responder))
+    assert sorted(c["type"] for c in doc["changes"]) == ["added", "removed"]  # labels only
+    assert load_config().semantics.repair_min_similarity <= 1  # on by default
+
+    vlm = FakeVLM(ladder_responder)
+    doc = run_semantics(tmp_path, load_config(overrides=FEATURES_ON), vlm)
+    assert [(c["id"], c["type"], c["label"]) for c in doc["changes"]] == [
+        (1, "moved", "wooden ladder")]
+    m = doc["changes"][0]
+    assert m["evidence"]["merged_from"] == [1, 2]
+    assert m["evidence"]["merged_types"] == ["removed", "added"]
+    assert m["evidence"]["appearance_similarity"] == pytest.approx(0.9, abs=1e-4)
+    assert m["evidence"]["cls_similarity"] == pytest.approx(0.7071, abs=1e-4)
+    assert m["evidence"]["vlm_reason"] == "same rungs and wood"
+    assert m["transform"]["translation_m"] == pytest.approx(0.6)
+    assert m["motion_kind"] == "rigid"
+    assert sum("same physical object" in p and "already matched" not in p
+               for p in vlm.prompts) == 1  # the strict re-pairing judge, asked once
+    meta = json.loads((tmp_path / "semantics" / "meta.json").read_text())
+    assert meta["merges"] == [{
+        "kind": "removed+added", "ids": [1, 2], "labels": ["wooden ladder", "ladder shelf"],
+        "distance_m": 0.6, "candidate": "features", "appearance_similarity": 0.9,
+        "cls_similarity": 0.7071, "verdict": "confirmed", "reason": "same rungs and wood"}]
+
+
+@pytest.mark.parametrize(("cosine", "after_extents", "paired"), [
+    (0.9, (0.45, 1.5, 0.12), True),
+    (0.8, (0.45, 1.5, 0.12), False),   # features not similar enough
+    (0.9, (0.45, 3.5, 0.12), False),   # 1.4 m vs 3.5 m: fails the M4 size gate
+])
+def test_feature_candidates_need_similarity_and_size(tmp_path, cosine, after_extents, paired):
+    ladder_scene(tmp_path, cosine, after_extents)
+    vlm = FakeVLM(ladder_responder)
+    doc = run_semantics(tmp_path, load_config(overrides=FEATURES_ON), vlm)
+    assert [c["type"] for c in doc["changes"]] == (["moved"] if paired else
+                                                   ["removed", "added"])
+    assert any("same physical object" in p for p in vlm.prompts) == paired
+
+
+def test_feature_candidate_may_be_an_in_place_pair(tmp_path):
+    """The two sides of a candidate in-place replacement are never paired by their labels,
+    but similar features re-pair them (a ladder moved 0.6 m overlaps its old place); with
+    dissimilar features, or labels only, the in-place question decides as before."""
+    ladder_scene(tmp_path, replaced=True)
+    vlm = FakeVLM(ladder_responder)
+    doc = run_semantics(tmp_path, load_config(overrides=FEATURES_ON), vlm)
+    assert [c["type"] for c in doc["changes"]] == ["moved"]
+    assert "replaced_by" not in doc["changes"][0]
+    assert not any("What changed at this place" in p for p in vlm.prompts)
+
+    dissimilar = tmp_path / "dissimilar"
+    dissimilar.mkdir()
+    ladder_scene(dissimilar, cosine=0.5, replaced=True)
+    for root, overrides in ((tmp_path, FEATURES_OFF), (dissimilar, FEATURES_ON)):
+        vlm = FakeVLM(ladder_responder)
+        doc = run_semantics(root, load_config(overrides=overrides), vlm)
+        assert sorted(c["type"] for c in doc["changes"] + doc["rejected"]) == \
+            ["added", "removed"]
+        assert not any("same physical object" in p for p in vlm.prompts)
+        assert sum("What changed at this place" in p for p in vlm.prompts) == 1
+
+
+def test_label_candidates_also_record_the_similarity(tmp_path):
+    """Matching labels propose the pair as before (whatever the features); the moved change
+    now carries the DINOv3 cosines instead of null."""
+    ladder_scene(tmp_path, cosine=0.3, after_colour="red")
+    doc = run_semantics(tmp_path, load_config(), FakeVLM(ladder_responder))
+    assert [c["type"] for c in doc["changes"]] == ["moved"]
+    assert doc["changes"][0]["evidence"]["appearance_similarity"] == pytest.approx(0.3)
+    meta = json.loads((tmp_path / "semantics" / "meta.json").read_text())
+    assert meta["merges"][0]["candidate"] == "label"
+
+
+def test_part_similarity_uses_the_best_matching_instances():
+    """A side merged from fragments matches through its most similar instance; the CLS
+    cosine is that of the same pair."""
+    from roomdiff.semantics import part_similarity
+    features = {"before": {"feats": np.stack([unit([1, 0, 0]), unit([0, 1, 0])]),
+                           "cls": np.stack([unit([1, 0, 0]), unit([0, 0, 1])])},
+                "after": {"feats": np.stack([unit([0, 1, 0.2])]),
+                          "cls": np.stack([unit([0, 1, 1])])}}
+    merged = {"instance_id": 1, "instance_ids": [1, 2]}
+    similarity, cls_similarity, parts = part_similarity(merged, {"instance_id": 1}, features)
+    assert parts == (2, 1) and similarity == pytest.approx(1 / np.sqrt(1.04), abs=1e-4)
+    assert cls_similarity == pytest.approx(np.sqrt(0.5), abs=1e-4)
+    assert part_similarity(merged, {"instance_id": 1}, {}) == (None, None, None)
+    assert part_similarity({"instance_id": 5}, {"instance_id": 1}, features)[0] is None

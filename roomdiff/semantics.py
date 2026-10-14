@@ -11,12 +11,18 @@ the stage can be re-run):
    owner crops show parts of one physical object (a chair seat and its base): geometry from
    the union of their instance points, confidence = max, the larger fragment's id, crops
    and evidence (+ `<side>_part` crop, summed free rays, `merged_from`).
-3. Re-pairing: a `removed` change and an `added` / after-only `unverified` change with a
-   matching label (same label or head noun) whose centroids are closer than
-   `repair_max_distance` become one `moved` change if the VLM says both crops show the
-   same physical object. A `moved` change absorbs an `added` change with a matching label
-   whose box lies within `merge_max_distance` of the moved after-box (gap between the
-   boxes; a spread-out quilt is one object) if the VLM says both are parts of one object.
+3. Re-pairing: a `removed` change and an `added` / after-only `unverified` change whose
+   centroids are closer than `repair_max_distance` are a candidate pair if their labels
+   match (same label, head noun or synonym group) or, whatever their names, if their
+   DINOv3 features are similar: the cosine of the pooled patch tokens of their
+   best-matching pair of instances (one each; a side holds several after a fragment
+   merge) reaches `repair_min_similarity` and those two instances pass the M4 size gate.
+   A feature candidate may also be the two sides of one in-place pair (an object moved a
+   few decimetres). Closest pair first, a candidate becomes one `moved` change if the VLM
+   says both crops show the same physical object. A `moved` change absorbs an `added`
+   change with a matching label whose box lies within `merge_max_distance` of the moved
+   after-box (gap between the boxes; a spread-out quilt is one object) if the VLM says
+   both are parts of one object.
 4. Judge: type-specific paired-crop questions -> `evidence.vlm_verdict` ("confirmed" /
    "rejected" / "unclear") and `evidence.vlm_reason`. A candidate in-place replacement (a
    removed change `replaced_by` an added one at the same place, from the appearance
@@ -61,7 +67,12 @@ from typing import Any
 import numpy as np
 from PIL import Image
 
-from roomdiff.changes import CHANGE_TYPES, instance_evidence
+from roomdiff.changes import (
+    CHANGE_TYPES,
+    box_extents,
+    extents_compatible,
+    instance_evidence,
+)
 from roomdiff.geometry import floor_obb, obb_corners, obb_gap
 from roomdiff.paths import RECORDINGS, OutputPaths
 from roomdiff.vlm import BaseVLM
@@ -632,9 +643,14 @@ def apply_verdict(change: dict[str, Any], verdict: str, reason: str,
 # ------------------------------------------------------------------ re-pairing
 
 
-def merge_removed_added(r: Mapping[str, Any], a: Mapping[str, Any], reason: str) -> dict[str, Any]:
+def merge_removed_added(
+    r: Mapping[str, Any], a: Mapping[str, Any], reason: str,
+    similarity: tuple[float | None, float | None] = (None, None),
+) -> dict[str, Any]:
     """One `moved` change from a removed change `r` and an added / after-only unverified
-    change `a` of the same object (translation from the centroids, rotation unknown)."""
+    change `a` of the same object (translation from the centroids, rotation unknown).
+    `similarity`: DINOv3 (patch, CLS) cosine of the two sides (`part_similarity`), stored
+    as `appearance_similarity` / `cls_similarity` (None if unknown)."""
     b_side, a_side = r["before"], a["after"]
     t = np.subtract(a_side["centroid"], b_side["centroid"])
     ev_r, ev_a = r["evidence"], a["evidence"]
@@ -655,7 +671,8 @@ def merge_removed_added(r: Mapping[str, Any], a: Mapping[str, Any], reason: str)
             "observing_views": round((views_b + views_a) / 2),
             "observing_views_before_place": views_b,
             "observing_views_after_place": views_a,
-            "appearance_similarity": None,
+            "appearance_similarity": similarity[0],
+            "cls_similarity": similarity[1],
             "mask_score": round((ev_r.get("mask_score", 0) + ev_a.get("mask_score", 0)) / 2, 4),
             "merged_from": [r["id"], a["id"]],
             "merged_types": [r["type"], a["type"]],
@@ -670,6 +687,37 @@ def merge_removed_added(r: Mapping[str, Any], a: Mapping[str, Any], reason: str)
 def side_instance_ids(side: Mapping[str, Any]) -> list[int]:
     """Instance ids of a change side (several after a merge of parts)."""
     return list(side.get("instance_ids") or [side["instance_id"]])
+
+
+def feature_row(rows: np.ndarray | None, instance_id: int) -> np.ndarray | None:
+    """Unit-length feature of an instance (row = id - 1), None if there is none."""
+    if rows is None or not 1 <= instance_id <= len(rows):
+        return None
+    vector = np.asarray(rows[instance_id - 1], np.float64)
+    norm = float(np.linalg.norm(vector))
+    return vector / norm if norm > 0 else None
+
+
+def part_similarity(
+    before: Mapping[str, Any], after: Mapping[str, Any], features: Mapping[str, Mapping[str, Any]],
+) -> tuple[float | None, float | None, tuple[int, int] | None]:
+    """DINOv3 similarity of a before side and an after side (`instance_features`): the
+    pooled-patch-token cosine of their best-matching pair of instances (a side holds
+    several after a merge of fragments, and one of them may be the object), the CLS cosine
+    of that pair and the pair (before id, after id); all None without features."""
+    rows_b, rows_a = features.get("before") or {}, features.get("after") or {}
+    best: tuple[float, int, int] | None = None
+    for i in side_instance_ids(before):
+        for j in side_instance_ids(after):
+            fb, fa = feature_row(rows_b.get("feats"), i), feature_row(rows_a.get("feats"), j)
+            if fb is not None and fa is not None and (best is None or fb @ fa > best[0]):
+                best = (float(fb @ fa), i, j)
+    if best is None:
+        return None, None, None
+    cosine, i, j = best
+    fb, fa = feature_row(rows_b.get("cls"), i), feature_row(rows_a.get("cls"), j)
+    cls_cosine = None if fb is None or fa is None else round(float(fb @ fa), 4)
+    return round(cosine, 4), cls_cosine, (i, j)
 
 
 def union_side(side: Mapping[str, Any], part: Mapping[str, Any],
@@ -805,12 +853,20 @@ def merge_fragments(vlm: BaseVLM, crops: Crops, changes: list[dict[str, Any]],
 
 def repair(vlm: BaseVLM, crops: Crops, changes: list[dict[str, Any]],
            params: Mapping[str, Any], only: set[int] | None = None,
+           features: Mapping[str, Mapping[str, Any]] | None = None,
+           extent_range: tuple[float, float] = (0.5, 2.0),
            ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Re-pair split changes (module docstring, step 2). `only`: consider just the pairs
-    with one of these ids, never two halves of the same rejected moved change. Returns the
-    new change list and one record per VLM pair check."""
+    """Re-pair split changes (module docstring, step 3). `only`: consider just the pairs
+    with one of these ids, never two halves of the same rejected moved change.
+    `features` (`instance_features`): DINOv3 features that also propose pairs whatever
+    their labels (`part_similarity` >= `repair_min_similarity`, and the sorted-extent
+    ratios of those two instances within `extent_range` as in the M4 gate); without them,
+    or with `repair_min_similarity` null or above 1, only matching labels do. Returns the
+    new change list and one record per VLM pair check (`candidate`: "label" or
+    "features", with both cosines)."""
     records: list[dict[str, Any]] = []
     by_id = {c["id"]: c for c in changes}
+    min_similarity = params.get("repair_min_similarity")
 
     def wanted(x: Mapping[str, Any], y: Mapping[str, Any]) -> bool:
         if only is None:
@@ -819,15 +875,41 @@ def repair(vlm: BaseVLM, crops: Crops, changes: list[dict[str, Any]],
             x["evidence"].get("split_from") == y["evidence"].get("split_from")
         return (x["id"] in only or y["id"] in only) and not same_split
 
+    def candidate(r: Mapping[str, Any], a: Mapping[str, Any]
+                  ) -> tuple[str, float | None, float | None] | None:
+        """(why, patch cosine, CLS cosine) if removed `r` and `a` are a candidate pair:
+        "label" (matching labels, not the two sides of one in-place pair) or "features"
+        (similar DINOv3 features and sizes, both named as objects); else None."""
+        if not wanted(r, a):
+            return None
+        similarity, cls_similarity, parts = part_similarity(r["before"], a["after"],
+                                                            features or {})
+        if labels_match(r["label"], a["label"]) and r.get("replaced_by") != a["id"]:
+            return "label", similarity, cls_similarity
+        named = all(c["label"] != "object" and not is_background(c["label"]) for c in (r, a))
+        if not named or min_similarity is None or similarity is None \
+                or similarity < min_similarity or parts is None:
+            return None
+        sizes = [((features or {}).get(name) or {}).get("extents", {}).get(i)
+                 or side_extents(side) for name, i, side in
+                 (("before", parts[0], r["before"]), ("after", parts[1], a["after"]))]
+        if extents_compatible(*sizes, *extent_range):
+            return "features", similarity, cls_similarity
+        return None
+
     removed = [c for c in changes if c["type"] == "removed"]
     targets = [c for c in changes if c["type"] == "added"
                or (c["type"] == "unverified" and c["evidence"].get("seen_in") == "after")]
-    pairs = sorted((centroid_distance(r["before"], a["after"]), r["id"], a["id"])
-                   for r in removed for a in targets
-                   if labels_match(r["label"], a["label"]) and wanted(r, a)
-                   and r.get("replaced_by") != a["id"])  # not the two sides of one place
+    pairs = []
+    for r in removed:
+        for a in targets:
+            found = candidate(r, a)
+            if found is not None:
+                pairs.append((centroid_distance(r["before"], a["after"]), r["id"], a["id"],
+                              *found))
+    pairs.sort(key=lambda p: p[:3])  # closest first
     used: set[int] = set()
-    for dist, rid, aid in pairs:
+    for dist, rid, aid, why, similarity, cls_similarity in pairs:
         if dist >= params["repair_max_distance"] or rid in used or aid in used:
             continue
         r, a = by_id[rid], by_id[aid]
@@ -836,9 +918,11 @@ def repair(vlm: BaseVLM, crops: Crops, changes: list[dict[str, Any]],
         verdict, reason = verdict_of(data)
         records.append({"kind": "removed+" + a["type"], "ids": [rid, aid],
                         "labels": [r["label"], a["label"]], "distance_m": round(dist, 3),
-                        "verdict": verdict, "reason": reason})
+                        "candidate": why, "appearance_similarity": similarity,
+                        "cls_similarity": cls_similarity, "verdict": verdict,
+                        "reason": reason})
         if verdict == "confirmed":
-            by_id[rid] = merge_removed_added(r, a, reason)
+            by_id[rid] = merge_removed_added(r, a, reason, (similarity, cls_similarity))
             del by_id[aid]
             used |= {rid, aid}
 
@@ -1085,6 +1169,22 @@ def instance_points(paths: OutputPaths) -> dict[str, dict[int, np.ndarray]]:
     return out
 
 
+def instance_features(paths: OutputPaths) -> dict[str, dict[str, Any]]:
+    """DINOv3 features per recording: `feats` (pooled patch tokens) and `cls` (CLS token)
+    from `instances/<rec>_feats.npy` / `_cls.npy` (row = instance id - 1) and `extents`
+    {id: oriented-box extents} from `instances/<rec>.json` (empty if the files are
+    missing)."""
+    out: dict[str, dict[str, Any]] = {}
+    for name in RECORDINGS:
+        files = {key: paths.instances / f"{name}_{key}.npy" for key in ("feats", "cls")}
+        if all(f.is_file() for f in files.values()):
+            out[name] = {key: np.load(f) for key, f in files.items()}
+            doc = paths.instances / f"{name}.json"
+            out[name]["extents"] = {r["id"]: box_extents(r) for r in json.loads(
+                doc.read_text())["instances"]} if doc.is_file() else {}
+    return out
+
+
 def instance_records(paths: OutputPaths) -> dict[str, dict[int, dict[str, Any]]]:
     """M4 instance records per recording and id (empty if the files are missing)."""
     out: dict[str, dict[int, dict[str, Any]]] = {}
@@ -1121,6 +1221,10 @@ def run_semantics(out_dir: str | Path, cfg: Mapping[str, Any],
         c["evidence"]["vlm_reason"] = None
     frame = scene_frame(paths)
     points = instance_points(paths)
+    features = instance_features(paths)
+    gate = cfg.get("changes") or {}  # the M4 size gate, also for similarity re-pairing
+    extent_range = (float(gate.get("extent_ratio_min", 0.5)),
+                    float(gate.get("extent_ratio_max", 2.0)))
     crops = Crops(paths.root)
     times["load"] = time.perf_counter() - start
 
@@ -1149,7 +1253,8 @@ def run_semantics(out_dir: str | Path, cfg: Mapping[str, Any],
 
     t0 = time.perf_counter()
     if params["enable_repair"]:
-        changes, more = repair(vlm, crops, changes, params)
+        changes, more = repair(vlm, crops, changes, params, features=features,
+                               extent_range=extent_range)
         merges += more
     times["repair"] = time.perf_counter() - t0
 
@@ -1215,7 +1320,8 @@ def run_semantics(out_dir: str | Path, cfg: Mapping[str, Any],
         merges += more
         halves |= {i for x in more if x["verdict"] == "confirmed" for i in x["ids"]}
     if splits and params["enable_repair"]:  # a kept split half may pair up with another change
-        kept, more = repair(vlm, crops, kept, params, only=halves)
+        kept, more = repair(vlm, crops, kept, params, only=halves, features=features,
+                            extent_range=extent_range)
         merges += more
         for c in kept:
             if c["type"] == "moved" and c["motion_kind"] is None:  # new: verdict from repair
