@@ -36,6 +36,32 @@ there were no false positives. The price is recall on small or flat objects: a w
 table or a bag lying flat is within the margin of the surface it rests on and produces no
 blob. Those objects need an appearance cue, which is the second channel below.
 
+*Alignment gate.* The margin assumes that the two reconstructions agree to a centimetre or
+two. The recon stage checks this on the co-visible points, in both directions: WEAK if the
+median nearest-neighbour distance exceeds 2 cm, fewer than 90 % of the points lie within
+10 cm, or the recordings barely overlap; FAIR if only the share within 3 cm drops below
+80 %; else OK. FAIR is a warning and changes nothing: it catches the tabletop runs with one
+recording turned a quarter turn (74 % within 3 cm, the whole table top reported "added"),
+which passed the other two tests, but also three benchmark pairs without such errors
+(77-79 %). With `visibility.weak_alignment_demotes` (off by default, see below) WEAK makes
+the voxel channel report its removed / added blobs as unverified, since a misaligned
+surface looks "seen empty" from the other side. The appearance channel is left alone: its candidates come from keyframe
+pairs whose depths agree after reprojection. One pair in each 20-pair subset is WEAK. On
+gas_station_3_gas_station_4 (median 7-9 cm, 28 % within 3 cm) all 7 benchmark predictions
+were voxel changes, 6 false (signs, a bumper, a gas pump "added") and 1 right (a car driven
+away); the gate removes all 7 (reported pairs: FP 39 -> 33, TP 36 -> 35, per-scene AP 0.413
+-> 0.400, typed 0.280 -> 0.264). On street_3_street_4 of the development subset (median
+3-4 cm, 40 % within 3 cm) all four voxel changes were right (a van removed, three cars
+added); the van and two cars, whose demoted blobs exceed the 1.5 m size limit of
+unverified regions, came back through the appearance channel, the third car stayed
+unverified (TP 25 -> 24, per-scene AP 0.459 -> 0.436). The gate trades a few correct
+changes for fewer false ones and lowers every AP metric on both subsets, so it is off by
+default; the verdict and the 3 cm share stay in the report as a diagnostic, and the WEAK
+pairs of this benchmark are outdoor scenes whose true changes are cars, exactly what the
+voxel channel finds there. A size rule (demote only blobs shorter than about 1.2 m, which
+separates the cars from the signs and bumpers on these two pairs) is fitted on 11 changes
+and was not adopted.
+
 ## 2b. Appearance channel: what the voxels cannot see
 For every keyframe we pick the two best co-visible keyframes of the other recording (same
 surfaces, depth-consistent after reprojection). Each DINOv3 patch of a keyframe is

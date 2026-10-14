@@ -51,6 +51,13 @@ visibility:
                          # surfaces are only 2-3 voxels thick
   min_blob_volume: 0.0015  # m^3, smaller candidate blobs are dropped ...
   min_blob_voxels: 8     # ... as are blobs with fewer voxels
+  weak_alignment_demotes: false  # recon verdict "alignment WEAK" (the two reconstructions do not
+                         # line up, so "seen empty" may be misalignment): every disappeared /
+                         # appeared blob becomes unverified_before / unverified_after. Off: one
+                         # pair per 20-pair subset is WEAK, and there the gate removed the false
+                         # changes (reported FP 39 -> 33) but also the correct ones (TP 36 -> 35,
+                         # development 25 -> 24), every AP lower; the verdict stays a diagnostic
+                         # in the report (docs/design_note.md, section 2)
   debug_views: 2         # debug crops per blob and recording (best views of its voxels)
   occlusion_tol: 0.05    # m, depth tolerance of the debug-view scorer: a voxel centre is visible
                          # if the observed depth is within this of it (own recording) or no

@@ -201,6 +201,55 @@ def test_instance_files(scene):
         assert inst_id in data["points"]
 
 
+def test_unverified_changes_say_why(scene):
+    _, _, doc = scene
+    unverified = change_of(doc, "unverified")
+    assert unverified and all(c["evidence"]["reason_class"] == "never_observed"
+                              for c in unverified)
+    assert all("never observed" in c["description"] for c in unverified)
+    assert not any("reason_class" in c["evidence"] for c in doc["changes"]
+                   if c["type"] != "unverified")
+
+
+def test_weak_alignment_turns_geometry_changes_unverified(tmp_path):
+    """With a WEAK recon verdict M3 demotes the disappeared / appeared blobs: the moved red
+    box, the removed blue one and the added green one come back as unverified regions with
+    `reason_class` "weak_alignment"; the yellow box the after video never saw stays
+    "never_observed"."""
+    from roomdiff.changes import run_changes
+
+    labels = make_scene(tmp_path)
+    (tmp_path / "recon" / "meta.json").write_text(json.dumps(
+        {"diagnostics": {"verdict": "alignment WEAK", "verdict_reason": "test"}}))
+    cfg = load_config(overrides=[*SETTINGS, "visibility.weak_alignment_demotes=true"])
+    run_visibility(tmp_path, cfg)
+    run_instances(tmp_path, cfg, FakeSegmenter(labels), FakeFeaturizer())
+    doc = run_changes(tmp_path, cfg)
+    assert {c["type"] for c in doc["changes"]} == {"unverified"}
+    assert doc["summary"].startswith("0 changes detected: 0 moved, 0 added, 0 removed")
+
+    def at(centre, side):
+        found = [c for c in doc["changes"] if c[side] is not None
+                 and np.allclose(c[side]["centroid"], centre, atol=0.12)]
+        assert len(found) == 1, (centre, side)
+        return found[0]
+
+    for centre, side in ((R0, "before"), (B, "before"), (R1, "after"), (G, "after")):
+        change = at(centre, side)
+        assert change["evidence"]["seen_in"] == side and change["confidence"] <= 0.5
+        assert change["evidence"]["reason_class"] == "weak_alignment"
+        assert "too poorly aligned" in change["description"]
+    assert at(Y, "before")["evidence"]["reason_class"] == "never_observed"
+    blobs = json.loads((tmp_path / "visibility" / "candidates.json").read_text())["candidates"]
+    demoted = {b["id"] for b in blobs if b.get("demotion_reason") == "weak_alignment"}
+    assert len(demoted) >= 4
+    for name in ("before", "after"):
+        for record in load_instances(tmp_path, name)["instances"]:
+            assert record["kind"] == "unverified"
+            assert record["demoted"] == ("weak_alignment" if demoted & set(record["blob_ids"])
+                                         else None)
+
+
 def test_cli_instances_changes_viz(tmp_path, monkeypatch):
     from typer.testing import CliRunner
 

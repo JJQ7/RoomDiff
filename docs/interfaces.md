@@ -34,8 +34,17 @@ describes the source video. Implemented.
 | `valid` | (N,H,W) bool | conf > threshold and not a depth/normal edge |
 | `metric_scale` | float | scale factor reported by the model |
 `meta.json`: model name, resolution, frame counts, runtime, VRAM, alignment diagnostics
-(median nearest-neighbour distance of confident before-points to the after cloud and vice
-versa, fraction under 3 cm / 10 cm), and the chosen `scale_factor`. Levelling (after the
+(`diagnostics`: median nearest-neighbour distance of confident before-points to the after
+cloud and vice versa, fraction under 3 cm / 10 cm, over all points (`nn_all`) and over the
+points the other recording could observe (`nn_covisible`, whose `fraction` is that share);
+`frac_lt_3cm_min` = the smaller co-visible 3 cm fraction of the two directions (null
+without co-visible points); `verdict` and `verdict_reason` from `nn_covisible`
+(`recon.alignment_verdict`): "alignment WEAK" if a direction covers less than 10 % of its
+recording, or its median exceeds 2 cm, or less than 90 % of it lies within 10 cm (M3 then
+demotes its removed / added candidates to unverified); else "alignment FAIR" if
+`frac_lt_3cm_min` < 0.8 (a warning only: good runs measure 0.85-0.98, but a few correct
+ones 0.77-0.80); else "alignment OK"; the M5 report's coverage note gives the verdict, its
+reason and `frac_lt_3cm_min`), and the chosen `scale_factor`. Levelling (after the
 joint pass or the separate-mode alignment, before `scale_factor`): `levelled` (bool);
 when true also `up_axis_original` (the up direction in the model frame that became +Y),
 `floor_inliers_fraction` (share of the floor candidates within 2 cm of the fitted floor
@@ -86,6 +95,12 @@ depth-consistent within `occlusion_tol`; other recording: not occluded) (`frame`
 into recon.npz, `file`, `occluded` (fewer than 15 % of the voxels visible),
 `visible_fraction`, `box` [x0,y0,x1,y1] = 2D box of the projected voxel centres,
 `crop` = `debug/blob_<id>_<type>_<rec>_<k>.jpg`).
+Alignment gate (`weak_alignment_demotes`, default off): when `recon/meta.json` has the
+verdict "alignment WEAK", every disappeared blob becomes `unverified_before` and every
+appeared blob `unverified_after` (`demote_blobs`, before the evidence and crops): it keeps
+all its fields and gets `demoted_from` (the old type) and `demotion_reason`
+("weak_alignment"); its voxels move to `labels_unverified_<rec>`, so `labels_disappeared` /
+`labels_appeared` stay empty. Downstream it is an unverified blob like any other.
 
 View scorer (`roomdiff.projection.score_views`, used for the M3 debug crops, the M4 SAM
 prompting views and the M4 crops): per keyframe, the object's points (blob voxel centres
@@ -100,7 +115,10 @@ images, so the ranking does not change when the world frame is turned about +Y
 (`tests/test_visibility.py`); the previous ranking by the projected axis-aligned box did.
 
 `meta.json`: parameters used, voxel size source, grid, voxels per state, candidate voxel
-counts (raw / after opening / in blobs), blobs per type, runtime, peak VRAM.
+counts (raw / after opening / in blobs, per type before any demotion), `alignment_verdict`
+(the M2 verdict, null without one), `demoted` {`disappeared`, `appeared`} (blobs demoted to
+unverified; the M5 report's coverage note states their number), `demotion_reason`
+("weak_alignment", or null), blobs per type (after the demotion), runtime, peak VRAM.
 `visibility.rrd`: blobs as Rerun boxes. Projection helpers for later stages:
 `roomdiff/projection.py` (`project_to_pixels`, `project_aabb`, `score_views`, `best_views`).
 
@@ -224,7 +242,8 @@ prompted keyframe: `frame` index into recon.npz, `file`, prompt `box`, `mask_box
 `feature_index` (row in the feature files = id - 1), `n_frame_masks`, `merged_from`
 (blob ids of each part joined by the gap rule, e.g. [[7, 18], [11]]; empty if none),
 `lift_fallback` (some view of a part used the bounded lifting), `source` ("geometry" for
-M3 blobs, "appearance" for appearance clusters), `evidence`
+M3 blobs, "appearance" for appearance clusters), `demoted` (the M3 `demotion_reason` of a
+source blob, "weak_alignment"; null if none was demoted), `evidence`
 (aggregated over the source blobs, verified ones if any: `voxels`, `volume_m3`,
 `free_rays` = sum over blob voxels of the other recording's free count, voxel-weighted
 `free_frames_mean`, max `observing_views`, summed `occ_points`, `min_camera_distance`;
@@ -296,8 +315,9 @@ with `"replaces": <id of the removed change>` (optional keys, only on such pairs
 the linked change may be in `rejected` or merged away), both with
 `evidence.replace_overlap`. Removed / added changes of appearance instances also have
 `evidence.appearance` (the instance's appearance terms); `before` / `after` is null on the side where the object does
-not exist (removed: after, added: before, unverified: the recording that never observed
-it) and `transform` is null unless moved. `R`, `t` map before points to after points
+not exist (removed: after, added: before, unverified: the other recording, which never
+observed it or, demoted, seemed to see it empty) and `transform` is null unless moved.
+`R`, `t` map before points to after points
 (`x_after = R x_before + t`); `translation_m` = displacement of the before centroid;
 `icp_fitness` = symmetric 3 cm fitness (smaller of the two inlier fractions); from
 `icp_min_fitness` (0.3) on the ICP motion is used and `rotation_deg` reported, with
@@ -312,7 +332,10 @@ factor of both sides).
 M4 writes `label: "object"`, a templated `description` and `vlm_verdict: null` (M5 fills
 them, see below). Evidence keys: removed / added / unverified: `free_rays`, `free_frames_mean`,
 `observing_views` (keyframes of the other recording that saw through the place),
-`occ_points`, `mask_score`, `view_consistency` (+ `seen_in` for unverified); moved:
+`occ_points`, `mask_score`, `view_consistency` (+ for unverified `seen_in`, the recording
+that has the object, and `reason_class`: "never_observed" = the other recording never
+looked at the place, "weak_alignment" = it did, but M3 demoted the blobs because the
+alignment verdict was WEAK); moved:
 `free_rays` (both places), `observing_views` (mean), `observing_views_before_place`,
 `observing_views_after_place`, `appearance_similarity` (DINOv3 cosine), `cls_similarity`,
 `mask_score`, `icp_fitness`.

@@ -36,6 +36,13 @@ Geometry proposes, appearance fills in what geometry cannot see, the vision-lang
 model judges and names. A change is only `removed` or `added` if the other video looked
 at that place and saw it empty; space the other video never observed is `unverified`.
 
+The recon stage checks that the two reconstructions line up on the points both videos
+see (verdict OK / FAIR / WEAK in the report, with the share of those points within 3 cm);
+a WEAK verdict can turn every removed / added candidate of the geometry channel into
+`unverified` (`visibility.weak_alignment_demotes`), but that is off by default: on the one
+WEAK pair of each benchmark subset it removed the false changes and the correct ones with
+them (design note, section 2).
+
 ## Install
 
 Tested on Ubuntu 24.04 under WSL2 with Python 3.12 and an RTX 5090 (the pipeline needs a

@@ -840,6 +840,9 @@ def instance_record(inst: Instance, recon: Mapping[str, Any]) -> dict[str, Any]:
         "merged_from": inst.merged_from,
         "lift_fallback": inst.lift_fallback,
         "source": inst.source,
+        # M3 demoted a source blob to unverified (`demotion_reason`, e.g. "weak_alignment")
+        "demoted": next((b["demotion_reason"] for b in inst.blobs
+                         if b.get("demotion_reason")), None),
         "evidence": inst.evidence if inst.evidence is not None
         else aggregate_evidence(inst.blobs),
     }

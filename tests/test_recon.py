@@ -21,7 +21,9 @@ from roomdiff.cli import app
 from roomdiff.config import load_config
 from roomdiff.geometry import sim3_apply_to_poses, sim3_matrix, umeyama
 from roomdiff.recon import (
+    FAIR_FRACTION_3CM,
     alignment_diagnostics,
+    alignment_verdict,
     anchor_indices,
     fit_floor,
     level_transform,
@@ -302,6 +304,54 @@ def test_alignment_verdict_without_overlap():
     diag, _ = alignment_diagnostics(data, voxel=0.02)
     assert diag["verdict"] == "alignment WEAK"
     assert diag["verdict_reason"] == "little co-visible overlap"
+
+
+def test_alignment_verdict_fair_when_only_the_3cm_fraction_drops():
+    """A 4 cm shift along x moves only the walls facing x: the median and the 10 cm share
+    pass, but a quarter of the points lie farther than 3 cm. This is the signature of the
+    tabletop runs with one recording turned a quarter turn (74-80 % within 3 cm)."""
+    data = overlap_recon([0, 1])
+    data["cam2world"][2:, 0, 3] += 0.04
+    diag, _ = alignment_diagnostics(data, voxel=0.02)
+    covis = diag["nn_covisible"].values()
+    assert all(c["median_m"] <= 0.02 and c["frac_lt_10cm"] >= 0.9 for c in covis)
+    assert diag["verdict"] == "alignment FAIR" and "within 3 cm" in diag["verdict_reason"]
+    assert diag["frac_lt_3cm_min"] == min(c["frac_lt_3cm"] for c in covis) < FAIR_FRACTION_3CM
+    line = verdict_line(diag)
+    assert line.startswith("alignment FAIR (< 80% of the co-visible points within 3 cm")
+    assert line.endswith(f"; min <3cm {100 * diag['frac_lt_3cm_min']:.0f}%)")
+
+
+def covis_stats(median: float, frac_3cm: float, frac_10cm: float, fraction: float = 0.6):
+    """One direction of `nn_covisible` as stored in recon/meta.json."""
+    return {"fraction": fraction, "median_m": median, "mean_m": median,
+            "frac_lt_3cm": frac_3cm, "frac_lt_10cm": frac_10cm}
+
+
+def test_alignment_verdict_levels_and_fair_boundary():
+    def verdict(before: dict, after: dict) -> tuple:
+        return alignment_verdict({"before_to_after": before, "after_to_before": after})
+
+    good = covis_stats(0.006, 0.92, 0.99)
+    assert verdict(good, covis_stats(0.008, 0.85, 0.98)) == ("alignment OK", "", 0.85)
+    # FAIR: the smaller 3 cm share of the two directions below FAIR_FRACTION_3CM (0.8)
+    assert FAIR_FRACTION_3CM == 0.8
+    assert verdict(good, covis_stats(0.01, 0.80, 0.97))[0] == "alignment OK"
+    fair = verdict(covis_stats(0.01, 0.7999, 0.97), good)
+    assert fair[0] == "alignment FAIR" and fair[2] == 0.7999
+    # the quarter-turned tabletop runs: median 1.0-1.6 cm, 95-97 % within 10 cm, OK before
+    assert verdict(covis_stats(0.010, 0.80, 0.97),
+                   covis_stats(0.016, 0.74, 0.95))[0] == "alignment FAIR"
+    # WEAK as before, whatever the 3 cm share: gas_station_3_gas_station_4 ...
+    weak = verdict(covis_stats(0.094, 0.278, 0.518, 0.278),
+                   covis_stats(0.074, 0.293, 0.553, 0.177))
+    assert weak[0] == "alignment WEAK" and "within 10 cm" in weak[1] and weak[2] == 0.278
+    assert verdict(covis_stats(0.021, 0.95, 0.99), good)[0] == "alignment WEAK"  # median
+    assert verdict(covis_stats(0.01, 0.95, 0.89), good)[0] == "alignment WEAK"  # 10 cm share
+    small = verdict(covis_stats(0.01, 0.95, 0.99, fraction=0.05), good)
+    assert small == ("alignment WEAK", "little co-visible overlap", 0.92)
+    assert alignment_verdict({"before_to_after": good})[:2] == small[:2]  # one direction only
+    assert alignment_verdict({}) == ("alignment WEAK", "little co-visible overlap", None)
 
 
 # ------------------------------------------------------------------- full stage

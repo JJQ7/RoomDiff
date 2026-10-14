@@ -17,7 +17,8 @@ on) the frame is then turned about +Y so that the dominant wall direction lies a
 +Z (`wall_yaw`), which makes object boxes room-aligned.
 
 Writes `<out>/recon/recon.npz`, `meta.json`, `before.ply`, `after.ply`
-(docs/interfaces.md, M2) and prints a one-line alignment verdict.
+(docs/interfaces.md, M2) and prints a one-line alignment verdict (`alignment_verdict`:
+OK, FAIR = a warning, WEAK = M3 demotes its removed / added candidates to unverified).
 """
 
 from __future__ import annotations
@@ -53,10 +54,19 @@ if TYPE_CHECKING:
 
 PATCH = 14  # Pi3X patch size: image sides must be multiples of it
 ICP_MAX_DIST = 0.05  # m, max ICP correspondence distance
-# alignment verdict, on co-visible points (see `alignment_diagnostics`), both directions:
+# alignment verdict, on co-visible points (see `alignment_verdict`), both directions:
+VERDICT_OK, VERDICT_FAIR, VERDICT_WEAK = "alignment OK", "alignment FAIR", "alignment WEAK"
 OK_MEDIAN = 0.02  # m, max median nearest-neighbour distance
 OK_FRACTION = 0.9  # min fraction of points within 10 cm of the other cloud
 MIN_COVISIBLE = 0.1  # min fraction of a recording's points the other one could observe
+# FAIR, a warning only (nothing downstream changes): the two rules above pass, but in one
+# direction fewer than this fraction of the co-visible points lie within 3 cm of the other
+# cloud. Measured (weaker direction): good runs 85-98 %; the tabletop runs with one
+# recording turned a quarter turn 74 % (the whole table top came out "added", 7 and 4 false
+# positives) although their median (1.0-1.6 cm) and 10 cm share (95-97 %) passed; but
+# three SceneDiff pairs without such errors measure 77-79 % (a fourth 80 %), so FAIR only
+# flags and only WEAK acts (visibility).
+FAIR_FRACTION_3CM = 0.8
 # levelling (`level_transform`)
 LEVEL_STRIDE = 4  # floor fit on every 4th valid pixel (rows and columns)
 FLOOR_BAND = 10.0  # floor candidates: the lowest 10 % of the points along the camera up
@@ -584,7 +594,8 @@ def alignment_diagnostics(
     distances before->after and after->before (median, mean, fraction < 3 / 10 cm):
     `nn_all` over all points, `nn_covisible` over the points the other recording could
     have observed (`observable_by`; `fraction` = share of points kept). Areas filmed by
-    one video only dominate `nn_all`; the verdict uses `nn_covisible`, where only real
+    one video only dominate `nn_all`; the verdict (`alignment_verdict`: OK / FAIR / WEAK,
+    with `verdict_reason` and `frac_lt_3cm_min`) uses `nn_covisible`, where only real
     changes and misalignment remain. Also reports the scene extent (1st-99th percentile
     box), camera path length, mean confidence and valid fraction per recording.
     Returns the diagnostics and the two downsampled coloured clouds.
@@ -615,16 +626,42 @@ def alignment_diagnostics(
             "valid_fraction": float(recon["valid"][sel].mean()),
             "points_voxelized": len(pts[r]),
         }
-    covis = [diag["nn_covisible"].get(k) for k in ("before_to_after", "after_to_before")]
-    if not all(c and c["fraction"] >= MIN_COVISIBLE for c in covis):
-        diag["verdict"], diag["verdict_reason"] = "alignment WEAK", "little co-visible overlap"
-    elif all(c["median_m"] <= OK_MEDIAN and c["frac_lt_10cm"] >= OK_FRACTION for c in covis):
-        diag["verdict"], diag["verdict_reason"] = "alignment OK", ""
-    else:
-        diag["verdict"] = "alignment WEAK"
-        diag["verdict_reason"] = (f"co-visible median > {100 * OK_MEDIAN:.0f} cm or < "
-                                  f"{100 * OK_FRACTION:.0f}% within 10 cm")
+    verdict, reason, frac_min = alignment_verdict(diag["nn_covisible"])
+    diag.update(verdict=verdict, verdict_reason=reason, frac_lt_3cm_min=frac_min)
     return diag, clouds
+
+
+def frac_lt_3cm_min(nn_covisible: Mapping[str, Mapping[str, float]]) -> float | None:
+    """Smaller of the two directions' fractions of co-visible points within 3 cm of the
+    other cloud (`nn_covisible` of `alignment_diagnostics`); None without any."""
+    fractions = [d["frac_lt_3cm"] for d in nn_covisible.values() if "frac_lt_3cm" in d]
+    return min(fractions) if fractions else None
+
+
+def alignment_verdict(
+    nn_covisible: Mapping[str, Mapping[str, float]],
+) -> tuple[str, str, float | None]:
+    """Verdict, reason and `frac_lt_3cm_min` from the co-visible statistics of both
+    directions (`nn_covisible` of `alignment_diagnostics`, also as stored in
+    recon/meta.json).
+
+    WEAK: a direction has no co-visible points or covers less than MIN_COVISIBLE of its
+    recording, or its median exceeds OK_MEDIAN or less than OK_FRACTION of it lies within
+    10 cm (M3 then demotes its blobs to unverified, `visibility.weak_alignment_demotes`).
+    FAIR (a warning): not WEAK, but `frac_lt_3cm_min` < FAIR_FRACTION_3CM. Else OK.
+    """
+    covis = [nn_covisible.get(k) for k in ("before_to_after", "after_to_before")]
+    frac_min = frac_lt_3cm_min(nn_covisible)
+    if not all(c and c["fraction"] >= MIN_COVISIBLE for c in covis):
+        return VERDICT_WEAK, "little co-visible overlap", frac_min
+    if not all(c["median_m"] <= OK_MEDIAN and c["frac_lt_10cm"] >= OK_FRACTION
+               for c in covis if c):
+        return VERDICT_WEAK, (f"co-visible median > {100 * OK_MEDIAN:.0f} cm or < "
+                              f"{100 * OK_FRACTION:.0f}% within 10 cm"), frac_min
+    if frac_min is not None and frac_min < FAIR_FRACTION_3CM:
+        return VERDICT_FAIR, (f"< {100 * FAIR_FRACTION_3CM:.0f}% of the co-visible points "
+                              "within 3 cm in one direction"), frac_min
+    return VERDICT_OK, "", frac_min
 
 
 def verdict_line(diag: Mapping[str, Any]) -> str:
@@ -636,6 +673,8 @@ def verdict_line(diag: Mapping[str, Any]) -> str:
             f"{100 * d['median_m']:.1f} cm, <3cm {100 * d['frac_lt_3cm']:.0f}%, "
             f"<10cm {100 * d['frac_lt_10cm']:.0f}%"
         )
+    if diag.get("frac_lt_3cm_min") is not None:
+        parts.append(f"min <3cm {100 * diag['frac_lt_3cm_min']:.0f}%")
     reason = f"{diag['verdict_reason']}; " if diag["verdict_reason"] else ""
     return f"{diag['verdict']} ({reason}{'; '.join(parts) or 'no co-visible points'})"
 

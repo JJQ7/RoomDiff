@@ -207,6 +207,64 @@ def test_cli_visibility_and_viz(tmp_path):
     assert "2 candidate blobs" in result.output and (out / "scene.rrd").exists()
 
 
+# ------------------------------------------------------------------ alignment gate
+
+
+def with_verdict(out, verdict: str):
+    """Store an M2 alignment verdict in `<out>/recon/meta.json`."""
+    (out / "recon" / "meta.json").write_text(json.dumps(
+        {"diagnostics": {"verdict": verdict, "verdict_reason": "test"}}))
+    return out
+
+
+def test_weak_alignment_demotes_removed_and_added_blobs(changed_scene, tmp_path):
+    """The scene of `changed_scene` (same noise) with a WEAK recon verdict: the disappeared
+    and appeared blobs become unverified with all their fields; box C, which the after
+    cameras never saw, is unverified anyway; the label arrays follow the new types."""
+    out = with_verdict(make_scene(tmp_path, [BOX_A, BOX_C], [BOX_B]), "alignment WEAK")
+    meta = run_visibility(out, cfg(weak_alignment_demotes=True))
+    reference = {b["id"]: b for b in blobs_of(changed_scene[0])}
+    blobs = blobs_of(out)
+    assert [b["id"] for b in blobs] == list(reference) == [1, 2, 3]
+    new_type = {"disappeared": "unverified_before", "appeared": "unverified_after"}
+    for blob in blobs:
+        ref = reference[blob["id"]]
+        assert all(blob[k] == ref[k] for k in ("voxels", "volume_m3", "centroid", "aabb",
+                                               "evidence"))
+        if ref["type"] in new_type:
+            assert blob["type"] == new_type[ref["type"]]
+            assert (blob["demoted_from"], blob["demotion_reason"]) == (ref["type"],
+                                                                       "weak_alignment")
+        else:
+            assert blob["type"] == ref["type"] == "unverified_before"
+            assert "demoted_from" not in blob and "demotion_reason" not in blob
+        views = blob["views"]["before"] + blob["views"]["after"]
+        assert views and all(f"_{blob['type']}_" in v["crop"] for v in views)
+    assert meta["alignment_verdict"] == "alignment WEAK"
+    assert meta["demoted"] == {"disappeared": 1, "appeared": 1}
+    assert meta["demotion_reason"] == "weak_alignment"
+    assert meta["blobs_per_type"] == {"disappeared": 0, "appeared": 0, "unverified_before": 2,
+                                      "unverified_after": 1}
+    assert meta["candidate_voxels"] == changed_scene[1]["candidate_voxels"]  # same grids
+    grid = load_grid(out / "visibility" / "grid.npz")
+    assert not grid["labels_disappeared"].any() and not grid["labels_appeared"].any()
+    for blob in blobs:
+        assert (grid[f"labels_{blob['type']}"] == blob["id"]).sum() == blob["voxels"]
+
+
+@pytest.mark.parametrize(("verdict", "demotes"), [("alignment FAIR", True),
+                                                  ("alignment OK", True),
+                                                  ("alignment WEAK", False)])
+def test_no_demotion_unless_weak_and_enabled(changed_scene, tmp_path, verdict, demotes):
+    out = with_verdict(make_scene(tmp_path, [BOX_A, BOX_C], [BOX_B]), verdict)
+    meta = run_visibility(out, cfg(weak_alignment_demotes=demotes))
+    assert [(b["id"], b["type"]) for b in blobs_of(out)] == \
+        [(b["id"], b["type"]) for b in blobs_of(changed_scene[0])]
+    assert not any("demoted_from" in b for b in blobs_of(out))
+    assert meta["alignment_verdict"] == verdict and meta["demotion_reason"] is None
+    assert meta["demoted"] == {"disappeared": 0, "appeared": 0}
+
+
 # ------------------------------------------------------------------ helpers
 
 
