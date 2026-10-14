@@ -13,9 +13,9 @@ keyframes -> `video_1` entries, after-instance masks -> `video_2`; `cost` = chan
 confidence x SAM mask score; `label` 1 for moved, else 0 (the evaluator recomputes it from
 the presence of both video keys, so a moved change keeps both keys even if one is empty).
 Masks are COCO RLE, upright with the GT's aspect ratio, at the keyframe resolution
-(`eval.mask_resolution: full`, the default: `rle_full` of `instances/<rec>_masks.npz`, the
+(`eval.mask_resolution: full`: `rle_full` of `instances/<rec>_masks.npz`, the
 reconstruction-resolution mask where there is none) or at the reconstruction resolution
-(`recon`); the evaluator resizes them to its working size. Layout below `out_root`:
+(`recon`, the default); the evaluator resizes them to its working size. Layout below `out_root`:
 `runs/<pair>/` (pipeline outputs), `logs/<pair>.log`, `pred/<pair>/object_masks.pkl` and
 `prediction.json`, `pred/summary.json`, `pred/result_frame_dup_1_obj_dup_1.txt`.
 

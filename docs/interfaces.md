@@ -596,15 +596,16 @@ One object per change of `changes.json` (`rejected` entries are not used): the
 before-instance masks of `instances/before_masks.npz` at mapped keyframes go to `video_1`,
 the after-instance masks to `video_2`; moved changes keep both keys (the evaluator derives
 the type from their presence), others have one. Unverified changes are included when
-`eval.include_unverified` (default true; their confidence is <= 0.5, so they rank after
-the verified changes and can only add recall to AP, but their pixels count in the global
-IoU). `cost` = change confidence x SAM mask score (the evaluator ranks per-view
+`eval.include_unverified` is true (default false: they claim no change; when submitted,
+their confidence is <= 0.5, so they rank after the verified changes and could only add
+recall to AP, which they never did, while their pixels lower the global IoU). `cost` = change confidence x SAM mask score (the evaluator ranks per-view
 detections by it and objects by its mean). Changes without a mask at any mapped frame are
 left out. Masks are COCO RLE (upright, same aspect as the GT; checked in
 `prediction.json: aspect_ok`) at the keyframe resolution with `eval.mask_resolution: full`
-(default; `rle_full` of `<rec>_masks.npz`, the recon-resolution mask where a row has none;
-e.g. 1024 x 576 for 1920 x 1080 portrait GT) or at the reconstruction resolution with
-`recon` (e.g. 672 x 378); the evaluator resizes them with nearest neighbour. A failed run
+(`rle_full` of `<rec>_masks.npz`, the recon-resolution mask where a row has none; e.g.
+1024 x 576 for 1920 x 1080 portrait GT) or at the reconstruction resolution with `recon`
+(the default, e.g. 672 x 378; the two measured identical to three decimals); the
+evaluator resizes them with nearest neighbour. A failed run
 gets an
 empty prediction (`{"H", "W"}` only) so its GT objects count as misses: the evaluator
 silently drops scenes without `object_masks.pkl`.
