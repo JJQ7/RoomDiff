@@ -247,6 +247,24 @@ reconstructions by re-running the describe stage only: it finds the biscuit box 
 (tabletop_1 becomes 3 / 3) but also accepts four table and chair regions seen from
 different viewpoints as changes (tabletop_1 + 3 false positives, tabletop_3 + 1,
 tabletop_2 unchanged). On close-range, top-down video it trades precision for recall.
+Run once more with the final code of 14 October (the `8c8263b` row of the benchmark
+table): tabletop_1 finds all three changes (biscuit box added, tea canister removed, white
+box moved 0.44 m and turned 54 deg after the LiDAR scale) with four false positives (the
+background bin again, now named a fabric runner, plus a chair leg and a coffee table seen
+from new viewpoints as removed and added); tabletop_2 is unchanged (tea canister, scissors,
+the bucket's new place only, no false positive); tabletop_3 is as before plus one false
+"added" table region.
+
+A no-change control was added the same day: the before video of tabletop_2 was cut into
+its first and second half, two different sweeps of the same, unchanged table (re-encoded
+upright, `data/scenes/control_tabletop_2_split`), and run as a pair. The reconstructions
+align (91 % and 84 % of the co-visible points within 3 cm) and the voxel channel is clean
+(no disappeared blob, one appeared), but four changes are kept, all parts of the table and
+a chair that the appearance channel found and the judge confirmed (a "moved" table, a
+"removed" chair leg and table, an "added" table corner), with six candidates rejected.
+On this close-range, top-down video the false positives come from the appearance channel
+and the judge, not from the geometry; the benchmark's own no-change pair
+(living_room_29_living_room_30) gets one false added object.
 
 ## Web viewer
 
@@ -312,18 +330,22 @@ fixed keyframes every 1 s, RTX 5090:
 | | per-view AP | per-scene AP | AP (typed) | global IoU | objects TP / FP / FN |
 |---|---|---|---|---|---|
 | geometry channel only (commit `ce23def`) | 0.151 | 0.083 | 0.078 | 0.187 | 7 / 42 / 68 |
-| + appearance channel (commit `c660672`) | **0.395** | 0.352 | 0.238 | 0.331 | 30 / 53 / 45 |
+| + appearance channel (commit `c660672`) | 0.395 | 0.352 | 0.238 | 0.331 | 30 / 53 / 45 |
 | same, keyframes every 0.5 s (commit `ad1b585`) | 0.394 | 0.383 | 0.256 | 0.351 | 32 / 61 / 43 |
-| + judges describe each box before deciding (commit `42c8055`, same runs, describe stage re-run) | **0.432** | **0.413** | **0.280** | **0.472** | 36 / 39 / 39 |
+| + judges describe each box before deciding (commit `42c8055`, same runs, describe stage re-run) | 0.432 | 0.413 | 0.280 | 0.472 | 36 / 39 / 39 |
+| + confidence from the separating evidence, masks in more keyframes, re-pairing by appearance (commit `8c8263b`, fresh end-to-end run) | **0.468** | **0.433** | **0.316** | **0.518** | 37 / 34 / 38 |
 | SceneDiff paper (full val set, for reference) | 0.496 | 0.463 | 0.255 | – | – |
 
-The last row changes only the VLM judge (`semantics.describe_first`): the removed / added
+The `42c8055` row changes only the VLM judge (`semantics.describe_first`): the removed / added
 and in-place judges first say what each box contains, and the in-place judge whether that
 is a movable object or a bare surface, before they decide; a "different" answer with a bare
 surface in the later image becomes "removed" instead of "removed + added". It was developed
 on a disjoint 20-pair subset of `val` / `varied` (pairs 21-40: per-scene AP 0.404 -> 0.459,
-typed AP 0.366 -> 0.401, TP / FP / FN 22 / 46 / 26 -> 25 / 42 / 23) and then applied once
-to the reported pairs by re-running the describe stage on their cached reconstructions.
+typed AP 0.366 -> 0.401, TP / FP / FN 22 / 46 / 26 -> 25 / 42 / 23; these development
+numbers count one pair, mailroom_1_mailroom_2, as an empty prediction, because its first
+run had crashed and the failure marker survived the describe re-run, see the end of this
+section) and then applied once to the reported pairs by re-running the describe stage on
+their cached reconstructions.
 Two other things were measured on the same runs: submitting the SAM masks at the keyframe
 resolution instead of the reconstruction resolution (`eval.mask_resolution`) changed
 nothing to three decimals, and leaving unverified regions out of the submission
@@ -389,6 +411,15 @@ Masks also in keyframes with about 200 cm² of the object in view
 with the same objects matched; on the reported pairs per-scene and typed AP move by 0.001
 and 0.002 through the confidence ranking, within noise at this sample size, so the rule is
 on by default (design note, "Masks in more keyframes").
+
+The `8c8263b` row is one fresh end-to-end run with the three changes above together (the
+new confidence, masks in more keyframes, re-pairing by appearance; the alignment gate's
+demotion stays off): on the reported pairs per-view / per-scene / typed AP 0.432 / 0.413 /
+0.280 -> 0.468 / 0.433 / 0.316, pixel IoU 0.472 -> 0.518, objects 36 / 39 / 39 -> 37 / 34 /
+38, with 11 moved, 36 removed and 24 added objects submitted (29 / 30 / 16 in the ground
+truth). The development subset, run fresh the same way and now scoring every pair, went
+from 0.497 / 0.409 / 0.355 (25 / 17 / 23; the mailroom pair's six objects are all false)
+to 0.521 / 0.497 / 0.418 (26 / 15 / 22).
 
 The paper numbers are on the whole validation set, ours on a 20-pair subset, so they are
 indicative only. Median run time per pair: 70 s at 1 s keyframes, 85 s at 0.5 s (RTX

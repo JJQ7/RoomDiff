@@ -194,6 +194,16 @@ the relative geometry (a 0.44 m move, a 54 deg turn) is fine. (3) One Pi3X pass 
 image size: mixed portrait / landscape pairs are handled by centre-cropping both videos to
 squares (see below), with a warning from `scripts/check_video.py`.
 
+*No-change control (14 October).* The before video of tabletop_2 cut into its first and
+second half, two sweeps of the same unchanged table, run as a pair: the reconstructions
+align (91 / 84 % of the co-visible points within 3 cm), the voxel channel finds no
+disappeared and one appeared blob, yet four changes survive the judge, all table and chair
+parts from the appearance channel (a "moved" table, a "removed" chair leg and table, an
+"added" table corner), six candidates are rejected. The same run with the final code of
+that day gives the same four. On close-range, top-down video the false positives are the
+appearance channel's and the judge's, not the geometry's; see the README held-out section
+for the re-run of the three staged pairs with that code.
+
 ## What we tried and did not keep as default
 *Masks at the keyframe resolution.* The benchmark evaluator matches masks at IoU 0.5 after
 resizing them to 1024 px, and ours come out of SAM at the reconstruction resolution
@@ -286,6 +296,6 @@ stays in the code as optional evidence (`recheck.enabled`), without the penalty.
 - Scale is approximately metric: 1.8x too large on our close-range tabletop videos (LiDAR
   check), so distances are reported with that caveat and converted when a scan exists.
 - Each run takes about 2–2.5 minutes on an RTX 5090, a third of it model loading.
-- No own no-change pair was recorded; the benchmark subset contains one
-  (living_room_29_living_room_30, no annotated change) on which the pipeline reports one false
-  added object.
+- On a no-change pair the appearance channel plus the judge still report changes: four on
+  our control (the two halves of one tabletop recording, section 6), one false added object
+  on the benchmark's own no-change pair (living_room_29_living_room_30).
