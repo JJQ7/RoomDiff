@@ -392,9 +392,9 @@ or merged); M5 sets or adds:
   <answer>; <reason>". An appearance change whose label names part of the room or a bare
   surface (background nouns, or head noun sheet / bedsheet / mattress / tabletop /
   countertop / worktop / surface / floorboard / tile / plank) is rejected whatever the
-  answer (the bed sheet where a hairbrush was later put). Re-pairing never pairs the two
-  sides of one replaced pair. Kept pairs get "replaced by a <label>" / "took the place of
-  the <label>" descriptions.
+  answer (the bed sheet where a hairbrush was later put). Re-pairing by labels never pairs
+  the two sides of one replaced pair (similar DINOv3 features can, see below). Kept pairs
+  get "replaced by a <label>" / "took the place of the <label>" descriptions.
 * `label`: VLM name, normalised (lowercase, no article, cut at a preposition, <= 3 words);
   `attributes` (colour / material), `object_description` (the VLM's sentence about the
   object).
@@ -452,12 +452,23 @@ or merged); M5 sets or adds:
   points); confidence = max; the description is regenerated (step below). Then judged
   like any other change. The masks of all `instance_ids` are united per frame for the
   SceneDiff evaluation.
-* Re-paired removed R + added or after-only unverified A (matching labels: same label,
-  head noun or synonym group; centroids < `repair_max_distance`; VLM: same object) -> one
-  `moved` change with R's id: `before` = R's side, `after` = A's, `transform` from the
-  centroids (`R` = I, `rotation_deg` / `icp_*` null), confidence = mean, `crops`
-  `before` = R's, `after` = A's, `before_place` = R's after view, `after_place` = A's
-  before view, `evidence.merged_from` [R, A] and `merged_types`.
+* Re-paired removed R + added or after-only unverified A -> one `moved` change with R's
+  id. Candidate pairs (centroids < `repair_max_distance`; closest first, each change in at
+  most one confirmed pair): matching labels (same label, head noun or synonym group; never
+  the two sides of one candidate in-place pair) or, with `repair_min_similarity` (a
+  cosine, default 0.85; above 1 = labels only), similar DINOv3 features whatever the labels:
+  the cosine of the pooled patch tokens (`instances/<rec>_feats.npy`) of the best-matching
+  pair of instances of the two sides (one instance each; a side merged from fragments has
+  several) is at least `repair_min_similarity`, the sorted `obb` extents of those two
+  instances pass the M4 size gate (`changes.extent_ratio_min` / `extent_ratio_max`) and
+  neither change is named "object" or after a part of the room; such a pair may be the
+  two sides of one in-place pair (a ladder moved 0.2 m overlaps its old place). The VLM
+  decides with the strict same-object prompt; confirmed: `before` = R's side, `after` =
+  A's, `transform` from the centroids (`R` = I, `rotation_deg` / `icp_*` null),
+  confidence = mean, `crops` `before` = R's, `after` = A's, `before_place` = R's after
+  view, `after_place` = A's before view, `evidence.merged_from` [R, A], `merged_types`,
+  `appearance_similarity` / `cls_similarity` (patch / CLS cosine of that best-matching
+  instance pair; null without the feature files).
 * A moved change M absorbing an added change P (matching labels, gap between the after
   boxes (oriented boxes if present) <= `merge_max_distance`, VLM: parts of one object, e.g. a spread-out quilt):
   `after` = union box (`instance_ids` [M's, P's], `n_points` summed, point-weighted
@@ -475,7 +486,9 @@ Top level: `rejected` (same schema, `vlm_verdict` "rejected" + reason + `reason_
 `summary` = "N changes: a moved, b added, c removed; d unverified." + a VLM paragraph.
 `semantics/meta.json`: model, params, runtime per step, VLM calls and seconds, counts in /
 out, rejected (id, type, label, reason), merges (every VLM pair check: kind, ids,
-labels, distance or box gap, verdict, reason; fragment checks also the VLM's `label`),
+labels, distance or box gap, verdict, reason; fragment checks also the VLM's `label`;
+re-pair checks also `candidate` "label" | "features", `appearance_similarity` and
+`cls_similarity` as above),
 splits (rejected moved changes: `id`, `label`,
 `into` [removed id, added id], `labels`, `reason`, `verdicts` of the two halves), verdict
 per id, `replacements` (per in-place pair question: `ids`, `labels`, `answer`, `reason`),

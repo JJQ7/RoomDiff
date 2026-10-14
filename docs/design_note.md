@@ -112,6 +112,30 @@ here" and "appeared there" are re-paired into one *moved* object, and same-label
 object. No API keys are used;
 everything runs offline on one GPU.
 
+*Re-pairing by appearance.* Of the 29 moved objects of the reported pairs, 5 came out as
+moved, 7 as a removed or an added half only and 17 not at all. We traced each of these 24
+to our instances (mask IoU with the ground truth per video, then the DINOv3 cosine, sizes
+and distance of the two halves and the step that kept them apart). 17 are lost upstream:
+one side was never segmented as an object of its own. Two are correct M4 pairs that the
+judge split (a soy sauce bottle, a cream bottle), two have masks too partial to reach IoU
+0.5, and three were kept apart although both halves were found. The M4 cosine threshold
+stopped none of those three (another cream bottle failed the M4 size ratio, 2.04 against
+2.0, because its before instance also holds a jar next to it); in M5 the names did, since
+re-pairing proposed only pairs with matching labels: "stainless steel saucepan" and
+"stainless steel pot", "plastic bottle" and "bottle of lotion", "wooden ladder" and
+"wooden ladder shelf" (the ladder moved 0.2 m, so its two sides were also an in-place
+pair, which re-pairing never joined). Re-pairing now also proposes a removed + added pair
+whatever its names, an in-place pair included, when the best-matching instances of the two
+have a DINOv3 cosine of at least 0.85 and pass the M4 size gate; the strict same-object
+judge still decides. On the 40 pairs of both subsets this asks five more questions: the
+ladder (cosine 0.91) and a letter in the mailroom pair (0.95) are confirmed, the pot
+(0.94; the judge sees different handles), a second letter and two different signs are not,
+and that cream bottle (0.70) is not proposed. That is one more moved object found as moved
+on each 20-pair subset, with one or two false positives fewer (README, benchmark).
+Lowering the M4 threshold instead (0.60, 0.55 or 0.50 rather than 0.65), replayed on the
+stored candidates of both subsets, finds no further correct pair, adds one to three wrong
+ones and loses a correct one.
+
 *Describe before deciding.* The judge's commonest mistake was to answer "same" or
 "rejected" for an object that is plainly in one image only (a biscuit box found by the
 appearance channel with confidence 0.9 was deleted this way). The removed / added and

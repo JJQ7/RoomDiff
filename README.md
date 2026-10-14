@@ -331,6 +331,23 @@ nothing to three decimals, and leaving unverified regions out of the submission
 IoU, since they claim no change (the earlier rows include them: 0.351 -> 0.457 for the row
 above without them; the last row is 0.369 with them, 36 / 74 / 39).
 
+Moved objects are also re-paired by appearance (`semantics.repair_min_similarity`, design
+note section 4): a removed and an added change whose best-matching instances have a DINOv3
+cosine of at least 0.85 and compatible sizes become a candidate pair whatever the VLM
+named them ("wooden ladder" and "wooden ladder shelf"), and the same-object judge decides.
+Describe stage re-run on the cached runs: on the development subset per-view AP 0.497 ->
+0.497, per-scene AP 0.409 -> 0.436, typed AP 0.355 -> 0.380, TP / FP / FN 25 / 17 / 23 ->
+26 / 15 / 22 (moved objects found as moved 7 -> 8 of 19); on the reported pairs 0.432 /
+0.413 / 0.280 -> 0.432 / 0.413 / 0.286, 36 / 39 / 39 -> 36 / 38 / 39 (moved 5 -> 6 of 29:
+that ladder, in living_room_1). Most misses of moved objects are upstream: of the 24 moved
+objects of the reported pairs found as one half or not at all, 17 have a side that was
+never segmented as an object of its own. These development numbers score
+mailroom_1_mailroom_2; the development numbers quoted above (per-scene AP 0.459) count it
+as an empty prediction, because its first run crashed in fragment merging (fixed since)
+and its failed-run marker survived the describe re-run. Under that convention the
+re-pairing changes nothing on the development subset, since the mailroom pair is the only
+one it touches there.
+
 Two backbone swaps were also measured on the development subset and not adopted (details
 in the design note): DINOv3 ViT-H+/16 for the appearance channel (`instances.dino_model`:
 per-view AP up, per-scene and typed AP down, twice the false positives) and Qwen3-VL-32B

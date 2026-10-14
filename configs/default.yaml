@@ -154,7 +154,8 @@ changes:
   lambda_size: 0.3       # cost = (1 - cos(feature)) + lambda_size * |log(volume ratio)|
   tau_feat: 0.65         # accept a match only if the feature cosine is at least this ...
                          # (0.55 matched a black jacket to a cream quilt at 0.60; true pairs
-                         # on the SceneDiff test scenes scored 0.68-0.92)
+                         # on the SceneDiff test scenes scored 0.68-0.92; re-checked with the
+                         # moved judge: 0.60 / 0.55 / 0.50 add no true pair on 40 val pairs)
   extent_ratio_min: 0.5  # ... and every sorted extent ratio lies in [min, max]
   extent_ratio_max: 2.0
   icp_max_dist: 0.10     # m, max correspondence distance of the moved-object ICP
@@ -194,6 +195,10 @@ semantics:
   enable_polish: true    # one text-only call rewrites the template descriptions
   repair_max_distance: 3.0  # m, removed + added/unverified centroids closer than this are re-paired ...
   merge_max_distance: 1.0   # m, ... and a moved after-box absorbs an added box this close (box gap)
+  repair_min_similarity: 0.85  # re-pair candidates: matching labels or, whatever the names (also the
+                         # two sides of an in-place pair), a DINOv3 cosine of at least this between
+                         # the best-matching instances of the two changes, sizes within the M4
+                         # extent gate (above 1: labels only, the behaviour before 2026-10-14)
   unclear_factor: 0.7    # confidence multiplier of an "unclear" verdict
   split_factor: 0.6      # a moved pair the judge rejects becomes removed + added, each judged
                          # again (removed / added prompt): confidence x this if "unclear"
