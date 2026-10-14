@@ -237,7 +237,11 @@ pooled inside the eroded masks, averaged over views. `instances/<rec>_cls.npy` (
 CLS token of the best view's mask box crop. `instances/<rec>_points.npz`: `points` (M, 3)
 float32 (1 cm voxels), `colors` (M, 3) uint8, `instance` (M,) int32 id.
 `instances/<rec>_masks.npz`: one row per (keyframe, instance) where the instance is
-visible (>= `frame_visible_frac` of its points depth-consistent; SAM prompted with the
+visible (>= `frame_visible_frac` of its points depth-consistent within `frame_depth_tol`,
+judged on a fixed 2000-point subsample, or, with `frame_min_points` > 0 (default 0: off),
+an estimated `frame_min_points` of them (subsample fraction x point count; 1 cm points,
+so about that many cm^2 of the object in view, which keeps an object partly out of the
+image; `roomdiff.instances.frame_visible`); SAM prompted with the
 box and up to `frame_prompt_points` of those projected instance points, so the masks
 follow the grown instance; on the full-resolution keyframe JPEG `keyframes/<rec>/<file>`,
 box and points scaled from recon pixels, or on the recon image if the JPEG is missing or

@@ -15,6 +15,7 @@ from roomdiff.instances import (
     encode_rle,
     enlarge_box,
     frame_masks,
+    frame_visible,
     grow_box,
     keep_near_blob,
     lift_view_points,
@@ -25,6 +26,7 @@ from roomdiff.instances import (
     merge_instances,
     pick_mask,
     pooled_feature,
+    project_with_depth,
     prompt_points,
     save_masks,
     select_blobs,
@@ -466,6 +468,41 @@ def test_frame_masks_prompt_the_full_resolution_keyframes(tmp_path):
         old_file = {k: f[k] for k in ("keyframe", "instance_id", "score", "rle", "size")}
     np.savez_compressed(tmp_path / "old_masks.npz", **old_file)
     assert load_masks(tmp_path / "old_masks.npz", full=True) == recon_masks
+
+
+def test_frame_visible_fraction_or_estimated_point_count():
+    consistent = np.zeros(2000, bool)
+    consistent[:100] = True  # 5 % of a 2000-point sample
+    assert not frame_visible(consistent, 2000, 0.20)  # the fraction rule alone
+    assert frame_visible(consistent, 2000, 0.05)
+    assert frame_visible(consistent, 20000, 0.20, min_points=1000)  # ~1000 of 20000 points
+    assert not frame_visible(consistent, 20000, 0.20, min_points=1001)
+    assert not frame_visible(consistent, 2000, 0.20, min_points=101)  # ~100 of 2000 points
+    assert not frame_visible(np.zeros(10, bool), 10, 0.0, min_points=1)  # nothing in view
+    assert not frame_visible(np.zeros(0, bool), 0, 0.0)
+
+
+def test_frame_masks_keep_an_object_partly_out_of_view():
+    """The second camera sees only the right end of the box top (2-20 % of the points):
+    no mask with the fraction rule alone (`frame_min_points` 0, the old behaviour), a mask
+    once the estimated number of depth-consistent points reaches `min_points`; a keyframe
+    that does not see the object gets none."""
+    recon, labels = make_recon(xs=(0.0, 0.9, 3.0))
+    points = box_surface_voxels().astype(np.float32)
+    inst = Instance(0, "disappeared", [], points, points, np.zeros((len(points), 3), np.uint8),
+                    [], id=1)
+    _, _, z, inside, depth, valid = project_with_depth(points, 1, recon)
+    visible = int((valid & (np.abs(depth - z) <= 0.05)).sum())
+    assert 0.02 * len(points) < visible < 0.20 * len(points) and inside.mean() < 0.2
+    args = (0.20, 0.05, PARAMS["frame_prompt_points"], PARAMS["box_enlarge"])
+    seg = FakeSegmenter()  # mask = prompt box (box of the depth-consistent pixels)
+    assert [m[0] for m in frame_masks(inst, [0, 1, 2], recon, seg, *args)] == [0]
+    assert [m[0] for m in frame_masks(inst, [0, 1, 2], recon, seg, *args,
+                                      min_points=visible + 1)] == [0]
+    out = frame_masks(inst, [0, 1, 2], recon, seg, *args, min_points=visible)
+    assert [m[0] for m in out] == [0, 1]
+    mask = decode_rle(out[1][1])
+    assert mask.any() and labels["1"][mask].mean() > 0.8  # on the visible part of the box
 
 
 def test_box_and_prompt_helpers():

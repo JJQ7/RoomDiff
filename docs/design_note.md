@@ -125,6 +125,37 @@ resizing them to 1024 px, and ours come out of SAM at the reconstruction resolut
 changed every metric by less than 0.001 on both 20-pair subsets. The option stays
 (`eval.mask_resolution`), the default is the cheaper one.
 
+*Masks in more keyframes.* The evaluator matches objects by the mask IoU stacked over all
+benchmark frames of both videos, so a frame where only the ground truth has a mask counts
+fully against us. On the reported pairs, 11 near misses (a prediction and a ground-truth
+object at stacked IoU 0.1-0.5) are above 0.5 on the frames both have. Of their 57 missing
+frames, 41 are in the other video: all 11 ground-truth objects moved, and for 9 of them we
+reported only a removal or an addition (for five, the other half is a separate change of
+ours, so these are pairing misses: a lotion bottle in two pairs, a pot, a soy-sauce
+bottle, a ladder). 10 are views of a quilt or a curtain beyond the part our instance
+covers, and 6 show the object partly out of the image, with 5-14 % of its points in view,
+below the 20 % of `instances.frame_visible_frac` (the points in view are depth-consistent,
+so a larger `frame_depth_tol` does not help). `instances.frame_min_points` also accepts a
+keyframe in which an estimated N of the object's 1 cm points are consistent, about N cm²
+in view. With N = 200, regenerating only the masks of the stored runs filled 23 of the 30
+partly visible ground-truth frames of all submitted objects on the reported pairs (3 of
+10 on the development pairs). On the development subset per-view AP rose from 0.478 to
+0.490 and pixel IoU from 0.442 to 0.452, with per-scene and typed AP and the 25 / 11 / 23
+objects unchanged. On the reported pairs per-view AP rose from 0.430 to 0.462 and IoU
+from 0.471 to 0.490 with the same 36 / 39 / 39 objects, but per-scene AP went from 0.406
+to 0.405 and typed AP from 0.277 to 0.275, through the ranking, which uses an object's
+mean frame score: a false positive made of two fragments now has the masks of its
+better-scoring part in three more frames and passed six true positives (0.60 -> 0.72),
+and two true positives whose IoU rose (0.90 -> 0.97, 0.85 -> 0.97) scored a little lower,
+partial views having lower SAM scores. Those references are the old rule with the masks
+prompted at the keyframe resolution, as the code now does; the published row's masks
+were prompted on the reconstruction image, and that alone moves per-scene AP from 0.413
+to 0.406 with identical matches. A fraction of 0.10 or 0.05, or N = 100, gave per-view AP
+0.488, 0.493 and 0.501 on the development subset but cost 0.002 of per-scene and typed AP
+there. N = 200 is the default: per-view AP and pixel IoU gain on both subsets with the
+same objects matched, and the per-scene / typed changes of 0.001-0.002 are noise at this
+sample size (the option can be switched off with `instances.frame_min_points: 0`).
+
 *A bigger appearance backbone.* SceneDiff's own method uses DINOv3 ViT-H+/16, so we swapped
 it in for ViT-L/16 (`instances.dino_model`, both stages). On the 20-pair development
 subset per-view AP rose from 0.478 to 0.510, but per-scene AP fell from 0.459 to 0.373 and
