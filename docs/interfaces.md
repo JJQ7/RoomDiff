@@ -306,9 +306,8 @@ is then shown as "rotation (unreliable)" in the report and viewer and never quot
 description); below `icp_min_fitness` `R` = I, `t` = centroid difference,
 `rotation_deg` null and `rotation_reliable` false (also for transforms built by M5
 re-pairing / merging). Order: moved, removed, added, unverified; by confidence within a type.
-Changes of appearance instances have their confidence scaled by 0.5 + 0.5
-min(`frames_supporting` / `changes.appearance_frames_full` (4), 1) (moved: the smaller
-factor of both sides).
+Changes of appearance instances have their confidence scaled by the appearance factor A
+below (moved: the smaller factor of both sides).
 M4 writes `label: "object"`, a templated `description` and `vlm_verdict: null` (M5 fills
 them, see below). Evidence keys: removed / added / unverified: `free_rays`, `free_frames_mean`,
 `observing_views` (keyframes of the other recording that saw through the place),
@@ -316,10 +315,19 @@ them, see below). Evidence keys: removed / added / unverified: `free_rays`, `fre
 `free_rays` (both places), `observing_views` (mean), `observing_views_before_place`,
 `observing_views_after_place`, `appearance_similarity` (DINOv3 cosine), `cls_similarity`,
 `mask_score`, `icp_fitness`.
-Confidence = (w_mask S_mask + w_free S_free + w_consistency S_cons) / (sum of weights):
-S_mask = mean SAM score, S_free = min(observing_views / free_views_full, 1) (moved: mean of
-both places), S_cons = view consistency (0.5 if unknown; moved: mean of both);
-unverified: 0.5 (w_mask S_mask + w_consistency S_cons) / (w_mask + w_consistency) <= 0.5.
+Confidence = A x (w_mask S_mask + w_free S_free + w_consistency S_cons) / (sum of weights),
+weights `changes.w_mask` / `w_free` / `w_consistency` (0.6 / 0.4 / 0): S_mask = mean SAM
+score, S_free = min(observing_views / free_views_full, 1) (moved: mean of both places),
+S_cons = view consistency (0.5 if unknown; moved: mean of both); unverified: A x 0.5
+(w_mask S_mask + w_consistency S_cons) / (w_mask + w_consistency) <= 0.5. A = 1 for a
+geometry instance; for an appearance instance A = 0.5 + 0.5 min(cue / full, 1) in [0.5, 1],
+with `changes.appearance_evidence` "score": cue = the cluster's `mean_score` (mean region
+score: depth vote share + `appearance.w_feat` x feature dissimilarity), full =
+`appearance_score_full` (2.0, its largest value), or "frames": cue = `frames_supporting`,
+full = `appearance_frames_full` (4). The earlier formula is w_mask 0.3, w_free 0.4,
+w_consistency 0.3 with "frames"; on SceneDiff pairs view consistency did not separate true
+from false detections, frames_supporting only on one of two subsets, the SAM score and the
+region score on both (README, benchmark section).
 Crops (paths relative to `<out>`; JPEG from the full-resolution keyframes, object box
 x `crop_context`, at least `crop_min_px` per side): `<id>_<rec>.jpg` shows the object in its
 own recording with mask outline and box (keyframe = best by the view scorer on the

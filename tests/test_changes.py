@@ -274,6 +274,46 @@ def test_confidence_bounds():
     assert confidence([0.9], [0.8], [5], PARAMS) == confidence([0.9], [0.8], [50], PARAMS)
 
 
+LEGACY = {**PARAMS, "w_mask": 0.3, "w_free": 0.4, "w_consistency": 0.3,
+          "appearance_evidence": "frames"}  # the confidence before 2026-10-14
+
+
+def test_confidence_weights_default_and_legacy():
+    """Default: 0.6 mask score + 0.4 free-space evidence, view consistency unused; the
+    earlier weights (0.3 / 0.4 / 0.3) stay selectable by configuration."""
+    assert confidence([0.9], [0.2], [3], PARAMS) == pytest.approx(0.6 * 0.9 + 0.4 * 0.6)
+    assert confidence([0.9], [0.2], [3], PARAMS) == confidence([0.9], [0.95], [3], PARAMS)
+    assert confidence([0.9], [0.8], [3], LEGACY) == pytest.approx(0.3 * 0.9 + 0.4 * 0.6 + 0.3 * 0.8)
+    assert confidence([0.9], [0.8], None, PARAMS) == pytest.approx(0.45)  # unverified: 0.5 S_mask
+    assert confidence([0.9], [0.8], None, LEGACY) == pytest.approx(0.425)
+    # moved: mean mask score and mean free-space term of both places
+    assert confidence([0.8, 1.0], [None, 0.5], [2, 10], PARAMS) == pytest.approx(0.6 * 0.9
+                                                                               + 0.4 * 0.7)
+
+
+def test_change_confidence_is_monotone_and_bounded():
+    """confidence x appearance factor, as run_changes combines them: in [0, 1] (unverified
+    <= 0.5) and non-decreasing in the mask score, the observing views and the cue."""
+    from roomdiff.changes import appearance_support
+
+    rng = np.random.default_rng(3)
+    for params in (PARAMS, LEGACY):
+        for _ in range(100):
+            mask, cons = float(rng.uniform(0, 1)), float(rng.uniform(-0.2, 1))
+            views, cue = int(rng.integers(0, 30)), float(rng.uniform(0, 2.5))
+            frames = int(rng.integers(0, 10))
+
+            def conf(m=mask, v=views, c=cue, f=frames, k=cons, p=params):
+                record = {"evidence": {"appearance": {"mean_score": c, "frames_supporting": f}}}
+                return confidence([m], [k], [v], p) * appearance_support(record, p)
+
+            assert 0.0 <= conf() <= 1.0
+            assert confidence([mask], [cons], None, params) <= 0.5
+            assert conf(m=min(mask + 0.1, 1.0)) >= conf()
+            assert conf(v=views + 1) >= conf()
+            assert conf(c=cue + 0.1) >= conf() and conf(f=frames + 1) >= conf()
+
+
 def test_rigid_transform_recovers_rotation_and_translation():
     rng = np.random.default_rng(1)
     # an L-shaped chair-like point set (seat + back), 1 cm noise-free grid
@@ -342,11 +382,26 @@ def test_rerun_boxes_use_the_oriented_box():
 
 
 def test_appearance_support_factor():
+    """1 for a geometry instance; an appearance instance: 0.5 + 0.5 min(cue / full, 1) with
+    the cluster's mean region score (default, full 2) or, as before, frames_supporting."""
     from roomdiff.changes import appearance_support
-    params = {"appearance_frames_full": 4}
-    assert appearance_support({"evidence": {}}, params) == 1.0
-    assert appearance_support({"evidence": {"appearance": None}}, params) == 1.0
-    few = {"evidence": {"appearance": {"frames_supporting": 2}}}
-    many = {"evidence": {"appearance": {"frames_supporting": 8}}}
-    assert appearance_support(few, params) == 0.75
-    assert appearance_support(many, params) == 1.0
+
+    score = {"appearance_evidence": "score", "appearance_score_full": 2.0}
+    frames = {"appearance_evidence": "frames", "appearance_frames_full": 4}
+    for params in (score, frames, PARAMS):
+        assert appearance_support({"evidence": {}}, params) == 1.0
+        assert appearance_support({"evidence": {"appearance": None}}, params) == 1.0
+
+    def app(**terms):
+        return {"evidence": {"appearance": {"frames_supporting": 2, "mean_score": 1.2, **terms}}}
+
+    assert appearance_support(app(), frames) == 0.75
+    assert appearance_support(app(frames_supporting=8), frames) == 1.0
+    assert appearance_support(app(), score) == pytest.approx(0.8)
+    assert appearance_support(app(), PARAMS) == pytest.approx(0.8)  # the default
+    assert appearance_support(app(mean_score=0.0), score) == 0.5
+    assert appearance_support(app(mean_score=2.6), score) == 1.0
+    values = [appearance_support(app(mean_score=float(c)), score) for c in np.linspace(0, 3, 31)]
+    assert all(0.5 <= v <= 1.0 for v in values) and np.all(np.diff(values) >= 0)
+    with pytest.raises(ValueError, match="appearance_evidence"):
+        appearance_support(app(), {"appearance_evidence": "votes"})

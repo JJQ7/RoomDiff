@@ -23,9 +23,16 @@
   sides), S_cons = mean pairwise cosine of the per-view features (0.5 if only one view;
   moved: mean of both). Unverified: 0.5 * (w_mask * S_mask + w_consistency * S_cons) /
   (w_mask + w_consistency), so at most 0.5. An appearance instance scales its change's
-  confidence by 0.5 + 0.5 min(frames_supporting / appearance_frames_full, 1) (moved: the
-  smaller factor of both sides): a region found in a couple of keyframes ranks below one
-  seen in many.
+  confidence by 0.5 + 0.5 min(cue / full, 1) (moved: the smaller factor of both sides).
+  `appearance_evidence` "score" (default): cue = the cluster's mean region score (depth
+  vote share + w_feat x feature dissimilarity, roomdiff.appearance), full =
+  `appearance_score_full` (2, its largest value), so a change that only the appearance
+  channel found ranks below a geometric one with the same mask and free-space evidence,
+  the more so the weaker its cue; "frames": cue = frames_supporting, full =
+  `appearance_frames_full` (the earlier factor). The defaults (w_mask 0.6, w_free 0.4,
+  w_consistency 0, "score") rank the SceneDiff detections better than the earlier formula
+  (w_mask 0.3, w_free 0.4, w_consistency 0.3, "frames"): view consistency did not separate
+  true from false detections, the mask score and the region score did (README, benchmark).
 * Crops `<out>/crops/<id>_before.jpg` / `<id>_after.jpg` (moved also `_before_place` /
   `_after_place`): the object in its own recording with mask outline and box, and the
   other recording looking at the same place; both views are ranked by
@@ -195,14 +202,28 @@ def confidence(
     return round(total / max(w_mask + w_free + w_cons, 1e-9), 3)
 
 
+APPEARANCE_EVIDENCE = ("score", "frames")  # values of changes.appearance_evidence
+
+
 def appearance_support(record: Mapping[str, Any], params: Mapping[str, Any]) -> float:
-    """Confidence factor of an instance record: 1 for a geometry instance, else 0.5 + 0.5
-    min(frames_supporting / `appearance_frames_full`, 1) (module docstring)."""
+    """Confidence factor of an instance record (module docstring): 1 for a geometry
+    instance, else 0.5 + 0.5 min(cue / full, 1), in [0.5, 1] and non-decreasing in the
+    cue: `appearance_evidence` "score" (default) = the cluster's `mean_score` over
+    `appearance_score_full`, "frames" = `frames_supporting` over `appearance_frames_full`."""
     app = record["evidence"].get("appearance")
     if app is None:
         return 1.0
-    full = max(float(params.get("appearance_frames_full", 4)), 1.0)
-    return 0.5 + 0.5 * min(float(app.get("frames_supporting", 0)) / full, 1.0)
+    mode = params.get("appearance_evidence", "score")
+    if mode == "score":
+        cue = float(app.get("mean_score", 0.0))
+        full = max(float(params.get("appearance_score_full", 2.0)), 1e-6)
+    elif mode == "frames":
+        cue = float(app.get("frames_supporting", 0))
+        full = max(float(params.get("appearance_frames_full", 4)), 1.0)
+    else:
+        raise ValueError(f"changes.appearance_evidence must be one of {APPEARANCE_EVIDENCE}, "
+                         f"got {mode!r}")
+    return 0.5 + 0.5 * min(max(cue, 0.0) / full, 1.0)
 
 
 def replaced_pairs(

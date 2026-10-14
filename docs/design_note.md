@@ -91,6 +91,28 @@ removal plus a spurious "added shelf". On a disjoint 20-pair subset of SceneDiff
 raised per-scene AP from 0.40 to 0.46; on the reported 20 pairs from 0.38 to 0.41 (typed
 AP 0.26 -> 0.28, 4 more objects found).
 
+*Confidence from the evidence that separates.* The benchmark ranks every detection by our
+confidence times its SAM score, and that confidence barely told true from false detections
+apart (reported pairs: mean 0.86 vs 0.80). We labelled every submitted object with the
+evaluator's own matching and ranked the objects by one evidence number at a time (AUC on
+the development / reported pairs, 0.5 = chance): the SAM mask score separates them well
+(0.87 / 0.83) and the appearance channel's mean region score moderately (0.68 / 0.66),
+while the view consistency of the mask features, 0.3 of the old weights, does not (0.44 /
+0.50), and the keyframes supporting an appearance region, the old appearance factor, only
+on one subset (0.65 / 0.48). The default now gives the consistency weight to the mask
+score (0.6 mask, 0.4 free space) and scales a change that only the appearance channel
+found by 0.5 + 0.25 x its region score (at most 1), so it ranks below a geometric change
+with equal mask and free-space evidence unless its cue is strong. Re-ranking the same
+detections, per-view / per-scene / typed AP went from 0.478 / 0.459 / 0.401 to 0.487 /
+0.488 / 0.408 on the development pairs and from 0.432 / 0.413 / 0.280 to 0.442 / 0.416 /
+0.296 on the reported ones. Three alternatives were measured and not kept: the see-through
+share alone as the appearance factor and a free-space term from the free count per voxel
+did well on the development pairs (per-scene AP 0.486 and 0.476) but lost on the reported
+ones (0.388 and 0.402), because flat objects such as a closed laptop on a bed leave
+neither a depth cue nor free space; and a view term that does not saturate at 5 views
+(log(1 + views) / log 21) lowered the APs on both subsets (reported per-scene AP 0.387),
+since appearance changes are seen from many views whether they are right or wrong.
+
 ## 5. Outputs
 `changes.json` (typed changes with 3D boxes, transforms, confidence and the evidence behind
 each verdict), `report.md`, a Rerun session for inspection, and a self-contained web

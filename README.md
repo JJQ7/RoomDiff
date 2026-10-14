@@ -291,6 +291,28 @@ as the judge (`semantics.model` with `semantics.quantize_4bit: true`, needs
 `pip install bitsandbytes`, 19.5 GiB: per-scene AP down on the development subset, up on
 the reported pairs, so no consistent gain). Both stay available as configuration options.
 
+The confidence that ranks the submitted objects was then re-derived from the evidence that
+separates true from false detections (design note, section 4): the SAM mask score ranks them
+well, the view consistency of the mask features does not, the keyframes supporting an
+appearance region only on one of the two subsets. The table re-ranks the detections of the
+describe-first runs (the development pairs and the commit `42c8055` row above): only the
+confidences in `changes.json` were recomputed from the stored evidence, so TP / FP / FN and
+IoU cannot change. The new default (`changes.w_mask` 0.6, `w_free` 0.4, `w_consistency` 0
+instead of 0.3 / 0.4 / 0.3; appearance-channel changes scaled by 0.5 + 0.5 min(region score
+/ 2, 1) instead of by their supporting keyframes, `changes.appearance_evidence: score`) was
+the best variant on the development pairs, and of the two best there the one that lowers no
+AP on the reported pairs. The old formula stays selectable: `changes.w_mask=0.3`,
+`changes.w_consistency=0.3`, `changes.appearance_evidence=frames`.
+
+| confidence (re-ranking of existing detections) | development: per-view / per-scene / typed AP | reported: per-view / per-scene / typed AP |
+|---|---|---|
+| as in those runs | 0.478 / 0.459 / 0.401 | 0.432 / 0.413 / 0.280 |
+| consistency weight moved to the mask score | 0.486 / 0.468 / 0.407 | 0.433 / 0.417 / 0.287 |
+| + appearance factor from the see-through depth share | 0.481 / 0.486 / 0.404 | 0.429 / 0.388 / 0.277 |
+| **+ appearance factor from the region score (default)** | **0.487 / 0.488 / 0.408** | **0.442 / 0.416 / 0.296** |
+| + free-space term from the free count per voxel | 0.475 / 0.476 / 0.412 | 0.428 / 0.402 / 0.286 |
+| old formula with an unsaturated view term, log(1 + views) / log 21 | 0.471 / 0.459 / 0.396 | 0.413 / 0.387 / 0.276 |
+
 The paper numbers are on the whole validation set, ours on a 20-pair subset, so they are
 indicative only. Median run time per pair: 70 s at 1 s keyframes, 85 s at 0.5 s (RTX
 5090). The remaining gap is recall on small objects in recordings with few co-visible

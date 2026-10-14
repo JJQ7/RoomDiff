@@ -150,10 +150,18 @@ changes:
   icp_reliable_fitness: 0.5  # ... and marked rotation_reliable from this fitness on (the ladder
                          # of living_room_1 scores 0.397-0.404 from run to run)
   free_views_full: 5     # observing views of the other recording that give full free-space evidence
-  w_mask: 0.3            # confidence = w_mask * SAM score + w_free * free-space evidence
-  w_free: 0.4            #   + w_consistency * view consistency (weights sum to 1);
-  w_consistency: 0.3     #   unverified: half the mask/consistency part only (<= 0.5)
-  appearance_frames_full: 4  # appearance instances: confidence x (0.5 + 0.5 min(frames_supporting / this, 1))
+  w_mask: 0.6            # confidence = (w_mask * SAM score + w_free * free-space evidence
+  w_free: 0.4            #   + w_consistency * view consistency) / (sum of the weights);
+  w_consistency: 0.0     #   unverified: half the mask/consistency part only (<= 0.5). View
+                         #   consistency did not separate true from false SceneDiff detections,
+                         #   the mask score did: 0.3 / 0.4 / 0.3 before (the old formula, with
+                         #   appearance_evidence: frames)
+  appearance_evidence: score  # appearance instances: confidence x (0.5 + 0.5 min(cue / full, 1)),
+                         # cue = the cluster's mean region score (score, full =
+                         # appearance_score_full) or its frames_supporting (frames, full =
+                         # appearance_frames_full: the earlier factor)
+  appearance_score_full: 2.0  # = 1 + appearance.w_feat, the largest region score
+  appearance_frames_full: 4
   crop_min_px: 256       # crops are at least this many pixels per side (keyframe resolution) ...
   crop_context: 1.6      # ... and this many times the object box
 
