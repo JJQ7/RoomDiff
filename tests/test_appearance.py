@@ -431,6 +431,8 @@ def test_replaced_pair_verdicts(tmp_path, answer, kept, rejected):
     for c in doc["changes"] + doc["rejected"]:
         if c["id"] in (1, 2):
             assert c["evidence"]["vlm_replace_answer"] == answer
+    for c in doc["rejected"]:  # "same", or the other type: the judge saw no such change
+        assert c["evidence"]["reason_class"] == "judge_same"
     meta = json.loads((tmp_path / "semantics" / "meta.json").read_text())
     assert meta["replacements"] == [{"ids": [1, 2], "labels": ["wallet", "phone"],
                                      "answer": answer, "reason": "scripted"}]
@@ -448,3 +450,4 @@ def test_surface_named_appearance_change_is_rejected(tmp_path):
     assert [c["id"] for c in doc["changes"]] == [2]
     sheet = next(c for c in doc["rejected"] if c["id"] == 1)
     assert "bare surface" in sheet["evidence"]["vlm_reason"]
+    assert sheet["evidence"]["reason_class"] == "room_or_surface"

@@ -26,7 +26,8 @@ the stage can be re-run):
    question with the other recording's view of the place (same or the other type:
    rejected; different or its own type: confirmed), and one named like a bare surface or
    part of the room is rejected; moved also `motion_kind` ("rigid" /
-   "deformed" / "unknown"). Rejected changes move to the `rejected` list; unclear ones keep
+   "deformed" / "unknown"). Rejected changes move to the `rejected` list, with
+   `evidence.reason_class` saying why (`REJECT_CLASSES`); unclear ones keep
    `confidence * unclear_factor`. A rejected `moved` change keeps its geometry: it is split
    back into a `removed` (before side) and an `added` change (after side), each named
    again and judged with the removed / added question (object + the other recording's
@@ -68,6 +69,11 @@ from roomdiff.vlm import BaseVLM
 
 VERDICTS = ("confirmed", "rejected", "unclear")
 MOTION_KINDS = ("rigid", "deformed", "unknown")
+# `evidence.reason_class` of a rejected change (a class it already has, the M4 one of an
+# unverified change, is kept): part of the room or a bare surface (label rules, the object
+# test's mirror / room flags); the judge saw no change (in-place "same" or the other type, a
+# removed / added question answered "still / already there"); any other judge rejection
+REJECT_CLASSES = ("room_or_surface", "judge_same", "judge_rejected")
 ARTICLES = {"a", "an", "the", "some"}
 TRAILING_WORDS = {"of", "on", "in", "with", "and", "against", "at", "for", "to"}
 CUT_WORDS = {"on", "in", "with", "against", "at", "near", "under", "behind", "from"}
@@ -480,11 +486,18 @@ def object_verdict(data: Mapping[str, Any] | None) -> tuple[str, str]:
     return verdict, reason
 
 
+def room_flagged(data: Mapping[str, Any] | None) -> bool:
+    """The object test's answer flags the region as inside a mirror or as part of the room."""
+    data = data or {}
+    return any(str(data.get(key)).lower() == "true" for key in ("inside_mirror", "part_of_room"))
+
+
 def judge_change(vlm: BaseVLM, crops: Crops, change: dict[str, Any],
-                 describe_first: bool = False) -> tuple[str, str]:
-    """Type-specific paired-crop question; returns (verdict, reason). For moved changes
-    also sets `motion_kind`. A missing view of the place falls back to the object test.
-    `describe_first`: the removed / added prompts ask what each box contains first."""
+                 describe_first: bool = False) -> tuple[str, str, str]:
+    """Type-specific paired-crop question; returns (verdict, reason, reason class of a
+    rejection: `REJECT_CLASSES`). For moved changes also sets `motion_kind`. A missing
+    view of the place falls back to the object test. `describe_first`: the removed / added
+    prompts ask what each box contains first."""
     kind, label, cid = change["type"], change["label"], change["id"]
     style = describing if describe_first else (lambda prompt: prompt)
     owner = crops.get(change, owner_side(change))
@@ -502,7 +515,7 @@ def judge_change(vlm: BaseVLM, crops: Crops, change: dict[str, Any],
             motion = str(data.get("motion", "")).strip().lower()
             change["motion_kind"] = motion if motion in MOTION_KINDS else "unknown"
             change["evidence"]["vlm_motion_reason"] = str(data.get("reason") or "").strip()
-        return verdict, reason
+        return verdict, reason, "judge_rejected"  # rejected: two different objects
     place = None
     if kind == "removed":
         place = crops.get(change, "after")
@@ -511,14 +524,17 @@ def judge_change(vlm: BaseVLM, crops: Crops, change: dict[str, Any],
         place = crops.get(change, "before")
         pair, prompt = [place, owner], fill(style(JUDGE_ADDED), label)
     if kind == "unverified" or place is None:
-        verdict, reason = object_verdict(ask_images(vlm, [owner], JUDGE_UNVERIFIED,
-                                                    f"judge_object:{cid}"))
-        if kind == "unverified" and verdict != "rejected" and is_background(label):
+        data = ask_images(vlm, [owner], JUDGE_UNVERIFIED, f"judge_object:{cid}")
+        verdict, reason = object_verdict(data)
+        background = kind == "unverified" and is_background(label)
+        if background and verdict != "rejected":
             verdict, reason = "rejected", f"named '{label}' (part of the room): {reason}"
         if kind != "unverified":
             reason = f"(no view of the place in the other video) {reason}"
-        return verdict, reason
-    return verdict_of(ask_images(vlm, pair, prompt, f"judge_{kind}:{cid}"))
+        reject_as = "room_or_surface" if background or room_flagged(data) else "judge_rejected"
+        return verdict, reason, reject_as  # judge_rejected: no distinct object
+    verdict, reason = verdict_of(ask_images(vlm, pair, prompt, f"judge_{kind}:{cid}"))
+    return verdict, reason, "judge_same"  # rejected: still / already at that place
 
 
 def linked_partner(change: Mapping[str, Any], by_id: Mapping[int, dict[str, Any]]
@@ -620,12 +636,17 @@ def surface_rejection(change: Mapping[str, Any]) -> str | None:
 
 
 def apply_verdict(change: dict[str, Any], verdict: str, reason: str,
-                  unclear_factor: float) -> bool:
-    """Store the verdict in `change`; returns False if the change is rejected."""
-    change["evidence"]["vlm_verdict"] = verdict
-    change["evidence"]["vlm_reason"] = reason
+                  unclear_factor: float, reject_class: str = "judge_rejected") -> bool:
+    """Store the verdict in `change`; returns False if the change is rejected. A rejected
+    change gets `evidence.reason_class` = `reject_class` (`REJECT_CLASSES`) unless it
+    already has one (the M4 class of an unverified change)."""
+    ev = change["evidence"]
+    ev["vlm_verdict"] = verdict
+    ev["vlm_reason"] = reason
     if verdict == "unclear":
         change["confidence"] = round(change["confidence"] * unclear_factor, 3)
+    if verdict == "rejected":
+        ev["reason_class"] = ev.get("reason_class") or reject_class
     return verdict != "rejected"
 
 
@@ -1187,10 +1208,11 @@ def run_semantics(out_dir: str | Path, cfg: Mapping[str, Any],
             surface = surface_rejection(c)
             if surface is not None and verdict != "rejected":
                 verdict, reason = "rejected", f"{surface}: {reason}"
-            keep = apply_verdict(c, verdict, reason, params["unclear_factor"])
+            keep = apply_verdict(c, verdict, reason, params["unclear_factor"],
+                                 "room_or_surface" if surface else "judge_same")
             (kept if keep else rejected).append(c)
             continue
-        verdict, reason = judge_change(vlm, crops, c, describe_first)
+        verdict, reason, reject_as = judge_change(vlm, crops, c, describe_first)
         surface = surface_rejection(c)
         if surface is not None and verdict != "rejected":
             verdict, reason = "rejected", f"{surface}: {reason}"
@@ -1200,14 +1222,19 @@ def run_semantics(out_dir: str | Path, cfg: Mapping[str, Any],
                 next_id += 1
             for half in halves:  # named and judged like any removed / added change
                 name_change(vlm, crops, half)
-                keep = apply_verdict(half, *judge_change(vlm, crops, half, describe_first),
-                                     params["split_factor"])
+                h_verdict, h_reason, h_reject_as = judge_change(vlm, crops, half,
+                                                                describe_first)
+                if h_reject_as == "judge_same":  # the judge split the pair: not a plain "same"
+                    h_reject_as = "judge_rejected"
+                keep = apply_verdict(half, h_verdict, h_reason, params["split_factor"],
+                                     h_reject_as)
                 (kept if keep else rejected).append(half)
             splits.append({"id": c["id"], "label": c["label"], "into": [h["id"] for h in halves],
                            "labels": [h["label"] for h in halves], "reason": reason,
                            "verdicts": [h["evidence"]["vlm_verdict"] for h in halves]})
             continue
-        keep = apply_verdict(c, verdict, reason, params["unclear_factor"])
+        keep = apply_verdict(c, verdict, reason, params["unclear_factor"],
+                             "room_or_surface" if surface else reject_as)
         (kept if keep else rejected).append(c)
     halves = {i for x in splits for i in x["into"]}
     if splits and params["enable_fragment_merge"]:  # a kept half may be part of another change
@@ -1219,7 +1246,7 @@ def run_semantics(out_dir: str | Path, cfg: Mapping[str, Any],
         merges += more
         for c in kept:
             if c["type"] == "moved" and c["motion_kind"] is None:  # new: verdict from repair
-                verdict, reason = judge_change(vlm, crops, c, describe_first)  # + motion kind
+                verdict, reason, _ = judge_change(vlm, crops, c, describe_first)  # + motion
                 apply_verdict(c, verdict, reason, params["unclear_factor"])
     kept, rejected = sort_changes(kept), sort_changes(rejected)
     times["judge"] = time.perf_counter() - t0

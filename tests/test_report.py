@@ -57,6 +57,14 @@ def test_render_report_sections():
     assert "## Coverage" in text and "- 76% of the before video's points ..." in lines
 
 
+def test_rejected_list_shows_the_reason_class():
+    wall = DOC["rejected"][0]
+    doc = {**DOC, "rejected": [{**wall, "evidence": {**wall["evidence"],
+                                                     "reason_class": "room_or_surface"}}]}
+    assert "- **9** unverified *wall* `room_or_surface`, confidence 0.41: part of the wall " \
+        "([crop](crops/9_after.jpg))" in render_report(doc, "scene_x", []).splitlines()
+
+
 def test_evidence_line():
     moved = evidence_line(DOC["changes"][0])
     assert moved.startswith("old place seen empty from 4 views of the after video, new place "

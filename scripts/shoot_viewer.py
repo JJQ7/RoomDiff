@@ -14,8 +14,8 @@ the page through the viewer's automation hook `window.roomdiff` (viewer/app.js) 
   <name>_blink.gif       before and after clouds alternating, boxes shown (3D view only).
 PNGs have 256 colours (about 3x smaller than full colour and hardly different; --lossless
 keeps full colour). GIFs are 800 px wide, 100 ms per frame and loop; their palette shrinks
-until each file is at most 3 MB. WebGL runs on SwiftShader, so no GPU is needed; the viewer
-loads three.js from unpkg.com, so the browser needs an internet connection.
+until each file is at most 3 MB. WebGL runs on SwiftShader, so no GPU is needed, and three.js
+is vendored with the viewer (viewer/vendor/), so no internet connection is needed either.
 """
 
 from __future__ import annotations

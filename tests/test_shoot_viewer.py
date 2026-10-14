@@ -1,23 +1,26 @@
 """scripts/shoot_viewer.py on a tiny synthetic viewer folder, in headless Chromium.
 
-Skipped without Playwright and its Chromium, or when the three.js CDN pinned in
-viewer/index.html cannot be reached (the viewer loads three.js from there)."""
+Skipped without Playwright and its Chromium. No network is needed: three.js is vendored in
+viewer/vendor/ (test_viewer_loads_without_network aborts every request to another host)."""
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
-import re
 import shutil
 import signal
 import subprocess
 import sys
-import urllib.request
 from pathlib import Path
+from types import ModuleType
+from urllib.parse import urlsplit
 
 import numpy as np
 import pytest
 from PIL import Image, ImageDraw
+
+from roomdiff.viewer_export import APP_DIRS, APP_FILES, VIEWER_SRC
 
 sync_api = pytest.importorskip("playwright.sync_api")
 
@@ -38,11 +41,6 @@ def browser_ready() -> None:
             playwright.chromium.launch().close()
     except sync_api.Error as error:
         pytest.skip(f"Playwright's Chromium does not start: {error}")
-    url = re.search(r'"three": "(https://[^"]+)"', (REPO / "viewer" / "index.html").read_text())[1]
-    try:
-        urllib.request.urlopen(urllib.request.Request(url, method="HEAD"), timeout=10).close()
-    except OSError as error:
-        pytest.skip(f"three.js is not reachable at {url}: {error}")
 
 
 def block(center: tuple, size: tuple, color: tuple, step: float = 0.05) -> tuple:
@@ -73,8 +71,10 @@ def box(center: tuple, size: tuple, yaw: float = 0.0) -> dict:
 def make_viewer(folder: Path) -> None:
     """Viewer app + scene.json, changes.json (one change of each type), two clouds, crops."""
     folder.mkdir(parents=True)
-    for name in ("index.html", "app.js", "style.css"):
-        shutil.copy2(REPO / "viewer" / name, folder / name)
+    for name in APP_FILES:
+        shutil.copy2(VIEWER_SRC / name, folder / name)
+    for name in APP_DIRS:  # the vendored three.js
+        shutil.copytree(VIEWER_SRC / name, folder / name)
     floor = np.stack(np.meshgrid(np.arange(-2, 2.01, 0.05), [0.0], np.arange(-2, 2.01, 0.05)),
                      -1).reshape(-1, 3)
     checker = ((np.floor(floor[:, 0] * 2) + np.floor(floor[:, 2] * 2)) % 2)[:, None]
@@ -129,6 +129,53 @@ def run_shooter(*args: str) -> subprocess.CompletedProcess[str]:
             os.killpg(proc.pid, signal.SIGKILL)
             pytest.fail(f"shoot_viewer.py took more than {TIMEOUT_S} s")
     return subprocess.CompletedProcess(proc.args, proc.returncode, out, err)
+
+
+def shoot_module() -> ModuleType:
+    """scripts/shoot_viewer.py imported as a module (its server and browser settings)."""
+    spec = importlib.util.spec_from_file_location("shoot_viewer", SCRIPT)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_viewer_loads_without_network(tmp_path: Path, browser_ready: None) -> None:
+    """Every request to a host other than the local server is aborted: the viewer must still
+    load (three.js from vendor/), with no console error and no request to another host."""
+    shoot = shoot_module()
+    make_viewer(tmp_path / "viewer")
+    outside: list[str] = []
+    problems: list[str] = []
+    with shoot.serve(tmp_path / "viewer") as url, sync_api.sync_playwright() as playwright:
+        host = urlsplit(url).netloc
+
+        def local_only(route: sync_api.Route) -> None:
+            if urlsplit(route.request.url).netloc == host:
+                route.continue_()
+            else:
+                outside.append(route.request.url)
+                route.abort()
+
+        def on_console(message: sync_api.ConsoleMessage) -> None:
+            if message.type == "error":
+                problems.append(f"{message.text} ({message.location['url']})")
+
+        browser = playwright.chromium.launch(args=shoot.CHROMIUM_ARGS)
+        try:
+            page = browser.new_page()
+            page.route("**/*", local_only)
+            page.on("console", on_console)
+            page.on("pageerror", lambda error: problems.append(str(error)))
+            page.goto(url, timeout=TIMEOUT_S * 1000)
+            page.wait_for_function(shoot.READY_JS, timeout=TIMEOUT_S * 1000, polling=200)
+            status = page.locator("#status").inner_text()
+            items = page.evaluate(
+                "() => window.roomdiff?.ready ? window.roomdiff.items().length : -1")
+        finally:
+            browser.close()
+    assert items == 4, status  # ready, with the four synthetic changes
+    assert outside == [] and problems == [], (outside, problems)
 
 
 def test_shoots_synthetic_viewer(tmp_path: Path, browser_ready: None) -> None:
