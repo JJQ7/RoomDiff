@@ -1031,6 +1031,11 @@ def template_description(change: Mapping[str, Any], frame: SceneFrame | None,
         return (f"{article(label)} {what} appeared {joined('after')}: the before recording "
                 f"looked at that spot from {views(ev.get('observing_views'))} and saw it empty.")
     other = "after" if side == "before" else "before"
+    if ev.get("reason_class") == "weak_alignment":  # a demoted geometry candidate (M3)
+        return (f"{article(label)} {what}, {joined(side)}, was seen in the {side} recording; "
+                "the two reconstructions do not line up well enough (alignment WEAK) to tell "
+                f"whether the {other} recording saw that spot empty, so this possible change "
+                "cannot be verified.")
     return (f"{article(label)} {what}, {joined(side)}, was seen only in the {side} "
             f"recording; the {other} recording never looked at that spot, so this possible "
             "change cannot be verified.")

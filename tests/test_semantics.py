@@ -629,6 +629,10 @@ def test_template_description_geometry():
     text = template_description(c, frame, {})
     assert text.startswith("The pajamas (about 0.8 x 0.8 x 0.8 m), 1.1 m above the floor in "
                            "the near right part of the room, was seen only in the after")
+    c["evidence"]["reason_class"] = "weak_alignment"  # demoted by the alignment gate
+    text = template_description(c, frame, {})
+    assert "do not line up well enough (alignment WEAK)" in text
+    assert "never looked" not in text
     m = change(3, "moved", before=side(1, [0, 0.8, 3]), after=side(1, [0.9, 0.8, 3]))
     m["label"], m["motion_kind"] = "ladder", "rigid"
     m["transform"] = {"translation_m": 0.93, "rotation_deg": 31.0, "rotation_reliable": True}
