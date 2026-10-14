@@ -33,8 +33,19 @@ flowchart LR
 ```
 
 Geometry proposes, appearance fills in what geometry cannot see, the vision-language
-model judges and names. A change is only `removed` or `added` if the other video looked
-at that place and saw it empty; space the other video never observed is `unverified`.
+model judges and names. What a `removed` or `added` change rests on depends on the channel:
+
+- geometry: the other video's camera rays carved that space empty (free in at least 2 of
+  its keyframes, more than 4 cm from its surfaces); occupied space the other video never
+  observed is `unverified` instead;
+- appearance (small or flat objects the voxels miss, e.g. a wallet on a table): no
+  free-space test; keyframes of the other video look at the same place (depth-consistent
+  reprojection) and see different DINOv3 features there, sometimes also a depth cue (they
+  see through the place to a surface behind it).
+
+Every candidate of both channels then goes to the VLM judge, which sees the object and,
+where there is one, the other video's view of the place; an appearance change is asked
+what changed at that place, and "same" rejects it.
 
 ## Install
 
@@ -49,8 +60,8 @@ python3.12 -m venv .venv && source .venv/bin/activate
 # torch for your CUDA; the RTX 5090 (sm_120) needs the cu128 wheels
 pip install torch==2.10.0 torchvision==0.25.0 --index-url https://download.pytorch.org/whl/cu128
 pip install -e .                                   # roomdiff + dependencies (pyproject.toml)
-# Pi3X reconstruction model code (not on PyPI); --no-deps keeps our numpy 2.x
-git clone https://github.com/yyfz/Pi3.git third_party/Pi3
+# Pi3X reconstruction model code (not on PyPI) at the tested commit; --no-deps keeps numpy 2.x
+git clone https://github.com/yyfz/Pi3.git third_party/Pi3 && git -C third_party/Pi3 checkout 9fa3ddb
 pip install --no-deps -e third_party/Pi3
 ```
 
@@ -58,17 +69,46 @@ Model weights are read from the Hugging Face cache; download them once (about 25
 DINOv3 is gated: accept its terms on the model page and `hf auth login` first.
 
 ```bash
-hf download yyfz233/Pi3X model.safetensors          # reconstruction (5.4 GB)
-hf download facebook/sam2.1-hiera-large             # instance masks (1.7 GB)
-hf download facebook/dinov3-vitl16-pretrain-lvd1689m   # appearance features (1.2 GB, gated)
-hf download Qwen/Qwen3-VL-8B-Instruct               # semantics (17 GB)
+hf download yyfz233/Pi3X model.safetensors            # reconstruction (5.4 GB), rev bb1deea4d7
+hf download facebook/sam2.1-hiera-large               # instance masks (1.7 GB), rev 665f8e2ad6
+hf download facebook/dinov3-vitl16-pretrain-lvd1689m  # appearance (1.2 GB, gated), rev ea8dc2863c
+hf download Qwen/Qwen3-VL-8B-Instruct                 # semantics (17 GB), rev 0c351dd01e
 ```
+
+The comments give the revision of each model used for the results in this README (each
+repository's `main` on 12 October 2026, as listed in `docs/env_report.md`). The code
+loads `main` from this cache, and `ls ~/.cache/huggingface/hub/models--yyfz233--Pi3X/snapshots/`
+(likewise for the others) shows the revision you got. (`hf download --revision <hash>`
+fetches exactly these files but does not record them as `main`, which is what the code asks
+the cache for.)
 
 Notes: video decoding uses PyAV's bundled FFmpeg, so no system `ffmpeg` is needed. Open3D
 needs `libusb-1.0.so.0` (`sudo apt install libusb-1.0-0`; without root, `apt-get download
 libusb-1.0-0`, extract the `.so` and put it in `.venv/lib/`). The SceneDiff benchmark
 (`roomdiff eval`) additionally needs the dataset under `data/scenediff/scenediff_benchmark/`
-and the official evaluator: `git clone https://github.com/yuqunw/scene_diff.git third_party/scene_diff`.
+and the official evaluator; the optional SAM 3 re-check (`roomdiff recheck`) needs SAM 3,
+whose package pins numpy < 2 (hence `--no-deps` and two of its dependencies by hand). Both
+at the tested commits:
+
+```bash
+git clone https://github.com/yuqunw/scene_diff.git third_party/scene_diff && git -C third_party/scene_diff checkout 62dcbd2
+git clone https://github.com/facebookresearch/sam3.git third_party/sam3 && git -C third_party/sam3 checkout 0570b3a
+pip install --no-deps -e third_party/sam3 && pip install ftfy==6.1.1 iopath==0.1.10
+hf download facebook/sam3 sam3.pt                     # SAM 3 checkpoint (3.5 GB, gated), rev 3c879f3982
+```
+
+### Licences
+
+| component | licence | source |
+|---|---|---|
+| Pi3 code (`third_party/Pi3`) | BSD 3-Clause | `third_party/Pi3/LICENSE` |
+| Pi3X weights (`yyfz233/Pi3X`) | CC BY-NC 4.0: non-commercial use only | `third_party/Pi3/README.md` ("License"); [model card](https://huggingface.co/yyfz233/Pi3X) |
+| SAM 2.1 (`facebook/sam2.1-hiera-large`) | Apache-2.0 | [model card](https://huggingface.co/facebook/sam2.1-hiera-large) |
+| DINOv3 (`facebook/dinov3-vitl16-pretrain-lvd1689m`) | DINOv3 License (Meta; gated) | `LICENSE.md` in the [model repository](https://huggingface.co/facebook/dinov3-vitl16-pretrain-lvd1689m) |
+| Qwen3-VL-8B-Instruct (`Qwen/Qwen3-VL-8B-Instruct`) | Apache-2.0 | [model card](https://huggingface.co/Qwen/Qwen3-VL-8B-Instruct) |
+| SceneDiff evaluator (`third_party/scene_diff`) | MIT | `third_party/scene_diff/LICENSE` |
+| SAM 3 code and weights (optional: `third_party/sam3`, `facebook/sam3`) | SAM License (Meta; weights gated) | `third_party/sam3/LICENSE`, same text in the [model repository](https://huggingface.co/facebook/sam3) |
+| three.js r160 (vendored in `viewer/vendor/three/`) | MIT | `viewer/vendor/three/LICENSE` |
 
 ## Run
 
@@ -203,13 +243,13 @@ tabletop_2 unchanged). On close-range, top-down video it trades precision for re
 
 ## Web viewer
 
-A static three.js viewer (source in `viewer/`, no build step; three.js is loaded from
-unpkg, so it needs an internet connection) shows the before/after clouds with the change
+A static three.js viewer (source in `viewer/`, no build step; three.js r160 is vendored in
+`viewer/vendor/three/`, so it works offline) shows the before/after clouds with the change
 boxes, a per-change list with evidence and crops, before/after/both and tint toggles.
 
 ```bash
 # writes outputs/scene1/viewer/: before.ply, after.ply (<= 400k points each), changes.json,
-# crops/, scene.json and a copy of the viewer app
+# crops/, scene.json and a copy of the viewer app (with vendor/)
 python -m roomdiff.cli viewer --out outputs/scene1 [--target-points 400000]
 # browsers block data loading from file:// pages, so serve the folder:
 cd outputs/scene1/viewer && python -m http.server 8000   # open http://localhost:8000/
@@ -229,8 +269,8 @@ outputs/scene1 --out docs/img/scene1 --gif` renders the same overview without a 
 GitHub Pages layout (several scenes, one copy of the app):
 
 ```
-docs/viewer/index.html, app.js, style.css       # copied from viewer/
-docs/viewer/scenes/<name>/                      # contents of outputs/<name>/viewer/
+docs/viewer/index.html, app.js, style.css, vendor/   # copied from viewer/
+docs/viewer/scenes/<name>/                           # data files of outputs/<name>/viewer/
 ```
 
 Live examples: <https://jjq7.github.io/RoomDiff/viewer/?scene=scenes/scenediff_living_room_1>

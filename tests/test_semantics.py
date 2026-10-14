@@ -14,6 +14,7 @@ from PIL import Image
 from roomdiff.config import load_config
 from roomdiff.geometry import floor_obb, obb_gap, rotation_y
 from roomdiff.semantics import (
+    REJECT_CLASSES,
     SceneFrame,
     head_noun,
     labels_match,
@@ -357,6 +358,7 @@ def test_rejected_split_half_moves_to_rejected(tmp_path):
     assert wall["label"] == "wall" and wall["evidence"]["vlm_verdict"] == "rejected"
     assert wall["evidence"]["vlm_reason"] == "the outline covers a plain wall"
     assert wall["evidence"]["split_from"] == 3
+    assert wall["evidence"]["reason_class"] == "judge_rejected"  # a half of a split pair
     # the bag half is confirmed and re-paired with the added red bag 7 (not with the wall)
     assert [(c["id"], c["type"], c["label"]) for c in doc["changes"]] == [(3, "moved", "red bag")]
     assert doc["changes"][0]["evidence"]["merged_from"] == [3, 7]
@@ -392,6 +394,57 @@ def test_split_half_is_re_paired_with_another_change(tmp_path):
     assert [x["ids"] for x in meta["merges"]] == [[7, 8]]  # never the two halves 3 + 8
     assert sum("same physical object" in p and "already matched" not in p
                for p in vlm.prompts) == 1  # one strict same-object check: 7 + 8
+
+
+def test_rejected_entries_say_why(tmp_path):
+    """Every change moved to `rejected` gets `evidence.reason_class`: part of the room (a
+    region named "wall"; a region the object test puts inside a mirror), no change seen by
+    the judge (a removed bag still at its place; an appearance change whose in-place answer
+    is "same"), another judge rejection (a strap, not a whole object). A class the change
+    already has (from M4) is kept; kept changes get none."""
+    def far(iid, k):  # 10 m apart: no re-pairing or fragment merging between the cases
+        return side(iid, [10.0 * k, 0, 2])
+
+    def unverified(cid, col):
+        return change(cid, "unverified", before=far(cid, cid), seen_in="before", views=0,
+                      crops={"before": crop(tmp_path, f"{cid}_before", col)})
+
+    def removed(cid, col, place_col, **extra):
+        return change(cid, "removed", before={**far(cid, cid), **extra},
+                      crops={"before": crop(tmp_path, f"{cid}_before", col),
+                             "after": crop(tmp_path, f"{cid}_after", place_col)})
+
+    unseen = unverified(5, "grey")
+    unseen["evidence"]["reason_class"] = "never_observed"
+    write_doc(tmp_path, [unverified(1, "grey"), removed(2, "red", "red"), unverified(3, "red"),
+                         unverified(4, "green"), unseen,
+                         removed(6, "green", "green", source="appearance"),
+                         removed(7, "green", "grey")])
+
+    def answer(images, prompt):
+        cols = [colour(im) for im in images]
+        if "What changed at this place" in prompt:  # in-place question (appearance change)
+            return '{"reason": "the same hairbrush", "change": "same"}'
+        if '"inside_mirror"' in prompt and cols[0] == "red":  # object test
+            return ('{"inside_mirror": false, "reason": "a strap, not a whole object", '
+                    '"part_of_room": false, "verdict": "rejected"}')
+        if '"inside_mirror"' in prompt and cols[0] == "green":
+            return ('{"inside_mirror": true, "reason": "a hairbrush in a mirror", '
+                    '"part_of_room": false, "verdict": "confirmed"}')
+        if "absent from that place in image 2" in prompt and cols[1] == "red":
+            return '{"reason": "the bag is still there", "verdict": "rejected"}'
+        return responder(images, prompt)
+
+    doc = run_semantics(tmp_path, load_config(), FakeVLM(answer))
+    assert [c["id"] for c in doc["changes"]] == [7]  # removed hairbrush, place seen empty
+    assert "reason_class" not in doc["changes"][0]["evidence"]
+    classes = {c["id"]: c["evidence"]["reason_class"] for c in doc["rejected"]}
+    assert classes == {1: "room_or_surface", 2: "judge_same", 3: "judge_rejected",
+                       4: "room_or_surface", 5: "never_observed", 6: "judge_same"}
+    assert set(classes.values()) == {*REJECT_CLASSES, "never_observed"}
+    reasons = {c["id"]: c["evidence"]["vlm_reason"] for c in doc["rejected"]}
+    assert reasons[4] == "inside a mirror: a hairbrush in a mirror"
+    assert reasons[6] == "in place: same; the same hairbrush"
 
 
 CHAIR_PARTS = {"red": "Office Chair", "green": "office chair base", "grey": "wall"}

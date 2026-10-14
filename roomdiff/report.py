@@ -2,8 +2,9 @@
 
 Title, summary paragraph, counts table, one section per change (type badge, label,
 confidence, description, evidence line, crops as relative markdown images), a collapsible
-list of the rejected candidates with the VLM's reason, and a coverage note from
-`recon/meta.json` (share of each recording's points the other one could observe).
+list of the rejected candidates with their `evidence.reason_class` as a tag and the VLM's
+reason, and a coverage note from `recon/meta.json` (share of each recording's points the
+other one could observe).
 """
 
 from __future__ import annotations
@@ -161,7 +162,8 @@ def render_report(doc: Mapping[str, Any], title: str, coverage: Sequence[str]) -
             reason = ev.get("vlm_reason") or "no reason"
             if ev.get("recheck_verdict") == "contradicted":
                 reason = f"SAM 3 re-check: {ev['recheck']['reason']} (VLM: {reason})"
-            lines.append(f"- **{c['id']}** {c['type']} *{c.get('label', 'object')}*, "
+            tag = f" `{ev['reason_class']}`" if ev.get("reason_class") else ""
+            lines.append(f"- **{c['id']}** {c['type']} *{c.get('label', 'object')}*{tag}, "
                          f"confidence {c['confidence']:.2f}: {reason}{link}")
         lines += ["", "</details>", ""]
     lines += ["## Coverage", ""]

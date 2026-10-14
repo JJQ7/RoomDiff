@@ -8,7 +8,8 @@ Writes
 * `crops/`: the crop images referenced by `changes.json`;
 * `scene.json`: manifest read by the viewer (file names, point counts, extent, up axis:
   [0, 1, 0] if recon/meta.json says the frame is levelled, else `estimate_up`);
-* a copy of the viewer app (repo `viewer/`: index.html, app.js, style.css).
+* a copy of the viewer app (repo `viewer/`: index.html, app.js, style.css and `vendor/`,
+  the three.js r160 modules app.js imports, so the folder needs no network).
 
 Browsers refuse `fetch` on file:// pages, so serve the folder:
 `cd <out>/viewer && python -m http.server 8000`, then open http://localhost:8000/.
@@ -34,6 +35,7 @@ from roomdiff.recon import is_levelled, load_recon, recording_points, write_ply
 
 VIEWER_SRC = Path(__file__).resolve().parent.parent / "viewer"
 APP_FILES = ("index.html", "app.js", "style.css")
+APP_DIRS = ("vendor",)  # three.js, mapped by the import map in index.html
 TARGET_POINTS = 400_000
 START_VOXEL = 0.005  # m, first voxel size tried by `downsample_to_target`
 UNITS = "metres (approx.)"
@@ -303,6 +305,9 @@ def export_viewer(out_dir: str | Path, target_points: int = TARGET_POINTS) -> Pa
     (viewer / "scene.json").write_text(json.dumps(manifest, indent=2))
     for file in APP_FILES:
         shutil.copy2(VIEWER_SRC / file, viewer / file)
+    for folder in APP_DIRS:
+        shutil.rmtree(viewer / folder, ignore_errors=True)
+        shutil.copytree(VIEWER_SRC / folder, viewer / folder)
 
     stats = manifest["stats"]
     print(f"[viewer] {stats['points_before']:,} before / {stats['points_after']:,} after points "

@@ -368,6 +368,22 @@ or merged); M5 sets or adds:
   "rigid" | "deformed" | "unknown" and `evidence.vlm_motion_reason` (`motion_kind` is null
   for the other types). Unverified regions are rejected unless the VLM sees a distinct
   object (not wall / floor / door frame / window / mirror reflection / shadow / lighting).
+* `evidence.reason_class` (entries of `rejected` only, `REJECT_CLASSES`): why the candidate
+  is not a change. `room_or_surface`: part of the room or a bare surface: an unverified
+  region whose label names part of the room (`is_background`), an appearance-channel
+  removed / added change whose label names part of the room or a bare surface
+  (`surface_rejection`), or a region the object test flags `inside_mirror` /
+  `part_of_room`; this class wins even where the judge had rejected the entry anyway.
+  `judge_same`: the judge saw no change: an in-place answer "same" or the other type (a
+  replaced pair answered "removed" rejects its added side), or the removed / added question
+  answered "rejected" (still / already at that place). `judge_rejected`: any other judge
+  rejection: the object test found no distinct object (unverified regions, removed / added
+  changes without a view of the place), or a half of a split moved change (below) was
+  rejected. An entry keeps a class it already has: M4 sets `evidence.reason_class` on
+  unverified changes, `never_observed` (the other recording never looked at the place) or
+  `weak_alignment` (a geometry candidate demoted because the two reconstructions disagree),
+  so a rejected unverified region shows its M4 class. Changes the optional SAM 3 re-check
+  moves to `rejected` get no class (`evidence.recheck_verdict` says why).
 * A `moved` change (M4 geometric match or re-pairing) whose match the judge rejects is not
   dropped: it is split into a `removed` change (its `before` side; id = the moved id, or
   the first merged candidate's) and an `added` change (its `after` side; id = the second
@@ -420,8 +436,8 @@ or merged); M5 sets or adds:
   counts), polished by one text-only VLM call if every number and the label survived;
   `description_template` keeps the template sentence.
 
-Top level: `rejected` (same schema, `vlm_verdict` "rejected" + reason), `summary` =
-"N changes: a moved, b added, c removed; d unverified." + a VLM paragraph.
+Top level: `rejected` (same schema, `vlm_verdict` "rejected" + reason + `reason_class`),
+`summary` = "N changes: a moved, b added, c removed; d unverified." + a VLM paragraph.
 `semantics/meta.json`: model, params, runtime per step, VLM calls and seconds, counts in /
 out, rejected (id, type, label, reason), merges (every VLM pair check: kind, ids,
 labels, distance or box gap, verdict, reason; fragment checks also the VLM's `label`),
@@ -434,8 +450,8 @@ estimate; floor height), `peak_vram_gb`, `peak_ram_gb`.
 `semantics/log.jsonl`: one line per VLM call `{tag, images, prompt, answer, seconds}`.
 `report.md`: title, summary, counts table, one section per change (type badge, label,
 confidence, verdict, motion, description, evidence line, crops as relative markdown
-images), collapsible rejected list with the VLM reasons, coverage note from
-`recon/meta.json`.
+images), collapsible rejected list with the reason class as a tag and the VLM reasons,
+coverage note from `recon/meta.json`.
 
 ## Re-check (optional) -> `<out>/changes.json` (rewritten), `<out>/recheck/`, `<out>/report.md`
 Implemented (`roomdiff/recheck.py`, SAM 3 wrapper `Sam3TextSegmenter` in
@@ -517,8 +533,10 @@ for changes the re-check rejected.
 appearance score maps (`world/<rec>/cam/<i>/appearance`: the keyframe dimmed with a
 black-red-yellow-white heat map of the score, for the cameras logged with their image)
 and clusters (`world/appearance/<rec>/<id>`, oriented boxes, "covered" if an M4 instance
-already held them), changes), `viewer/` (`roomdiff viewer`: static web viewer assets: downsampled clouds,
-boxes, crops, changes.json; `scene.json: up_axis` = [0, 1, 0] for a levelled
+already held them), changes), `viewer/` (`roomdiff viewer`: static web viewer assets: the
+app (index.html, app.js, style.css and three.js r160 vendored in `vendor/three/`, so it needs
+no network), downsampled clouds, boxes, crops, changes.json; `scene.json: up_axis` = [0, 1, 0]
+for a levelled
 reconstruction, else the camera-based estimate; `view_dir` = the horizontal direction of
 the viewer's home view, chosen among 12 azimuths as the one whose home camera sees the
 largest unoccluded share of the points, `viewer_export.best_view_dir`). The viewer draws each change's `obb`

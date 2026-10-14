@@ -1,6 +1,7 @@
 """Tests for the static web viewer export on a synthetic recon.npz (CPU only)."""
 
 import json
+import re
 from pathlib import Path
 
 import numpy as np
@@ -10,6 +11,7 @@ from scipy.spatial.transform import Rotation
 
 from roomdiff.recon import load_recon, recording_points, write_recon
 from roomdiff.viewer_export import (
+    APP_DIRS,
     APP_FILES,
     START_VOXEL,
     VIEWER_SRC,
@@ -101,8 +103,44 @@ def test_export_writes_plys_manifest_and_app(tmp_path):
 
     changes = json.loads((viewer / "changes.json").read_text())
     assert changes["changes"] == [] and changes["summary"]
-    for file in APP_FILES:
+    for file in app_files():
         assert (viewer / file).read_bytes() == (VIEWER_SRC / file).read_bytes()
+
+
+def app_files() -> list[Path]:
+    """The viewer app, relative to viewer/: APP_FILES and every file under APP_DIRS."""
+    return [Path(f) for f in APP_FILES] + sorted(
+        p.relative_to(VIEWER_SRC) for d in APP_DIRS for p in (VIEWER_SRC / d).rglob("*")
+        if p.is_file())
+
+
+def test_viewer_app_needs_no_network():
+    """Every module app.js and the vendored addons import resolves, through the import map
+    of index.html, to a file of viewer/ (three.js is vendored, no CDN), and the GitHub Pages
+    copy in docs/viewer/ is the same app."""
+    html = (VIEWER_SRC / "index.html").read_text()
+    importmap = re.search(r'<script type="importmap">(.*?)</script>', html, re.DOTALL)[1]
+    imports = json.loads(importmap)["imports"]
+    assert imports and not any("//" in target for target in imports.values())
+    modules = [VIEWER_SRC / "app.js", *(VIEWER_SRC / "vendor").rglob("addons/**/*.js")]
+    resolved = set()
+    for module in modules:
+        for name in re.findall(r"""\bfrom\s+['"]([^'"]+)['"]""", module.read_text()):
+            if name.startswith("."):
+                target = (module.parent / name).resolve()
+            else:  # bare specifier: the exact key or the longest "prefix/" key of the map
+                keys = [k for k in imports
+                        if k == name or (k.endswith("/") and name.startswith(k))]
+                assert keys, f"{module.name}: {name} is not in the import map"
+                key = max(keys, key=len)
+                target = (VIEWER_SRC / (imports[key] + name[len(key):])).resolve()
+            assert target.is_file(), f"{module.name}: {name} -> {target}"
+            resolved.add(target.relative_to(VIEWER_SRC).as_posix())
+    assert {"vendor/three/three.module.js", "vendor/three/addons/controls/OrbitControls.js",
+            "vendor/three/addons/loaders/PLYLoader.js"} <= resolved
+    pages = VIEWER_SRC.parent / "docs" / "viewer"
+    for file in app_files():
+        assert (pages / file).read_bytes() == (VIEWER_SRC / file).read_bytes(), file
 
 
 def test_levelled_recon_gives_the_y_up_axis(tmp_path):

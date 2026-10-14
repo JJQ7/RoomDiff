@@ -5,12 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>RoomDiff viewer</title>
   <link rel="stylesheet" href="style.css">
-  <!-- three.js from a CDN, pinned; no build step -->
+  <!-- three.js r160 (npm three@0.160.0, unmodified; MIT, vendor/three/LICENSE) is vendored,
+       so the viewer needs no network; no build step -->
   <script type="importmap">
     {
       "imports": {
-        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        "three": "./vendor/three/three.module.js",
+        "three/addons/": "./vendor/three/addons/"
       }
     }
   </script>
@@ -58,7 +59,7 @@
   </aside>
 
   <script>
-    // Classic script: runs even when the module below cannot load (file:// pages, offline).
+    // Classic script: runs even when the module below cannot load (file:// pages, missing files).
     window.SERVE_HINT = 'Browsers block loading data into a page opened from file://. ' +
       'Serve this folder instead: run "python -m http.server 8000" inside it and open http://localhost:8000/';
     window.showError = function (message) {
@@ -70,6 +71,6 @@
     if (location.protocol === 'file:') showError(SERVE_HINT);
   </script>
   <script type="module" src="app.js"
-          onerror="showError(location.protocol === 'file:' ? SERVE_HINT : 'Could not load the viewer code (app.js, or three.js from unpkg.com, which needs an internet connection).')"></script>
+          onerror="showError(location.protocol === 'file:' ? SERVE_HINT : 'Could not load the viewer code (app.js or three.js in vendor/three/ next to index.html).')"></script>
 </body>
 </html>

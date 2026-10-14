@@ -49,6 +49,11 @@ description stages; a before/after pair of appearance instances in the same plac
 asked a single in-place question (same thing, replaced, removed or added), which is how a
 jumper on a bed or a bottle swapped for another gets a verdict without a fake 0 m "move".
 
+An appearance change stands on weaker evidence than a voxel change: no free-space test is
+applied to it. It rests on keyframes of the other recording that looked at the same place
+(`observing_views`) and saw different features there, the see-through depth vote where there
+is one (`evidence.appearance.geom_term`), and the judge's in-place answer on the paired crops.
+
 On the same three scenes this recovered the wallet, the hairbrush and the tissue box, at
 the cost of one false positive (a bare wall patch that the judge read as a "wall
 decoration", gone once the prompt said the drawn outline is not part of the room); on 20
@@ -178,3 +183,6 @@ stays in the code as optional evidence (`recheck.enabled`), without the penalty.
 - Scale is approximately metric: 1.8x too large on our close-range tabletop videos (LiDAR
   check), so distances are reported with that caveat and converted when a scan exists.
 - Each run takes about 2–2.5 minutes on an RTX 5090, a third of it model loading.
+- No own no-change pair was recorded; the benchmark subset contains one
+  (living_room_29_living_room_30, no annotated change) on which the pipeline reports one false
+  added object.
