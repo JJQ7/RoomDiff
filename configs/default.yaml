@@ -133,7 +133,13 @@ instances:
   mask_erode_px: 3       # mask erosion before pooling DINOv3 patch tokens
   cls_box_enlarge: 0.20  # CLS feature crop = mask box enlarged by this fraction
   frame_visible_frac: 0.20  # per-keyframe masks where >= this fraction of the points ...
-  frame_depth_tol: 0.05     # ... is depth-consistent within this many metres
+  frame_depth_tol: 0.05     # ... is depth-consistent within this many metres ...
+  frame_min_points: 200     # ... or at least this many of them (1 cm points: ~cm^2 seen), 0 = off.
+                            # 200 adds objects partly out of the image: SceneDiff per-view AP
+                            # +0.013 / +0.032, pixel IoU +0.010 / +0.019 (development / reported
+                            # 20 pairs), the same objects matched; per-scene and typed AP equal on
+                            # the development pairs, -0.001 / -0.002 on the reported ones (ranking
+                            # noise), so adopted (docs/design_note.md, "Masks in more keyframes")
   frame_prompt_points: 8    # positive points of the per-keyframe SAM prompts
 
 # M4: matching across recordings, change typing (added / removed / moved / unverified)

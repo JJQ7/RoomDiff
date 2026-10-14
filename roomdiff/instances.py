@@ -741,15 +741,32 @@ def full_keyframe(
     return cache[frame]
 
 
+def frame_visible(
+    consistent: np.ndarray, total: int, visible_frac: float, min_points: int = 0
+) -> bool:
+    """Per-keyframe mask rule. `consistent` (bool per projected sample point): the points
+    depth-consistent in the keyframe. Visible if at least `visible_frac` of the sample is,
+    or, with `min_points` > 0, if an estimated `min_points` of the instance's `total`
+    points are (sample fraction x `total`; 1 cm points, so about that many cm^2 of the
+    object's surface in view: a large object partly out of the image)."""
+    n = int(np.count_nonzero(consistent))
+    if n == 0:
+        return False
+    return bool(consistent.mean() >= visible_frac) or \
+        (min_points > 0 and n * total >= min_points * len(consistent))
+
+
 def frame_masks(
     inst: Instance, frames: Sequence[int], recon: Mapping[str, Any], segmenter: Segmenter,
     visible_frac: float, depth_tol: float, n_points: int, box_enlarge: float,
     keyframes: str | Path | None = None,
     full_images: dict[int, np.ndarray | None] | None = None,
+    min_points: int = 0,
 ) -> list[tuple[int, dict[str, Any], float, dict[str, Any] | None]]:
     """SAM masks `(frame, RLE, score, full RLE)` of the instance in every keyframe where at
     least `visible_frac` of its points are depth-consistent (|observed - projected depth|
-    <= `depth_tol`); prompt = up to `n_points` of those pixels plus their box.
+    <= `depth_tol`), or an estimated `min_points` of them if that is > 0 (`frame_visible`);
+    prompt = up to `n_points` of those pixels plus their box.
 
     With `keyframes` (the recording's keyframe folder, file names `recon["files"]`) SAM is
     prompted on the full-resolution keyframe JPEG, box and points scaled from recon pixels
@@ -766,7 +783,7 @@ def frame_masks(
     for frame in frames:
         col, row, z, _, depth, valid = project_with_depth(sample, frame, recon)
         consistent = valid & (np.abs(depth - z) <= depth_tol)
-        if consistent.mean() < visible_frac:
+        if not frame_visible(consistent, len(inst.points), visible_frac, min_points):
             continue
         c, r = col[consistent], row[consistent]
         box = enlarge_box((c.min(), r.min(), c.max(), r.max()), box_enlarge, width, height)
@@ -1031,7 +1048,7 @@ def run_instances(
             inst.frame_masks = frame_masks(
                 inst, frames[rec], recon, segmenter, params["frame_visible_frac"],
                 params["frame_depth_tol"], params["frame_prompt_points"], params["box_enlarge"],
-                paths.keyframes_of(RECORDINGS[rec]), full_images)
+                paths.keyframes_of(RECORDINGS[rec]), full_images, params["frame_min_points"])
     times["frame_masks"] = time.perf_counter() - t0
 
     t0 = time.perf_counter()

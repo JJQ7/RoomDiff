@@ -353,6 +353,19 @@ AP on the reported pairs. The old formula stays selectable: `changes.w_mask=0.3`
 | + free-space term from the free count per voxel | 0.475 / 0.476 / 0.412 | 0.428 / 0.402 / 0.286 |
 | old formula with an unsaturated view term, log(1 + views) / log 21 | 0.471 / 0.459 / 0.396 | 0.413 / 0.387 / 0.276 |
 
+Frame coverage, not mask resolution, is what our near misses lose: the evaluator stacks
+each object's masks over all benchmark frames of both videos, and on the reported pairs
+most frames where only the ground truth has a mask are in the other video, because the
+object moved and we reported only its removal or its addition (in five cases both halves
+were found, as separate changes); the rest are mostly objects partly out of the image.
+Masks also in keyframes with about 200 cm² of the object in view
+(`instances.frame_min_points: 200`) fill most of those and raise per-view AP 0.478 ->
+0.490 and pixel IoU 0.442 -> 0.452 on the development subset, and 0.430 -> 0.462 and
+0.471 -> 0.490 on the reported pairs (reference: the old rule run with the current code),
+with the same objects matched; on the reported pairs per-scene and typed AP move by 0.001
+and 0.002 through the confidence ranking, within noise at this sample size, so the rule is
+on by default (design note, "Masks in more keyframes").
+
 The paper numbers are on the whole validation set, ours on a 20-pair subset, so they are
 indicative only. Median run time per pair: 70 s at 1 s keyframes, 85 s at 0.5 s (RTX
 5090). The remaining gap is recall on small objects in recordings with few co-visible
