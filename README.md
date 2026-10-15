@@ -325,8 +325,9 @@ CPU-only helpers for your own recordings; the `gt.yaml` schema and the matching 
 
 `roomdiff eval` runs the pipeline on pairs of the public
 [SceneDiff](https://github.com/yuqunw/scene_diff) benchmark and scores them with the
-official evaluator (`third_party/scene_diff`). 20 pairs of the `val` / `varied` split,
-fixed keyframes every 1 s, RTX 5090:
+official evaluator (`third_party/scene_diff`). The first rows: 20 pairs of the `val` /
+`varied` split, fixed keyframes every 1 s, RTX 5090; the last rows: the whole validation
+set (105 pairs), 0.5 s keyframes:
 
 | | per-view AP | per-scene AP | AP (typed) | global IoU | objects TP / FP / FN |
 |---|---|---|---|---|---|
@@ -335,6 +336,9 @@ fixed keyframes every 1 s, RTX 5090:
 | same, keyframes every 0.5 s (commit `ad1b585`) | 0.394 | 0.383 | 0.256 | 0.351 | 32 / 61 / 43 |
 | + judges describe each box before deciding (commit `42c8055`, same runs, describe stage re-run) | 0.432 | 0.413 | 0.280 | 0.472 | 36 / 39 / 39 |
 | + confidence from the separating evidence, masks in more keyframes, re-pairing by appearance (commit `8c8263b`, fresh end-to-end run) | **0.468** | **0.433** | **0.316** | **0.518** | 37 / 34 / 38 |
+| same code, the whole `val` set: 50 `varied` + 55 `kitchen` pairs (commit `20a0a79`) | 0.385 | 0.351 | 0.242 | 0.409 | 133 / 123 / 188 |
+| its `varied` half (50 pairs) | 0.552 | 0.517 | 0.416 | 0.478 | – |
+| its `kitchen` half (55 pairs) | 0.187 | 0.183 | 0.076 | 0.254 | – |
 | SceneDiff paper (full val set, for reference) | 0.496 | 0.463 | 0.255 | – | – |
 
 The `42c8055` row changes only the VLM judge (`semantics.describe_first`): the removed / added
@@ -422,10 +426,21 @@ truth). The development subset, run fresh the same way and now scoring every pai
 from 0.497 / 0.409 / 0.355 (25 / 17 / 23; the mailroom pair's six objects are all false)
 to 0.521 / 0.497 / 0.418 (26 / 15 / 22).
 
-The paper numbers are on the whole validation set, ours on a 20-pair subset, so they are
-indicative only. Median run time per pair: 70 s at 1 s keyframes, 85 s at 0.5 s (RTX
-5090). The remaining gap is recall on small objects in recordings with few co-visible
-keyframes and the precision of the VLM judge; see `docs/design_note.md`.
+On the whole validation set, the paper's own test bed, the pipeline is below SceneDiff
+(0.385 / 0.351 / 0.242 against 0.496 / 0.463 / 0.255), and the split tells where: on the
+50 `varied` pairs it is above the paper's full-set numbers on all three metrics (0.552 /
+0.517 / 0.416; 40 of these pairs are the two 20-pair subsets above), on the 55 `kitchen`
+pairs it collapses (0.187 / 0.183 / 0.076; 40 of 160 objects found, no moved object typed
+right). The kitchen recordings are short sweeps of one cluttered kitchen with many small
+objects (73 of the 160 are moved) and little overlap between the two videos: the two
+recordings share a median 42 % of their points (72 % on `varied`), the Pi3X confidence is
+0.46 (0.71), and 13 of 55 alignments are FAIR or WEAK (6 of 50). Both channels depend on
+that overlap, the voxel channel on an alignment it can trust and the appearance channel on
+co-visible keyframes, so the kitchen pairs yield almost no candidates, and 55 of the 58
+false positives there are appearance regions the judge confirmed. The remaining gap is
+therefore coverage: recall of small objects in recordings with few co-visible keyframes,
+and the precision of the VLM judge on close-range views; see `docs/design_note.md`.
+Median run time per pair: 70 s at 1 s keyframes, 85 s at 0.5 s (RTX 5090).
 
 ```bash
 python -m roomdiff.cli eval --split val --set varied --limit 20 --out-root outputs/scenediff_eval \

@@ -296,6 +296,13 @@ stays in the code as optional evidence (`recheck.enabled`), without the penalty.
 - Scale is approximately metric: 1.8x too large on our close-range tabletop videos (LiDAR
   check), so distances are reported with that caveat and converted when a scan exists.
 - Each run takes about 2–2.5 minutes on an RTX 5090, a third of it model loading.
+- Low overlap between the two recordings is the failure mode: on the 55 `kitchen` pairs of
+  the SceneDiff validation set (short sweeps, cluttered counters, a median 42 % of the
+  points co-visible against 72 % on `varied`, Pi3X confidence 0.46 against 0.71) the
+  pipeline finds 40 of 160 objects and no moved object typed right (per-scene AP 0.18
+  against 0.52 on `varied`), because both channels need the other recording to have seen
+  the place: the voxel channel through a trustworthy alignment, the appearance channel
+  through co-visible keyframes (README, benchmark section).
 - On a no-change pair the appearance channel plus the judge still report changes: four on
   our control (the two halves of one tabletop recording, section 6), one false added object
   on the benchmark's own no-change pair (living_room_29_living_room_30).
