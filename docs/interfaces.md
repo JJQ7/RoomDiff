@@ -41,7 +41,8 @@ points the other recording could observe (`nn_covisible`, whose `fraction` is th
 without co-visible points); `verdict` and `verdict_reason` from `nn_covisible`
 (`recon.alignment_verdict`): "alignment WEAK" if a direction covers less than 10 % of its
 recording, or its median exceeds 2 cm, or less than 90 % of it lies within 10 cm (M3 then
-demotes its removed / added candidates to unverified); else "alignment FAIR" if
+demotes its removed / added candidates to unverified only with
+`visibility.weak_alignment_demotes`, off by default); else "alignment FAIR" if
 `frac_lt_3cm_min` < 0.8 (a warning only: good runs measure 0.85-0.98, but a few correct
 ones 0.77-0.80); else "alignment OK"; the M5 report's coverage note gives the verdict, its
 reason and `frac_lt_3cm_min`), and the chosen `scale_factor`. Levelling (after the
@@ -51,8 +52,8 @@ when true also `up_axis_original` (the up direction in the model frame that beca
 plane, null if no plane was found) and `level` {`method` ("ransac floor plane" | "camera
 up (no floor plane)"), `camera_up` (initial estimate: mean camera down axis without its
 components along the camera x axes), `floor_vs_camera_up_deg`, `floor_offset_m`,
-`points_used`, `wall_votes`, `transform` (4x4, model frame -> levelled frame)}; with
-`snap_to_walls` also `walls_snapped` (bool), `wall_yaw_deg` (dominant wall direction in
+`points_used`, `transform` (4x4, model frame -> levelled frame)}; with
+`snap_to_walls` also `walls_snapped` (bool), `wall_votes`, `wall_yaw_deg` (dominant wall direction in
 the camera-levelled frame, in (-45, 45], `rotation_y` / `obb.yaw_deg` convention; the
 snapped frame is that one turned by `rotation_y(-wall_yaw_deg)`) and `wall_peak_fraction`
 (share of the wall votes in the histogram peak; snapped only if >= `wall_peak_fraction`
@@ -257,7 +258,7 @@ CLS token of the best view's mask box crop. `instances/<rec>_points.npz`: `point
 float32 (1 cm voxels), `colors` (M, 3) uint8, `instance` (M,) int32 id.
 `instances/<rec>_masks.npz`: one row per (keyframe, instance) where the instance is
 visible (>= `frame_visible_frac` of its points depth-consistent within `frame_depth_tol`,
-judged on a fixed 2000-point subsample, or, with `frame_min_points` > 0 (default 0: off),
+judged on a fixed 2000-point subsample, or, with `frame_min_points` > 0 (default 200; 0 = off),
 an estimated `frame_min_points` of them (subsample fraction x point count; 1 cm points,
 so about that many cm^2 of the object in view, which keeps an object partly out of the
 image; `roomdiff.instances.frame_visible`); SAM prompted with the
