@@ -83,7 +83,9 @@ python scripts/lidar_check.py outputs/<scene> --before data/scenes/<scene>/lidar
 ```
 It registers our cloud of each recording (`viewer/<rec>.ply`, else `recon/<rec>.ply`, else
 `recon/recon.npz`) to its scan with a similarity: both are gravity-aligned with +Y up, so
-the search covers scale (0.80-1.25) and yaw, then refines by ICP. It prints the scale
+a coarse grid covers scale (0.60-1.40) and yaw, then a local search and a similarity ICP
+refine both without bounds (the tabletop recordings came out at 0.55-0.57, below the grid).
+It prints the scale
 (ours -> metres), yaw, tilt (levelling error), the residual median / p90 in the overlap
 and the overlap fraction (WARN below 50 %: the scan shows another part of the room), the
 before / after scale consistency (PASS within 3 %), and a table of the changes with

@@ -541,8 +541,9 @@ checked; unverified changes are skipped and the M5 `rejected` list is left alone
 4. Verdict: `skipped` (no prompt, no view or not checked), `contradicted` (>= 1 view with
    the prompt at the place; moved: at both places, since one place alone is often a
    sibling such as the other curtain of a window), `unsupported` (not found on the
-   object), else `supported`. Confidence x `unsupported_factor` (0.9) without own-side
-   support and x `contradicted_factor` (0.6) when contradicted (rounded to 3 decimals). A
+   object), else `supported`. Confidence x `unsupported_factor` (1.0, i.e. evidence only: 0.9 lowered the
+   benchmark AP, see the design note) without own-side support and x
+   `contradicted_factor` (0.6) when contradicted (rounded to 3 decimals). A
    change moves to `rejected` only when contradicted in >= `reject_views` (2) views: its
    `vlm_verdict` / `vlm_reason` stay, `evidence.recheck_verdict` = "contradicted"; the
    summary gets the new counts and a sentence naming the rejected changes.

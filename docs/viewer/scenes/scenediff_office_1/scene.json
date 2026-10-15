@@ -1,0 +1,39 @@
+{
+  "name": "scenediff_office_1",
+  "units": "metres (approx.)",
+  "before_ply": "before.ply",
+  "after_ply": "after.ply",
+  "changes": "changes.json",
+  "stats": {
+    "points_before": 295881,
+    "points_after": 229011,
+    "extent_m": [
+      5.144,
+      1.941,
+      3.114
+    ],
+    "voxel_m": 0.0123
+  },
+  "bbox_m": [
+    [
+      -3.552,
+      -0.0,
+      -0.747
+    ],
+    [
+      1.592,
+      1.941,
+      2.367
+    ]
+  ],
+  "up_axis": [
+    0.0,
+    1.0,
+    0.0
+  ],
+  "view_dir": [
+    -0.2449,
+    0.0,
+    0.9695
+  ]
+}

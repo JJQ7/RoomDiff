@@ -7,7 +7,7 @@ Date: 2026-10-12. The WSL VM restarted twice during setup. After the final resta
 - Host: Windows 10 Pro 19045, 31.1 GB RAM, pagefile 16-32 GB. Guest: WSL2 Ubuntu 24.04.4, kernel 6.18.40.1-microsoft-standard-WSL2.
 - WSL VM: 16 GB RAM (about 13 GB available at idle) and 4 GB swap. During the first two attempts it was 24 GB and 24 GB.
 - GPU: RTX 5090, 32 GB, WDDM, driver 595.79, compute capability 12.0. torch is built against CUDA 12.8.
-- Python 3.12.3 venv at `/home/jjq/code/intern_humanoid/.venv`, uv 0.13.0. Disk: about 735 GB free.
+- Python 3.12.3 venv at `.venv` in the checkout, uv 0.13.0. Disk: about 735 GB free.
 
 ## 2. Packages
 
@@ -70,7 +70,7 @@ Test image: `third_party/Pi3/examples/room/rgb/0.png`, 434x350, a synthetic room
   - `metric`: (1,), value 0.323
 - There is no intrinsics output. `pi3.utils.geometry.recover_intrinsic_from_rays_d(rays, force_center_principal_point=True)` returns K of shape (1,8,3,3).
   - Frame 0: fx=321.7, fy=321.3, cx=279.5, cy=223.5.
-  - The ground truth from `examples/room/condition.npz`, scaled to 560x448, is fx=325.5, fy=322.9. Per-frame fx ranges 315.9-328.9, within about 1-3%.
+  - The ground truth from `third_party/Pi3/examples/room/condition.npz`, scaled to 560x448, is fx=325.5, fy=322.9. Per-frame fx ranges 315.9-328.9, within about 1-3%.
 - Public functions in `pi3/utils/geometry.py`: se3_inverse, get_pixel, depthmap_to_absolute_camera_coordinates, depthmap_to_camera_coordinates, homogenize_points, get_gt_warp, warp_kpts, geotrf, inv, opencv_camera_to_plucker, depth_edge, points_to_normals, normal_edge, depth_normal_edge, recover_intrinsic_from_rays_d.
 - Public functions in `pi3/utils/basic.py`: load_images_as_tensor, load_multimodal_data, tensor_to_pil, array_to_pil, rotate_target_dim_to_last_axis, write_ply.
 - PLY: conf>0.1 kept all pixels; after the `depth_normal_edge` filter, 1,950,115 points (97.2%), 52.7 MB. It was written to the scratchpad, which the restart wiped.

@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RoomDiff</title>
+<style>
+  :root { color-scheme: light dark; --fg: #1b1b1b; --bg: #fafafa; --muted: #5a5a5a; --link: #0b5fbf; }
+  @media (prefers-color-scheme: dark) { :root { --fg: #e8e8e8; --bg: #16181c; --muted: #a0a0a0; --link: #7cb3ff; } }
+  body { margin: 0; padding: 2rem 1rem 3rem; background: var(--bg); color: var(--fg);
+         font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 42rem; margin: 0 auto; }
+  h1 { font-size: 1.6rem; margin: 0 0 .25rem; }
+  p.lead { color: var(--muted); margin-top: 0; }
+  h2 { font-size: 1.05rem; margin: 1.75rem 0 .5rem; }
+  ul { padding-left: 1.25rem; } li { margin: .25rem 0; }
+  a { color: var(--link); }
+  code { font-size: .9em; }
+</style>
+</head>
+<body>
+<main>
+  <h1>RoomDiff: what changed in the room?</h1>
+  <p class="lead">Two phone videos of the same room, recorded at different times, compared in one
+  shared 3D frame: objects reported as added, removed or moved, each with its evidence.
+  Code, reports and benchmark numbers are in the
+  <a href="https://github.com/JJQ7/RoomDiff">GitHub repository</a>.</p>
+
+  <h2>Live viewer: SceneDiff benchmark pairs</h2>
+  <ul>
+    <li><a href="viewer/?scene=scenes/scenediff_living_room_1">living_room_1</a>: bag and wallet removed, hairbrush added, ladder shelf and a curtain moved</li>
+    <li><a href="viewer/?scene=scenes/scenediff_office_1">office_1</a>: one chair removed, one chair moved</li>
+    <li><a href="viewer/?scene=scenes/scenediff_bedroom_1">bedroom_1</a>: jacket removed, bedding and tissue box moved</li>
+  </ul>
+
+  <h2>Live viewer: our own tabletop recordings</h2>
+  <ul>
+    <li><a href="viewer/?scene=scenes/tabletop_1">tabletop_1</a>: biscuit box added, tea canister removed, white box moved</li>
+    <li><a href="viewer/?scene=scenes/tabletop_2">tabletop_2</a>: tea canister added, scissors removed, bucket moved</li>
+    <li><a href="viewer/?scene=scenes/tabletop_3">tabletop_3</a>: detergent bottle moved, tea canister and stool hidden under the table edge</li>
+  </ul>
+
+  <p class="lead">In the viewer: drag to orbit, right-drag to pan, wheel to zoom, N / P for the next /
+  previous change, R to reset the view. Red = removed, green = added, blue = moved (arrow from
+  the old place), dimmed = unverified.</p>
+</main>
+</body>
+</html>

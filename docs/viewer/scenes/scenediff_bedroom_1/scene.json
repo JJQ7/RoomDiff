@@ -1,0 +1,39 @@
+{
+  "name": "scenediff_bedroom_1",
+  "units": "metres (approx.)",
+  "before_ply": "before.ply",
+  "after_ply": "after.ply",
+  "changes": "changes.json",
+  "stats": {
+    "points_before": 297649,
+    "points_after": 272832,
+    "extent_m": [
+      3.734,
+      1.84,
+      4.562
+    ],
+    "voxel_m": 0.0125
+  },
+  "bbox_m": [
+    [
+      -2.062,
+      -0.006,
+      -2.846
+    ],
+    [
+      1.672,
+      1.835,
+      1.716
+    ]
+  ],
+  "up_axis": [
+    0.0,
+    1.0,
+    0.0
+  ],
+  "view_dir": [
+    0.9283,
+    0.0,
+    0.3719
+  ]
+}

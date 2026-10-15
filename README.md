@@ -169,6 +169,10 @@ sees it best; "place" crops show the same spot in the other video.
 |---|---|---|
 | [![office_1 overview](docs/img/scenediff_office_1_overview.png)](examples/scenediff_office_1/report.md) | [![bedroom_1 overview](docs/img/scenediff_bedroom_1_overview.png)](examples/scenediff_bedroom_1/report.md) | [![living_room_1 overview](docs/img/scenediff_living_room_1_overview.png)](examples/scenediff_living_room_1/report.md) |
 
+Live viewer: [office_1](https://jjq7.github.io/RoomDiff/viewer/?scene=scenes/scenediff_office_1),
+[bedroom_1](https://jjq7.github.io/RoomDiff/viewer/?scene=scenes/scenediff_bedroom_1),
+[living_room_1](https://jjq7.github.io/RoomDiff/viewer/?scene=scenes/scenediff_living_room_1).
+
 *After clouds with the reported changes (`scripts/render_scene.py`): red / green / blue boxes = removed / added / moved (dashed = the old place), grey dashed = unverified. Below, the living room before and after:*
 
 ![living_room_1: cross-fade between the before and after point clouds](docs/img/scenediff_living_room_1_beforeafter.gif)
@@ -288,8 +292,9 @@ when selected; the home view frames the confirmed changes. `changes.json` is tak
 regions) when the change stage has not run yet.
 
 Figures for a report: `python scripts/shoot_viewer.py outputs/scene1 --out docs/img/viewer/scene1 --gif both`
-screenshots the viewer headlessly (Playwright with Chromium: the overview, one close-up
-per change, an orbit GIF and a before/after GIF), and `python scripts/render_scene.py
+screenshots the viewer headlessly (Playwright with Chromium, not among the package
+dependencies: `pip install playwright && playwright install chromium`; it takes the overview,
+one close-up per change, an orbit GIF and a before/after GIF), and `python scripts/render_scene.py
 outputs/scene1 --out docs/img/scene1 --gif` renders the same overview without a browser.
 
 GitHub Pages layout (several scenes, one copy of the app):
@@ -300,8 +305,9 @@ docs/viewer/scenes/<name>/                           # data files of outputs/<na
 ```
 
 Live examples: <https://jjq7.github.io/RoomDiff/viewer/?scene=scenes/scenediff_living_room_1>
-(a SceneDiff benchmark pair) and `scenes/tabletop_1`, `tabletop_2`, `tabletop_3` (our own
-recordings). Without `?scene=` the viewer loads `./scene.json` from its own folder. `*.ply` is gitignored except under `docs/viewer/scenes/` and `examples/`.
+(a SceneDiff benchmark pair; `scenes/scenediff_office_1` and `scenes/scenediff_bedroom_1` are
+the other two example pairs) and `scenes/tabletop_1`, `tabletop_2`, `tabletop_3` (our own
+recordings); <https://jjq7.github.io/RoomDiff/> lists them all. Without `?scene=` the viewer loads `./scene.json` from its own folder. `*.ply` is gitignored except under `docs/viewer/scenes/` and `examples/`.
 
 ## Capture-day tools
 

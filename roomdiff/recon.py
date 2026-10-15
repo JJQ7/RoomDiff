@@ -12,13 +12,15 @@ by point-to-plane ICP.
 Levelling (`level_world`, default on): the model's frame is arbitrary (roughly the first
 camera), so the result is rotated into a gravity-aligned frame: +Y up (camera up estimate
 refined by a RANSAC floor plane), the floor at y = 0 and the first before-camera looking
-along +Z (projected onto the floor), see `level_transform`. With `snap_to_walls` (default
-on) the frame is then turned about +Y so that the dominant wall direction lies along +X /
-+Z (`wall_yaw`), which makes object boxes room-aligned.
+along +Z (projected onto the floor), see `level_transform`. With `snap_to_walls` (off by
+default) the frame is then turned about +Y so that the dominant wall direction lies along
++X / +Z (`wall_yaw`), which makes object boxes room-aligned.
 
 Writes `<out>/recon/recon.npz`, `meta.json`, `before.ply`, `after.ply`
 (docs/interfaces.md, M2) and prints a one-line alignment verdict (`alignment_verdict`:
-OK, FAIR = a warning, WEAK = M3 demotes its removed / added candidates to unverified).
+OK, FAIR = a warning, WEAK = the two reconstructions do not line up; M3 then demotes its
+removed / added candidates to unverified only with `visibility.weak_alignment_demotes`,
+off by default).
 """
 
 from __future__ import annotations

@@ -82,7 +82,7 @@ opencv-python-headless==5.0.0.93
 packaging==26.3
 parso==0.8.7
 pexpect==4.9.0
--e file:///home/jjq/code/intern_humanoid/third_party/Pi3
+# pi3: editable install of third_party/Pi3 at commit 9fa3ddb (README, Install: pip install --no-deps -e third_party/Pi3)
 pillow==12.3.0
 platformdirs==4.13.0
 plotly==7.1.0
@@ -111,7 +111,7 @@ retrying==1.4.2
 rich==15.0.0
 rpds-py==2026.9.1
 safetensors==0.8.0
--e file:///home/jjq/code/intern_humanoid/third_party/sam3
+# sam3: editable install of third_party/sam3 at commit 0570b3a (optional; README, Install: pip install --no-deps -e third_party/sam3)
 scikit-image==0.26.0
 scikit-learn==1.9.1
 scipy==1.18.1

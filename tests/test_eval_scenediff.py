@@ -142,7 +142,8 @@ def test_load_segments_refuses_globals(tmp_path):
 def test_write_prediction_matches_the_evaluator_format(synthetic):
     eval_root, bench, doc = synthetic
     pred_dir = eval_root / "pred_format" / PAIR
-    stats = write_prediction(eval_root / "runs" / PAIR, bench / "data" / PAIR, pred_dir)
+    stats = write_prediction(eval_root / "runs" / PAIR, bench / "data" / PAIR, pred_dir,
+                             include_unverified=True)  # the format of every type, below
     with open(pred_dir / "object_masks.pkl", "rb") as f:
         pred = pickle.load(f)
     assert (pred["H"], pred["W"]) == (768, 1024)  # GT 480 x 640 scaled to max side 1024

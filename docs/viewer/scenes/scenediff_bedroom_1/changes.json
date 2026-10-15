@@ -1,0 +1,1118 @@
+{
+  "scene": {
+    "before": "original_video1.MOV",
+    "after": "original_video2.MOV",
+    "units": "metres (approx.)"
+  },
+  "changes": [
+    {
+      "id": 2,
+      "type": "moved",
+      "label": "cardboard box",
+      "confidence": 0.931,
+      "before": {
+        "instance_id": 7,
+        "centroid": [
+          0.8440999984741211,
+          0.5608000159263611,
+          -0.8901000022888184
+        ],
+        "aabb": [
+          [
+            0.777400016784668,
+            0.42500001192092896,
+            -1.020900011062622
+          ],
+          [
+            1.1132999658584595,
+            0.7010999917984009,
+            -0.8079000115394592
+          ]
+        ],
+        "extents": [
+          0.3359000086784363,
+          0.2761000096797943,
+          0.21299999952316284
+        ],
+        "obb": {
+          "center": [
+            0.9395,
+            0.5631,
+            -0.8958
+          ],
+          "extents": [
+            0.3132,
+            0.2761,
+            0.1717
+          ],
+          "yaw_deg": 19.03
+        },
+        "n_points": 1081,
+        "blob_ids": [],
+        "source": "appearance"
+      },
+      "after": {
+        "instance_id": 4,
+        "centroid": [
+          0.6126999855041504,
+          0.09049999713897705,
+          -0.810699999332428
+        ],
+        "aabb": [
+          [
+            0.5493999719619751,
+            -0.0013000000035390258,
+            -0.8737999796867371
+          ],
+          [
+            0.7577000260353088,
+            0.14380000531673431,
+            -0.713100016117096
+          ]
+        ],
+        "extents": [
+          0.20829999446868896,
+          0.14509999752044678,
+          0.1606999933719635
+        ],
+        "obb": {
+          "center": [
+            0.6571,
+            0.0712,
+            -0.8144
+          ],
+          "extents": [
+            0.1896,
+            0.1451,
+            0.1497
+          ],
+          "yaw_deg": 22.77
+        },
+        "n_points": 850,
+        "blob_ids": [],
+        "source": "appearance"
+      },
+      "transform": {
+        "translation_m": 0.5288,
+        "rotation_deg": 17.5,
+        "rotation_reliable": true,
+        "R": [
+          [
+            0.953996,
+            0.063066,
+            -0.293112
+          ],
+          [
+            -0.070322,
+            0.997422,
+            -0.014274
+          ],
+          [
+            0.291456,
+            0.03423,
+            0.955972
+          ]
+        ],
+        "t": [
+          -0.48008,
+          -0.42456,
+          -0.22319
+        ],
+        "icp_fitness": 0.9491,
+        "icp_rmse": 0.0087
+      },
+      "evidence": {
+        "free_rays": 3356,
+        "observing_views": 15,
+        "observing_views_before_place": 9,
+        "observing_views_after_place": 21,
+        "appearance_similarity": 0.7676,
+        "cls_similarity": 0.2761,
+        "mask_score": 0.9333,
+        "icp_fitness": 0.9491,
+        "vlm_verdict": "confirmed",
+        "vlm_reason": "The outlined objects are identical cardboard boxes with the same pattern and color, and appear to be the same physical object in different poses and locations.",
+        "vlm_motion_reason": "The object maintains its box shape and orientation relative to its surroundings in both images, indicating it was moved as a whole."
+      },
+      "description": "The brown cardboard box (with printed labels; about 0.3 x 0.3 x 0.2 m) was shifted 0.5 m within the left side of the room (0.5 m above the floor before, on the floor after) and rotated about 18 degrees; the later video shows its old spot empty from 9 viewpoints and the earlier video shows the new spot empty from 21 viewpoints.",
+      "crops": {
+        "before": "crops/2_before.jpg",
+        "before_place": "crops/2_before_place.jpg",
+        "after": "crops/2_after.jpg",
+        "after_place": "crops/2_after_place.jpg"
+      },
+      "attributes": "brown, with printed labels",
+      "object_description": "A small cardboard box with colorful printed labels, likely used for storage or shipping.",
+      "motion_kind": "rigid",
+      "description_template": "The cardboard box (brown, with printed labels; about 0.3 x 0.3 x 0.2 m) moved 0.5 m within the left side of the room (lowest part 0.5 m above the floor before, on the floor after) and turned by about 18 degrees; the after recording saw the old place empty from 9 viewpoints and the before recording saw the new place empty from 21 viewpoints."
+    },
+    {
+      "id": 3,
+      "type": "moved",
+      "label": "bedding",
+      "confidence": 0.914,
+      "before": {
+        "instance_id": 2,
+        "centroid": [
+          0.4027000069618225,
+          0.4869000017642975,
+          0.6222000122070312
+        ],
+        "aabb": [
+          [
+            0.019099999219179153,
+            0.3458000123500824,
+            0.2493000030517578
+          ],
+          [
+            0.902400016784668,
+            0.5619999766349792,
+            0.9348000288009644
+          ]
+        ],
+        "extents": [
+          0.8833000063896179,
+          0.21619999408721924,
+          0.6855000257492065
+        ],
+        "obb": {
+          "center": [
+            0.468,
+            0.4539,
+            0.5865
+          ],
+          "extents": [
+            1.0727,
+            0.2162,
+            0.4909
+          ],
+          "yaw_deg": -30.46
+        },
+        "n_points": 5699,
+        "blob_ids": [
+          14
+        ],
+        "source": "geometry"
+      },
+      "after": {
+        "instance_id": 1,
+        "centroid": [
+          0.675000011920929,
+          0.48179998993873596,
+          0.29899999499320984
+        ],
+        "aabb": [
+          [
+            0.07609999924898148,
+            0.34599998593330383,
+            -0.08049999922513962
+          ],
+          [
+            1.1562999486923218,
+            0.5541999936103821,
+            0.8255000114440918
+          ]
+        ],
+        "extents": [
+          1.080199956893921,
+          0.20819999277591705,
+          0.906000018119812
+        ],
+        "obb": {
+          "center": [
+            0.6512,
+            0.4501,
+            0.386
+          ],
+          "extents": [
+            1.0746,
+            0.2082,
+            0.783
+          ],
+          "yaw_deg": 11.7
+        },
+        "n_points": 11070,
+        "blob_ids": [
+          7
+        ],
+        "source": "geometry"
+      },
+      "transform": {
+        "translation_m": 0.4457,
+        "rotation_deg": 19.49,
+        "rotation_reliable": false,
+        "R": [
+          [
+            0.950822,
+            -0.18,
+            0.252068
+          ],
+          [
+            0.146003,
+            0.978184,
+            0.147778
+          ],
+          [
+            -0.273169,
+            -0.103708,
+            0.956359
+          ]
+        ],
+        "t": [
+          0.24732,
+          -0.13831,
+          -0.1449
+        ],
+        "icp_fitness": 0.434,
+        "icp_rmse": 0.014
+      },
+      "evidence": {
+        "free_rays": 11437,
+        "observing_views": 8,
+        "observing_views_before_place": 11,
+        "observing_views_after_place": 5,
+        "appearance_similarity": 0.9236,
+        "cls_similarity": 0.9092,
+        "mask_score": 0.8125,
+        "icp_fitness": 0.434,
+        "vlm_verdict": "confirmed",
+        "vlm_reason": "Both outlined regions show the same cream-colored, patterned duvet or comforter, with identical fabric texture and decorative pattern visible in both images.",
+        "vlm_motion_reason": "The bedding's outline changes significantly between the two images, indicating it was spread out or rearranged rather than moved as a whole rigid object."
+      },
+      "description": "The cream-colored bedding (soft fabric; about 1.1 x 0.5 x 0.2 m) was moved 0.4 m within the far part of the room (0.4 m above the floor both times), mostly by being rearranged or deformed rather than moved as a whole; the later video shows its old spot empty from 11 viewpoints and the earlier video shows the new spot empty from 5 viewpoints.",
+      "crops": {
+        "before": "crops/3_before.jpg",
+        "before_place": "crops/3_before_place.jpg",
+        "after": "crops/3_after.jpg",
+        "after_place": "crops/3_after_place.jpg"
+      },
+      "attributes": "cream-colored, soft fabric",
+      "object_description": "A rumpled, cream-colored comforter or duvet cover on a bed.",
+      "motion_kind": "deformed",
+      "description_template": "The bedding (cream-colored, soft fabric; about 1.1 x 0.5 x 0.2 m) moved 0.4 m within the far part of the room (0.4 m above the floor both times), mostly by being rearranged or deformed rather than carried as a whole; the after recording saw the old place empty from 11 viewpoints and the before recording saw the new place empty from 5 viewpoints."
+    },
+    {
+      "id": 1,
+      "type": "removed",
+      "label": "black jacket",
+      "attributes": "black fabric",
+      "object_description": "a crumpled black jacket lying on the floor.",
+      "confidence": 0.945,
+      "before": {
+        "instance_id": 1,
+        "centroid": [
+          0.21359999477863312,
+          0.10109999775886536,
+          -1.3365999460220337
+        ],
+        "aabb": [
+          [
+            -0.0502999983727932,
+            0.006000000052154064,
+            -1.8179999589920044
+          ],
+          [
+            0.5110999941825867,
+            0.19169999659061432,
+            -0.9753000140190125
+          ]
+        ],
+        "extents": [
+          0.5613999962806702,
+          0.1858000010251999,
+          0.8428000211715698
+        ],
+        "obb": {
+          "center": [
+            0.2083,
+            0.0988,
+            -1.3873
+          ],
+          "extents": [
+            0.5091,
+            0.1858,
+            0.8825
+          ],
+          "yaw_deg": 7.1
+        },
+        "n_points": 8332,
+        "blob_ids": [
+          10
+        ],
+        "source": "geometry"
+      },
+      "after": null,
+      "transform": null,
+      "motion_kind": null,
+      "evidence": {
+        "free_rays": 4045,
+        "free_frames_mean": 6.34,
+        "observing_views": 7,
+        "occ_points": 170271,
+        "mask_score": 0.956,
+        "view_consistency": 0.8363,
+        "split_from": 1,
+        "split_reason": "appearance judge did not confirm the match: The outlined objects differ in color (black vs. white) and material appearance, indicating they are different objects.",
+        "vlm_verdict": "confirmed",
+        "vlm_reason": "The black jacket highlighted in image 1 is no longer present in the same spot in image 2, as the area is now empty carpet."
+      },
+      "description": "The black jacket (black fabric; about 0.9 x 0.5 x 0.2 m), which was on the floor in the near left part of the room, was removed: the later video looked at that spot from 7 viewpoints and saw it empty.",
+      "crops": {
+        "before": "crops/1_before.jpg",
+        "after": "crops/1_before_place.jpg"
+      },
+      "description_template": "The black jacket (black fabric; about 0.9 x 0.5 x 0.2 m), which was on the floor in the near left part of the room, was removed: the after recording looked at that spot from 7 viewpoints and saw it empty."
+    },
+    {
+      "id": 12,
+      "type": "unverified",
+      "label": "bedside table",
+      "confidence": 0.365,
+      "before": {
+        "instance_id": 3,
+        "centroid": [
+          1.132699966430664,
+          0.21199999749660492,
+          -0.8410000205039978
+        ],
+        "aabb": [
+          [
+            0.8564000129699707,
+            0.005799999926239252,
+            -1.1339999437332153
+          ],
+          [
+            1.2618999481201172,
+            0.47530001401901245,
+            -0.6557999849319458
+          ]
+        ],
+        "extents": [
+          0.40549999475479126,
+          0.46950000524520874,
+          0.4781999886035919
+        ],
+        "obb": {
+          "center": [
+            1.0424,
+            0.2406,
+            -0.8494
+          ],
+          "extents": [
+            0.5831,
+            0.4695,
+            0.2706
+          ],
+          "yaw_deg": -42.75
+        },
+        "n_points": 1704,
+        "blob_ids": [
+          9
+        ],
+        "source": "geometry"
+      },
+      "after": null,
+      "transform": null,
+      "evidence": {
+        "free_rays": 0,
+        "free_frames_mean": 0.0,
+        "observing_views": 0,
+        "occ_points": 31890,
+        "mask_score": 0.7629,
+        "view_consistency": 0.696,
+        "seen_in": "before",
+        "vlm_verdict": "confirmed",
+        "vlm_reason": "The contour outlines a black bedside table with items on it, which is a distinct movable object."
+      },
+      "description": "A bedside table (black metal; about 0.6 x 0.5 x 0.3 m), on the floor on the left side of the room, was only visible in the earlier video; the later video never looked at that spot, so this possible change cannot be verified.",
+      "crops": {
+        "before": "crops/12_before.jpg",
+        "after": "crops/12_after.jpg"
+      },
+      "attributes": "black metal",
+      "object_description": "a black metal bedside table with items on top.",
+      "motion_kind": null,
+      "description_template": "A bedside table (black metal; about 0.6 x 0.5 x 0.3 m), on the floor on the left side of the room, was seen only in the before recording; the after recording never looked at that spot, so this possible change cannot be verified."
+    }
+  ],
+  "rejected": [
+    {
+      "id": 4,
+      "type": "removed",
+      "label": "grey blanket",
+      "confidence": 0.91,
+      "before": {
+        "instance_id": 4,
+        "centroid": [
+          -0.9254999756813049,
+          0.2540999948978424,
+          1.229099988937378
+        ],
+        "aabb": [
+          [
+            -1.172700047492981,
+            0.16459999978542328,
+            1.069000005722046
+          ],
+          [
+            -0.6960999965667725,
+            0.3237999975681305,
+            1.4713000059127808
+          ]
+        ],
+        "extents": [
+          0.4765999913215637,
+          0.15929999947547913,
+          0.40230000019073486
+        ],
+        "obb": {
+          "center": [
+            -0.9092,
+            0.2442,
+            1.2837
+          ],
+          "extents": [
+            0.4955,
+            0.1593,
+            0.3386
+          ],
+          "yaw_deg": 21.57
+        },
+        "n_points": 2719,
+        "blob_ids": [],
+        "source": "appearance"
+      },
+      "after": null,
+      "transform": null,
+      "evidence": {
+        "free_rays": 5334,
+        "free_frames_mean": 9.84,
+        "observing_views": 19,
+        "occ_points": 2719,
+        "mask_score": 0.8364,
+        "view_consistency": 0.8633,
+        "appearance": {
+          "cluster": 1,
+          "frames_supporting": 15,
+          "mean_score": 0.9964,
+          "feat_term": 0.3895,
+          "geom_term": 0.6069,
+          "partners_visible": 8
+        },
+        "vlm_verdict": "rejected",
+        "vlm_reason": "in place: same; The grey blanket in image 1 is still present in image 2, though it appears more rumpled and less distinct due to different lighting and viewpoint.",
+        "vlm_replace_answer": "same"
+      },
+      "description": "An object about 0.48 x 0.16 x 0.40 m was removed from (-0.93, 0.25, 1.23); the after recording saw that space empty in 19 views.",
+      "crops": {
+        "before": "crops/4_before.jpg",
+        "after": "crops/4_after.jpg"
+      },
+      "attributes": "grey, soft fabric",
+      "object_description": "A soft grey blanket draped over something, likely a person or furniture, with visible folds and creases.",
+      "motion_kind": null
+    },
+    {
+      "id": 5,
+      "type": "removed",
+      "label": "white duvet cover",
+      "confidence": 0.811,
+      "before": {
+        "instance_id": 8,
+        "centroid": [
+          -0.2969000041484833,
+          0.49059998989105225,
+          0.6492000222206116
+        ],
+        "aabb": [
+          [
+            -0.4255000054836273,
+            0.44290000200271606,
+            0.46650001406669617
+          ],
+          [
+            -0.14100000262260437,
+            0.5045999884605408,
+            0.7246000170707703
+          ]
+        ],
+        "extents": [
+          0.28450000286102295,
+          0.0617000013589859,
+          0.2581000030040741
+        ],
+        "obb": {
+          "center": [
+            -0.318,
+            0.4738,
+            0.614
+          ],
+          "extents": [
+            0.3074,
+            0.0617,
+            0.195
+          ],
+          "yaw_deg": -23.28
+        },
+        "n_points": 279,
+        "blob_ids": [],
+        "source": "appearance"
+      },
+      "after": null,
+      "transform": null,
+      "evidence": {
+        "free_rays": 48,
+        "free_frames_mean": 0.63,
+        "observing_views": 24,
+        "occ_points": 279,
+        "mask_score": 0.8203,
+        "view_consistency": 0.9365,
+        "appearance": {
+          "cluster": 2,
+          "frames_supporting": 3,
+          "mean_score": 0.882,
+          "feat_term": 0.3421,
+          "geom_term": 0.54,
+          "partners_visible": 3
+        },
+        "vlm_verdict": "rejected",
+        "vlm_reason": "in place: same; The region inside the contour in both images shows the same crumpled white duvet cover, with no replacement or removal.",
+        "vlm_replace_answer": "same"
+      },
+      "description": "An object about 0.28 x 0.06 x 0.26 m was removed from (-0.30, 0.49, 0.65); the after recording saw that space empty in 24 views.",
+      "crops": {
+        "before": "crops/5_before.jpg",
+        "after": "crops/5_after.jpg"
+      },
+      "attributes": "white cotton",
+      "object_description": "a white, soft, rumpled duvet cover on a bed.",
+      "motion_kind": null
+    },
+    {
+      "id": 6,
+      "type": "removed",
+      "label": "white wall",
+      "confidence": 0.711,
+      "before": {
+        "instance_id": 6,
+        "centroid": [
+          1.1380000114440918,
+          1.1545000076293945,
+          -1.1454999446868896
+        ],
+        "aabb": [
+          [
+            1.0942000150680542,
+            0.7168999910354614,
+            -1.288599967956543
+          ],
+          [
+            1.1921000480651855,
+            1.3128000497817993,
+            -0.9682999849319458
+          ]
+        ],
+        "extents": [
+          0.09799999743700027,
+          0.59579998254776,
+          0.3203999996185303
+        ],
+        "obb": {
+          "center": [
+            1.1456,
+            1.0149,
+            -1.1283
+          ],
+          "extents": [
+            0.0218,
+            0.5958,
+            0.3333
+          ],
+          "yaw_deg": 16.87
+        },
+        "n_points": 1176,
+        "blob_ids": [],
+        "source": "appearance"
+      },
+      "after": null,
+      "transform": null,
+      "evidence": {
+        "free_rays": 0,
+        "free_frames_mean": 0.0,
+        "observing_views": 6,
+        "occ_points": 1176,
+        "mask_score": 0.0704,
+        "view_consistency": 0.9663,
+        "appearance": {
+          "cluster": 9,
+          "frames_supporting": 4,
+          "mean_score": 0.6328,
+          "feat_term": 0.6328,
+          "geom_term": 0.0,
+          "partners_visible": 2
+        },
+        "vlm_verdict": "rejected",
+        "vlm_reason": "in place: same; The region inside the contour in both images is a plain white wall, with no objects or changes visible.",
+        "vlm_replace_answer": "same"
+      },
+      "description": "An object about 0.10 x 0.60 x 0.32 m was removed from (1.14, 1.15, -1.15); the after recording saw that space empty in 6 views.",
+      "crops": {
+        "before": "crops/6_before.jpg",
+        "after": "crops/6_after.jpg"
+      },
+      "attributes": "plain, smooth",
+      "object_description": "a plain white wall surface with a slightly uneven red outline tracing its edge.",
+      "motion_kind": null
+    },
+    {
+      "id": 7,
+      "type": "removed",
+      "label": "white paper corner",
+      "confidence": 0.703,
+      "before": {
+        "instance_id": 9,
+        "centroid": [
+          0.7713000178337097,
+          1.3115999698638916,
+          -1.4047000408172607
+        ],
+        "aabb": [
+          [
+            0.7081999778747559,
+            1.2513999938964844,
+            -1.4149999618530273
+          ],
+          [
+            0.8213000297546387,
+            1.3944000005722046,
+            -1.388800024986267
+          ]
+        ],
+        "extents": [
+          0.11299999803304672,
+          0.14309999346733093,
+          0.026200000196695328
+        ],
+        "obb": {
+          "center": [
+            0.7653,
+            1.3229,
+            -1.404
+          ],
+          "extents": [
+            0.1125,
+            0.1431,
+            0.0259
+          ],
+          "yaw_deg": 4.43
+        },
+        "n_points": 228,
+        "blob_ids": [],
+        "source": "appearance"
+      },
+      "after": null,
+      "transform": null,
+      "evidence": {
+        "free_rays": 222,
+        "free_frames_mean": 4.11,
+        "observing_views": 5,
+        "occ_points": 228,
+        "mask_score": 0.8881,
+        "view_consistency": 0.9016,
+        "appearance": {
+          "cluster": 7,
+          "frames_supporting": 2,
+          "mean_score": 1.0528,
+          "feat_term": 0.2718,
+          "geom_term": 0.7811,
+          "partners_visible": 2
+        },
+        "vlm_verdict": "rejected",
+        "vlm_reason": "in place: same; The region in both images contains a plain white surface, likely a wall or a sheet, with no discernible change in object or content, only possible lighting or viewpoint differences.",
+        "vlm_replace_answer": "same"
+      },
+      "description": "An object about 0.11 x 0.14 x 0.03 m was removed from (0.77, 1.31, -1.40); the after recording saw that space empty in 5 views.",
+      "crops": {
+        "before": "crops/7_before.jpg",
+        "after": "crops/7_after.jpg"
+      },
+      "attributes": "white, paper",
+      "object_description": "a corner of a white sheet of paper, slightly curled at the edge.",
+      "motion_kind": null
+    },
+    {
+      "id": 8,
+      "type": "removed",
+      "label": "gray bed sheet",
+      "confidence": 0.678,
+      "before": {
+        "instance_id": 5,
+        "centroid": [
+          0.29269999265670776,
+          0.34779998660087585,
+          -0.13210000097751617
+        ],
+        "aabb": [
+          [
+            0.05770000070333481,
+            0.33799999952316284,
+            -0.46149998903274536
+          ],
+          [
+            0.8831999897956848,
+            0.373199999332428,
+            0.23330000042915344
+          ]
+        ],
+        "extents": [
+          0.8256000280380249,
+          0.03519999980926514,
+          0.6948999762535095
+        ],
+        "obb": {
+          "center": [
+            0.4528,
+            0.3556,
+            -0.2328
+          ],
+          "extents": [
+            0.5109,
+            0.0352,
+            0.9239
+          ],
+          "yaw_deg": -43.8
+        },
+        "n_points": 1595,
+        "blob_ids": [],
+        "source": "appearance"
+      },
+      "after": null,
+      "transform": null,
+      "evidence": {
+        "free_rays": 0,
+        "free_frames_mean": 0.0,
+        "observing_views": 23,
+        "occ_points": 1595,
+        "mask_score": 0.4142,
+        "view_consistency": 0.8345,
+        "appearance": {
+          "cluster": 4,
+          "frames_supporting": 3,
+          "mean_score": 0.6405,
+          "feat_term": 0.6405,
+          "geom_term": 0.0,
+          "partners_visible": 4
+        },
+        "replace_overlap": 0.8619,
+        "vlm_verdict": "rejected",
+        "vlm_reason": "in place: same; The region inside the contour in both images contains a gray bed sheet with wrinkles, and the only difference is lighting and viewpoint.",
+        "vlm_replace_answer": "same"
+      },
+      "description": "An object about 0.83 x 0.04 x 0.69 m was removed from (0.29, 0.35, -0.13); the after recording saw that space empty in 23 views.",
+      "crops": {
+        "before": "crops/8_before.jpg",
+        "after": "crops/8_after.jpg"
+      },
+      "replaced_by": 10,
+      "attributes": "gray cotton",
+      "object_description": "a wrinkled gray bed sheet covering a bed.",
+      "motion_kind": null
+    },
+    {
+      "id": 9,
+      "type": "removed",
+      "label": "floor lamp",
+      "confidence": 0.619,
+      "before": {
+        "instance_id": 10,
+        "centroid": [
+          0.8937000036239624,
+          0.9667999744415283,
+          -1.6124999523162842
+        ],
+        "aabb": [
+          [
+            0.7919999957084656,
+            0.6068000197410583,
+            -1.6783000230789185
+          ],
+          [
+            0.9857000112533569,
+            1.2108999490737915,
+            -1.5496000051498413
+          ]
+        ],
+        "extents": [
+          0.19370000064373016,
+          0.6040999889373779,
+          0.12870000302791595
+        ],
+        "obb": {
+          "center": [
+            0.898,
+            0.9088,
+            -1.6004
+          ],
+          "extents": [
+            0.2217,
+            0.6041,
+            0.0476
+          ],
+          "yaw_deg": 31.73
+        },
+        "n_points": 89,
+        "blob_ids": [],
+        "source": "appearance"
+      },
+      "after": null,
+      "transform": null,
+      "evidence": {
+        "free_rays": 82,
+        "free_frames_mean": 1.64,
+        "observing_views": 4,
+        "occ_points": 89,
+        "mask_score": 0.4993,
+        "view_consistency": 0.7907,
+        "appearance": {
+          "cluster": 8,
+          "frames_supporting": 3,
+          "mean_score": 0.7002,
+          "feat_term": 0.4848,
+          "geom_term": 0.2153,
+          "partners_visible": 2
+        },
+        "vlm_verdict": "rejected",
+        "vlm_reason": "in place: same; The red contour in both images traces the same floor lamp, showing only minor differences in lighting and viewpoint.",
+        "vlm_replace_answer": "same"
+      },
+      "description": "An object about 0.19 x 0.60 x 0.13 m was removed from (0.89, 0.97, -1.61); the after recording saw that space empty in 4 views.",
+      "crops": {
+        "before": "crops/9_before.jpg",
+        "after": "crops/9_after.jpg"
+      },
+      "attributes": "white, metal",
+      "object_description": "a tall, slender floor lamp with a white shade and metal base.",
+      "motion_kind": null
+    },
+    {
+      "id": 13,
+      "type": "added",
+      "label": "crumpled white duvet",
+      "attributes": "off-white cotton",
+      "object_description": "a soft, rumpled white duvet covering a bed.",
+      "confidence": 0.945,
+      "before": null,
+      "after": {
+        "instance_id": 2,
+        "centroid": [
+          -0.2296999990940094,
+          0.44859999418258667,
+          0.6378999948501587
+        ],
+        "aabb": [
+          [
+            -0.756600022315979,
+            0.3382999897003174,
+            0.16949999332427979
+          ],
+          [
+            0.5519000291824341,
+            0.5440000295639038,
+            1.1002000570297241
+          ]
+        ],
+        "extents": [
+          1.308500051498413,
+          0.20569999516010284,
+          0.9307000041007996
+        ],
+        "obb": {
+          "center": [
+            -0.1148,
+            0.4411,
+            0.6141
+          ],
+          "extents": [
+            1.1658,
+            0.2057,
+            0.8271
+          ],
+          "yaw_deg": 18.65
+        },
+        "n_points": 7643,
+        "blob_ids": [
+          11
+        ],
+        "source": "geometry"
+      },
+      "transform": null,
+      "motion_kind": null,
+      "evidence": {
+        "free_rays": 6642,
+        "free_frames_mean": 11.99,
+        "observing_views": 10,
+        "occ_points": 66137,
+        "mask_score": 0.9045,
+        "view_consistency": 0.9391,
+        "split_from": 1,
+        "split_reason": "appearance judge did not confirm the match: The outlined objects differ in color (black vs. white) and material appearance, indicating they are different objects.",
+        "vlm_verdict": "rejected",
+        "vlm_reason": "In image 1, the highlighted area contains only rumpled grey sheets and part of a white duvet, but the white duvet is not the main focus or the only object; in image 2, the highlighted contour specifically isolates the crumpled white duvet as the primary object. The duvet was present in image 1 but was not the highlighted object there, so it was not absent."
+      },
+      "description": "",
+      "crops": {
+        "after": "crops/1_after.jpg",
+        "before": "crops/1_after_place.jpg"
+      }
+    },
+    {
+      "id": 10,
+      "type": "added",
+      "label": "bed sheet",
+      "confidence": 0.716,
+      "before": null,
+      "after": {
+        "instance_id": 5,
+        "centroid": [
+          0.19820000231266022,
+          0.364300012588501,
+          -0.06289999932050705
+        ],
+        "aabb": [
+          [
+            0.09939999878406525,
+            0.35580000281333923,
+            -0.1421000063419342
+          ],
+          [
+            0.2809000015258789,
+            0.3824000060558319,
+            0.02250000089406967
+          ]
+        ],
+        "extents": [
+          0.18150000274181366,
+          0.026599999517202377,
+          0.16459999978542328
+        ],
+        "obb": {
+          "center": [
+            0.196,
+            0.3691,
+            -0.0721
+          ],
+          "extents": [
+            0.1351,
+            0.0266,
+            0.1972
+          ],
+          "yaw_deg": 25.12
+        },
+        "n_points": 355,
+        "blob_ids": [],
+        "source": "appearance"
+      },
+      "transform": null,
+      "evidence": {
+        "free_rays": 0,
+        "free_frames_mean": 0.0,
+        "observing_views": 7,
+        "occ_points": 355,
+        "mask_score": 0.8568,
+        "view_consistency": 0.9913,
+        "appearance": {
+          "cluster": 12,
+          "frames_supporting": 2,
+          "mean_score": 0.612,
+          "feat_term": 0.612,
+          "geom_term": 0.0,
+          "partners_visible": 2
+        },
+        "replace_overlap": 0.8619,
+        "vlm_verdict": "rejected",
+        "vlm_reason": "in place: same; The region inside the contour in both images contains a gray bed sheet with wrinkles, and the only difference is lighting and viewpoint.",
+        "vlm_replace_answer": "same"
+      },
+      "description": "An object about 0.18 x 0.03 x 0.16 m was added at (0.20, 0.36, -0.06); the before recording saw that space empty in 7 views.",
+      "crops": {
+        "after": "crops/10_after.jpg",
+        "before": "crops/10_before.jpg"
+      },
+      "replaces": 8,
+      "attributes": "dark grey fabric",
+      "object_description": "a crumpled dark grey bed sheet with folds and creases.",
+      "motion_kind": null
+    },
+    {
+      "id": 11,
+      "type": "unverified",
+      "label": "wall",
+      "confidence": 0.413,
+      "before": null,
+      "after": {
+        "instance_id": 3,
+        "centroid": [
+          -1.72160005569458,
+          1.2926000356674194,
+          1.503100037574768
+        ],
+        "aabb": [
+          [
+            -1.7961000204086304,
+            0.43479999899864197,
+            1.2373000383377075
+          ],
+          [
+            -1.597599983215332,
+            1.676200032234192,
+            1.7523000240325928
+          ]
+        ],
+        "extents": [
+          0.19859999418258667,
+          1.2414000034332275,
+          0.5151000022888184
+        ],
+        "obb": {
+          "center": [
+            -1.7143,
+            1.0555,
+            1.4959
+          ],
+          "extents": [
+            0.0717,
+            1.2414,
+            0.5363
+          ],
+          "yaw_deg": 18.4
+        },
+        "n_points": 8968,
+        "blob_ids": [
+          5
+        ],
+        "source": "geometry"
+      },
+      "transform": null,
+      "evidence": {
+        "free_rays": 0,
+        "free_frames_mean": 0.0,
+        "observing_views": 0,
+        "occ_points": 72525,
+        "mask_score": 0.9019,
+        "view_consistency": 0.7516,
+        "seen_in": "after",
+        "vlm_verdict": "rejected",
+        "vlm_reason": "The highlighted region is a section of the wall, not a distinct movable object."
+      },
+      "description": "An object about 0.20 x 1.24 x 0.52 m at (-1.72, 1.29, 1.50) was seen only in the after recording; the before recording never observed that space, so no verdict is possible.",
+      "crops": {
+        "after": "crops/11_after.jpg",
+        "before": "crops/11_before.jpg"
+      },
+      "attributes": "light grey smooth",
+      "object_description": "a section of a light grey smooth wall in a room.",
+      "motion_kind": null
+    }
+  ],
+  "summary": "3 changes: 2 moved, 0 added, 1 removed; 1 unverified. The brown cardboard box was moved slightly and rotated, now sitting on the floor where it previously hung above it. The cream-colored bedding was rearranged or deformed, shifting its position slightly within the far part of the room. The black jacket was removed from the floor in the near left corner. A bedside table, visible only in the earlier video, may have been removed or moved, but this cannot be verified as the later video did not show that spot."
+}

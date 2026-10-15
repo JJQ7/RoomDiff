@@ -187,13 +187,14 @@ def side_masks(
 
 def write_prediction(
     out_dir: str | Path, pair_dir: str | Path, pred_dir: str | Path,
-    include_unverified: bool = True, time_tol: float = 0.1, mask_resolution: str = "full",
+    include_unverified: bool = False, time_tol: float = 0.1, mask_resolution: str = "recon",
 ) -> dict[str, Any]:
     """Write `<pred_dir>/object_masks.pkl` (+ `prediction.json` stats) of one scene from a
     pipeline output `<out_dir>` (changes.json, instances/<rec>_masks.npz, keyframes/
     index.json). `pair_dir` (its segments.pkl) gives the GT size. `mask_resolution`:
-    "full" submits the keyframe-resolution masks (the recon one where a mask has none),
-    "recon" the reconstruction-resolution ones. Returns the stats."""
+    "recon" (the default, as in configs/default.yaml) submits the reconstruction-resolution
+    masks, "full" the keyframe-resolution ones (the recon one where a mask has none).
+    Unverified regions are left out unless `include_unverified`. Returns the stats."""
     if mask_resolution not in MASK_RESOLUTIONS:
         raise ValueError(f"mask_resolution must be one of {MASK_RESOLUTIONS}, "
                          f"got {mask_resolution!r}")
@@ -353,7 +354,7 @@ def run_pairs(
             stats = write_empty_prediction(pair_dir, pred_dir, f"run failed, see {log}")
         else:
             stats = write_prediction(out, pair_dir, pred_dir, params["include_unverified"],
-                                     params["time_tol_s"], params.get("mask_resolution", "full"))
+                                     params["time_tol_s"], params.get("mask_resolution", "recon"))
         results[pair] = {"run": state, **stats}
     return results
 
