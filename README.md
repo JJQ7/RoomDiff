@@ -108,6 +108,7 @@ hf download facebook/sam3 sam3.pt                     # SAM 3 checkpoint (3.5 GB
 
 | component | licence | source |
 |---|---|---|
+| RoomDiff (this repository: code, docs, viewer) | MIT | [`LICENSE`](LICENSE); the models it runs keep their own licences below, so a run of the full pipeline is non-commercial because of the Pi3X weights |
 | Pi3 code (`third_party/Pi3`) | BSD 3-Clause | `third_party/Pi3/LICENSE` |
 | Pi3X weights (`yyfz233/Pi3X`) | CC BY-NC 4.0: non-commercial use only | `third_party/Pi3/README.md` ("License"); [model card](https://huggingface.co/yyfz233/Pi3X) |
 | SAM 2.1 (`facebook/sam2.1-hiera-large`) | Apache-2.0 | [model card](https://huggingface.co/facebook/sam2.1-hiera-large) |
