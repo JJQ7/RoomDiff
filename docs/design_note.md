@@ -76,7 +76,11 @@ floor keep their own blobs: tabletop_1's four strips become the suitcase and the
 tabletop_3's 2.6 m "wooden table" the stool, bucket, brush and cookie box on that floor,
 and every reported change of the three pairs stays the same. On the 20 reported benchmark
 pairs the unverified regions that pass the size filters go from 109 to 111 (some floor
-patches vanish, others split into the objects on them); they are not scored.
+patches vanish, others split into the objects on them); they are not scored. A fresh
+end-to-end run of those pairs with the cut differs from the previous one in a single pair,
+where a removed cardboard box is now re-paired with an unverified region of the after video
+that the floor no longer inflates and comes out as moved: objects 37 / 34 / 38 -> 38 / 33 /
+37, per-view / per-scene / typed AP 0.468 / 0.433 / 0.316 -> 0.474 / 0.444 / 0.325.
 
 ## 2b. Appearance channel: what the voxels cannot see
 For every keyframe we pick the two best co-visible keyframes of the other recording (same

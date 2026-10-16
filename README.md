@@ -22,12 +22,14 @@ kept for the record; a map of the documentation is at the end of this README.
 ## Results at a glance
 
 Scored with the official evaluator of the public [SceneDiff](https://github.com/yuqunw/scene_diff)
-benchmark (final code, default settings; the full table and what each row changed are in the
+benchmark (default settings; the 20-pair row is the final code, the 105-pair rows were run
+on 15 October, before the floor cut of the next day, which changed the 20-pair numbers by one
+object; the full table and what each row changed are in the
 [benchmark section](#benchmark-scenediff-validation-subset)):
 
 | | per-view AP | per-scene AP | typed AP |
 |---|---|---|---|
-| SceneDiff `val` / `varied`, the 20 pairs reported during development | 0.468 | 0.433 | 0.316 |
+| SceneDiff `val` / `varied`, the 20 pairs reported during development | 0.474 | 0.444 | 0.325 |
 | SceneDiff whole `val` set, 105 pairs | 0.385 | 0.351 | 0.242 |
 | its `varied` half, 50 pairs | 0.552 | 0.517 | 0.416 |
 | its `kitchen` half, 55 pairs (short sweeps, little overlap between the videos) | 0.187 | 0.183 | 0.076 |
@@ -382,10 +384,11 @@ set (105 pairs), 0.5 s keyframes:
 | + appearance channel (commit `c660672`) | 0.395 | 0.352 | 0.238 | 0.331 | 30 / 53 / 45 |
 | same, keyframes every 0.5 s (commit `ad1b585`) | 0.394 | 0.383 | 0.256 | 0.351 | 32 / 61 / 43 |
 | + judges describe each box before deciding (commit `42c8055`, same runs, describe stage re-run) | 0.432 | 0.413 | 0.280 | 0.472 | 36 / 39 / 39 |
-| + confidence from the separating evidence, masks in more keyframes, re-pairing by appearance (commit `8c8263b`, fresh end-to-end run) | **0.468** | **0.433** | **0.316** | **0.518** | 37 / 34 / 38 |
+| + confidence from the separating evidence, masks in more keyframes, re-pairing by appearance (commit `8c8263b`, fresh end-to-end run) | 0.468 | 0.433 | 0.316 | 0.518 | 37 / 34 / 38 |
 | same code, the whole `val` set: 50 `varied` + 55 `kitchen` pairs (commit `20a0a79`) | 0.385 | 0.351 | 0.242 | 0.409 | 133 / 123 / 188 |
 | its `varied` half (50 pairs) | 0.552 | 0.517 | 0.416 | 0.478 | – |
 | its `kitchen` half (55 pairs) | 0.187 | 0.183 | 0.076 | 0.254 | – |
+| + floor-level voxels left out of the unverified regions (commit `911e649`, 16 October, fresh end-to-end run of the 20 pairs) | **0.474** | **0.444** | **0.325** | **0.533** | 38 / 33 / 37 |
 | SceneDiff paper (full val set, for reference) | 0.496 | 0.463 | 0.255 | – | – |
 
 The `42c8055` row changes only the VLM judge (`semantics.describe_first`): the removed / added
@@ -472,6 +475,17 @@ demotion stays off): on the reported pairs per-view / per-scene / typed AP 0.432
 truth). The development subset, run fresh the same way and now scoring every pair, went
 from 0.497 / 0.409 / 0.355 (25 / 17 / 23; the mailroom pair's six objects are all false)
 to 0.521 / 0.497 / 0.418 (26 / 15 / 22).
+
+The `911e649` row adds the floor cut of 16 October (unverified regions lose their
+floor-level voxels, held-out section). Unverified regions are not scored, so the change
+reaches the scored objects only where such a region takes part in re-pairing or covers an
+appearance cluster: a fresh end-to-end run of the 20 reported pairs differs from the
+`8c8263b` run in one pair, laundry_room_3_laundry_room_4, where the removed cardboard box
+is now re-paired with an unverified region of the after video that the floor no longer
+inflates (it used to be a floor-joined region named "top loading washing machine") and
+comes out as moved: objects 37 / 34 / 38 -> 38 / 33 / 37, per-view / per-scene / typed AP
+0.468 / 0.433 / 0.316 -> 0.474 / 0.444 / 0.325. The development subset and the whole
+validation set were not re-run after this change.
 
 On the whole validation set, the paper's own test bed, the pipeline is below SceneDiff
 (0.385 / 0.351 / 0.242 against 0.496 / 0.463 / 0.255), and the split tells where: on the
