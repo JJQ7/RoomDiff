@@ -58,7 +58,8 @@ model judges and names. What a `removed` or `added` change rests on depends on t
 
 - geometry: the other video's camera rays carved that space empty (free in at least 2 of
   its keyframes, more than 4 cm from its surfaces); occupied space the other video never
-  observed is `unverified` instead;
+  observed is `unverified` instead, without the voxels within 6 cm of the floor plane (a
+  patch of floor that one video filmed is not an object);
 - appearance (small or flat objects the voxels miss, e.g. a wallet on a table): no
   free-space test; keyframes of the other video look at the same place (depth-consistent
   reprojection) and see different DINOv3 features there, sometimes also a depth cue (they
@@ -232,6 +233,10 @@ LiDAR scans of every state (3D Scanner App) were used only afterwards, to check 
 |---|---|---|
 | [![tabletop_1 overview](docs/img/tabletop_1_overview.png)](examples/tabletop_1/report.md) | [![tabletop_2 overview](docs/img/tabletop_2_overview.png)](examples/tabletop_2/report.md) | [![tabletop_3 overview](docs/img/tabletop_3_overview.png)](examples/tabletop_3/report.md) |
 
+*After clouds of the re-run with the final code (16 October, see "Floor is not an object"
+below), the run the live viewer shows; the table above and `examples/tabletop_*` describe
+the first, frozen run.*
+
 Live viewer: [tabletop_1](https://jjq7.github.io/RoomDiff/viewer/?scene=scenes/tabletop_1),
 [tabletop_2](https://jjq7.github.io/RoomDiff/viewer/?scene=scenes/tabletop_2),
 [tabletop_3](https://jjq7.github.io/RoomDiff/viewer/?scene=scenes/tabletop_3).
@@ -292,6 +297,21 @@ On this close-range, top-down video the false positives come from the appearance
 and the judge, not from the geometry; the benchmark's own no-change pair
 (living_room_29_living_room_30) gets one false added object.
 
+Floor is not an object (16 October). The first run's four unverified regions of
+tabletop_1 were not objects but patches of floor that only one video had filmed, 3.4-3.7 m
+long once SAM's mask had followed the floor and the table edge, and the judge named each
+after whatever stood on it (two "wooden stools", a "blue suitcase", a "black office
+chair"). Voxels less than 6 cm above the fitted floor plane are now left out of the
+unverified candidates (`visibility.unverified_floor_cut`; removed / added candidates are
+untouched): floor that one video filmed is not an object, and the objects standing on it
+were joined through it into one room-sized region. Re-run from the cached reconstructions
+of the 14 October run, every reported change of the three pairs is identical (3 / 3 + 4,
+2 / 3 + 0, 1 / 3 + 1 false positives) and the unverified regions are objects with
+object-sized boxes: tabletop_1 keeps the suitcase (0.18 x 0.98 x 0.38 in the reported
+units) and the chair, tabletop_2 its suitcase, and tabletop_3 trades a 2.6 m "wooden
+table" for the stool, bucket, brush and cookie box that stood on that floor. The live
+viewer and the overview figures above show this run.
+
 ## Web viewer
 
 A static three.js viewer (source in `viewer/`, no build step; three.js r160 is vendored in
@@ -306,8 +326,8 @@ python -m roomdiff.cli viewer --out outputs/scene1 [--target-points 400000]
 cd outputs/scene1/viewer && python -m http.server 8000   # open http://localhost:8000/
 ```
 
-Keys: N / P next / previous change, R reset view. Unverified regions (often a patch of
-floor or table top that only one video observed) are drawn dimmed and get their label only
+Keys: N / P next / previous change, R reset view. Unverified regions (an object or a
+surface that only one video observed) are drawn dimmed and get their label only
 when selected; the home view frames the confirmed changes. `changes.json` is taken from
 `<out>/changes.json`, or generated from `<out>/visibility/candidates.json` (geometry-only
 regions) when the change stage has not run yet.

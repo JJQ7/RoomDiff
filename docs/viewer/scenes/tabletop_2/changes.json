@@ -9,9 +9,9 @@
       "id": 1,
       "type": "removed",
       "label": "scissors",
-      "confidence": 0.836,
+      "confidence": 0.622,
       "before": {
-        "instance_id": 3,
+        "instance_id": 2,
         "centroid": [
           0.2345000058412552,
           0.7911999821662903,
@@ -69,94 +69,24 @@
           "partners_visible": 20
         },
         "vlm_verdict": "confirmed",
-        "vlm_reason": "in place: removed; The scissors are gone in image 2, leaving only the wooden table surface.",
+        "vlm_reason": "in place: removed; The scissors are present in image 1 but absent in image 2, leaving only the bare table surface.",
         "vlm_replace_answer": "removed"
       },
-      "description": "The black and silver scissors (about 0.8 x 0.2 x 0.1 m), located 0.8 m above the floor in the middle of the room, were removed; the later video shows that spot empty from 37 viewpoints.",
+      "description": "The black and red plastic scissors (about 0.8 x 0.2 x 0.1 m), which were 0.8 m above the floor in the middle of the room, were removed; the later video shows that spot empty from 37 viewpoints.",
       "crops": {
         "before": "crops/1_before.jpg",
         "after": "crops/1_after.jpg"
       },
-      "attributes": "black and silver",
-      "object_description": "a pair of black and silver scissors resting on a wooden surface.",
+      "attributes": "black and red plastic",
+      "object_description": "a pair of black and red plastic scissors resting on a wooden table.",
       "motion_kind": null,
-      "description_template": "The scissors (black and silver; about 0.8 x 0.2 x 0.1 m), which was 0.8 m above the floor in the middle of the room, was removed: the after recording looked at that spot from 37 viewpoints and saw it empty."
+      "description_template": "The scissors (black and red plastic; about 0.8 x 0.2 x 0.1 m), which was 0.8 m above the floor in the middle of the room, was removed: the after recording looked at that spot from 37 viewpoints and saw it empty."
     },
     {
       "id": 2,
       "type": "added",
-      "label": "tea canister",
-      "confidence": 0.951,
-      "before": null,
-      "after": {
-        "instance_id": 2,
-        "centroid": [
-          0.4481000006198883,
-          0.9164999723434448,
-          -0.23469999432563782
-        ],
-        "aabb": [
-          [
-            0.35040000081062317,
-            0.7669000029563904,
-            -0.3001999855041504
-          ],
-          [
-            0.5522000193595886,
-            1.0104999542236328,
-            -0.09640000015497208
-          ]
-        ],
-        "extents": [
-          0.20170000195503235,
-          0.2434999942779541,
-          0.2037000060081482
-        ],
-        "obb": {
-          "center": [
-            0.4502,
-            0.8887,
-            -0.1998
-          ],
-          "extents": [
-            0.2016,
-            0.2435,
-            0.1962
-          ],
-          "yaw_deg": 27.58
-        },
-        "n_points": 2179,
-        "blob_ids": [
-          9
-        ],
-        "source": "geometry"
-      },
-      "transform": null,
-      "evidence": {
-        "free_rays": 14373,
-        "free_frames_mean": 21.91,
-        "observing_views": 23,
-        "occ_points": 146390,
-        "mask_score": 0.963,
-        "view_consistency": 0.8741,
-        "vlm_verdict": "confirmed",
-        "vlm_reason": "The green contour in image 2 clearly highlights a tea canister that is not present in image 1, which only shows the empty wooden surface."
-      },
-      "description": "The black and gold tea canister (about 24 x 20 x 20 cm) appeared 0.8 m above the floor in the far part of the room; the earlier video looked at that spot from 23 viewpoints and saw it empty.",
-      "crops": {
-        "after": "crops/2_after.jpg",
-        "before": "crops/2_before.jpg"
-      },
-      "attributes": "black and gold",
-      "object_description": "a cylindrical container for storing tea, with a black lid and gold body.",
-      "motion_kind": null,
-      "description_template": "A tea canister (black and gold; about 24 x 20 x 20 cm) appeared 0.8 m above the floor in the far part of the room: the before recording looked at that spot from 23 viewpoints and saw it empty."
-    },
-    {
-      "id": 3,
-      "type": "added",
       "label": "green bucket",
-      "confidence": 0.93,
+      "confidence": 0.978,
       "before": null,
       "after": {
         "instance_id": 1,
@@ -197,7 +127,7 @@
         },
         "n_points": 3216,
         "blob_ids": [
-          10
+          5
         ],
         "source": "geometry"
       },
@@ -210,26 +140,96 @@
         "mask_score": 0.9627,
         "view_consistency": 0.8051,
         "vlm_verdict": "confirmed",
-        "vlm_reason": "Image 1 shows only the floor tile at that location, with no object present; Image 2 shows a green bucket in the same spot."
+        "vlm_reason": "The green bucket is present in image 2 where the floor was in image 1, indicating it was added."
       },
-      "description": "The green plastic bucket (about 0.4 x 0.3 x 0.2 m) appeared 0.3 m above the floor on the left side of the room; the earlier video looked at that spot from 9 viewpoints and saw it empty.",
+      "description": "The green plastic bucket (dark green; about 0.4 x 0.3 x 0.2 m) appeared 0.3 m above the floor on the left side of the room; the earlier video looked at that spot from 9 viewpoints and saw it empty.",
+      "crops": {
+        "after": "crops/2_after.jpg",
+        "before": "crops/2_before.jpg"
+      },
+      "attributes": "dark green, plastic",
+      "object_description": "a dark green plastic bucket partially visible under a wooden table.",
+      "motion_kind": null,
+      "description_template": "A green bucket (dark green, plastic; about 0.4 x 0.3 x 0.2 m) appeared 0.3 m above the floor on the left side of the room: the before recording looked at that spot from 9 viewpoints and saw it empty."
+    },
+    {
+      "id": 3,
+      "type": "added",
+      "label": "tea canister",
+      "confidence": 0.978,
+      "before": null,
+      "after": {
+        "instance_id": 2,
+        "centroid": [
+          0.4481000006198883,
+          0.9164999723434448,
+          -0.23469999432563782
+        ],
+        "aabb": [
+          [
+            0.35040000081062317,
+            0.7669000029563904,
+            -0.3001999855041504
+          ],
+          [
+            0.5522000193595886,
+            1.0104999542236328,
+            -0.09640000015497208
+          ]
+        ],
+        "extents": [
+          0.20170000195503235,
+          0.2434999942779541,
+          0.2037000060081482
+        ],
+        "obb": {
+          "center": [
+            0.4502,
+            0.8887,
+            -0.1998
+          ],
+          "extents": [
+            0.2016,
+            0.2435,
+            0.1962
+          ],
+          "yaw_deg": 27.58
+        },
+        "n_points": 2179,
+        "blob_ids": [
+          3
+        ],
+        "source": "geometry"
+      },
+      "transform": null,
+      "evidence": {
+        "free_rays": 14373,
+        "free_frames_mean": 21.91,
+        "observing_views": 23,
+        "occ_points": 146390,
+        "mask_score": 0.963,
+        "view_consistency": 0.8741,
+        "vlm_verdict": "confirmed",
+        "vlm_reason": "The green box in image 1 contains only the wooden surface, while image 2 shows a tea canister in the same spot."
+      },
+      "description": "The black and gold tea canister (about 24 x 20 x 20 cm) appeared 0.8 m above the floor in the far part of the room; the earlier video looked at that spot from 23 viewpoints and saw it empty.",
       "crops": {
         "after": "crops/3_after.jpg",
         "before": "crops/3_before.jpg"
       },
-      "attributes": "green plastic",
-      "object_description": "a green plastic bucket partially visible under a wooden table.",
+      "attributes": "black and gold",
+      "object_description": "a cylindrical container for storing tea, with a black lid and gold body.",
       "motion_kind": null,
-      "description_template": "A green bucket (green plastic; about 0.4 x 0.3 x 0.2 m) appeared 0.3 m above the floor on the left side of the room: the before recording looked at that spot from 9 viewpoints and saw it empty."
+      "description_template": "A tea canister (black and gold; about 24 x 20 x 20 cm) appeared 0.8 m above the floor in the far part of the room: the before recording looked at that spot from 23 viewpoints and saw it empty."
     },
     {
-      "id": 8,
+      "id": 4,
       "type": "unverified",
       "label": "blue suitcase",
-      "confidence": 0.429,
+      "confidence": 0.478,
       "before": null,
       "after": {
-        "instance_id": 5,
+        "instance_id": 4,
         "centroid": [
           0.17679999768733978,
           0.5964000225067139,
@@ -267,7 +267,7 @@
         },
         "n_points": 5848,
         "blob_ids": [
-          6
+          2
         ],
         "source": "geometry"
       },
@@ -280,12 +280,13 @@
         "mask_score": 0.9561,
         "view_consistency": 0.7583,
         "seen_in": "after",
+        "reason_class": "never_observed",
         "vlm_verdict": "confirmed",
         "vlm_reason": "The contour covers a blue suitcase, a distinct movable object."
       },
-      "description": "The blue hard-shell suitcase (about 1.0 x 0.9 x 0.5 m), positioned 0.3 m above the floor in the far left part of the room, was only visible in the later video; the earlier video never looked at that spot, so this change cannot be confirmed.",
+      "description": "The blue hard-shell suitcase (about 1.0 x 0.9 x 0.5 m), located 0.3 m above the floor in the far left part of the room, was only visible in the later video; the earlier video never looked at that spot, so this change cannot be confirmed.",
       "crops": {
-        "after": "crops/8_after.jpg",
+        "after": "crops/4_after.jpg",
         "before": null
       },
       "attributes": "blue hard-shell",
@@ -296,137 +297,68 @@
   ],
   "rejected": [
     {
-      "id": 4,
-      "type": "unverified",
-      "label": "wooden floor",
-      "confidence": 0.484,
-      "before": null,
-      "after": {
-        "instance_id": 3,
-        "centroid": [
-          -1.3758000135421753,
-          -0.011300000362098217,
-          -1.8762999773025513
-        ],
-        "aabb": [
-          [
-            -2.2857000827789307,
-            -0.09160000085830688,
-            -2.1849000453948975
-          ],
-          [
-            -0.4959999918937683,
-            0.1168999969959259,
-            -1.4678000211715698
-          ]
-        ],
-        "extents": [
-          1.7896000146865845,
-          0.2084999978542328,
-          0.7170000076293945
-        ],
-        "obb": {
-          "center": [
-            -1.3762,
-            0.0126,
-            -1.8497
-          ],
-          "extents": [
-            1.7544,
-            0.2085,
-            0.6104
-          ],
-          "yaw_deg": 9.68
-        },
-        "n_points": 14779,
-        "blob_ids": [
-          7
-        ],
-        "source": "geometry"
-      },
-      "transform": null,
-      "evidence": {
-        "free_rays": 0,
-        "free_frames_mean": 0.0,
-        "observing_views": 0,
-        "occ_points": 14832,
-        "mask_score": 0.9634,
-        "view_consistency": 0.9719,
-        "seen_in": "after",
-        "vlm_verdict": "rejected",
-        "vlm_reason": "The highlighted region shows part of a floor, which is part of the room itself."
-      },
-      "description": "An object about 1.79 x 0.21 x 0.72 m at (-1.38, -0.01, -1.88) was seen only in the after recording; the before recording never observed that space, so no verdict is possible.",
-      "crops": {
-        "after": "crops/4_after.jpg",
-        "before": null
-      },
-      "attributes": "light brown, smooth",
-      "object_description": "a section of a light brown wooden floor with a visible grain pattern.",
-      "motion_kind": null
-    },
-    {
       "id": 5,
       "type": "unverified",
       "label": "wooden table surface",
-      "confidence": 0.465,
+      "confidence": 0.462,
       "before": {
         "instance_id": 1,
         "centroid": [
-          0.7498000264167786,
-          0.1453000009059906,
-          -1.8588000535964966
+          0.7221999764442444,
+          0.1542000025510788,
+          -1.8472000360488892
         ],
         "aabb": [
           [
             0.2815999984741211,
-            -0.006399999838322401,
+            -0.006899999920278788,
             -2.362299919128418
           ],
           [
-            1.3335000276565552,
+            1.2021000385284424,
             0.5437999963760376,
             -1.1441999673843384
           ]
         ],
         "extents": [
-          1.051900029182434,
-          0.5501999855041504,
+          0.9204999804496765,
+          0.5507000088691711,
           1.2180999517440796
         ],
         "obb": {
           "center": [
-            0.6849,
-            0.2687,
-            -1.8668
+            0.7828,
+            0.2685,
+            -1.7616
           ],
           "extents": [
-            1.257,
-            0.5502,
-            0.9405
+            0.9202,
+            0.5507,
+            1.1825
           ],
-          "yaw_deg": 44.7
+          "yaw_deg": 7.04
         },
-        "n_points": 12842,
+        "n_points": 12039,
         "blob_ids": [
-          3
+          1
         ],
         "source": "geometry"
       },
       "after": null,
       "transform": null,
       "evidence": {
-        "free_rays": 43,
+        "free_rays": 35,
         "free_frames_mean": 0.02,
         "observing_views": 0,
-        "occ_points": 12738,
-        "mask_score": 0.9255,
-        "view_consistency": 0.9364,
+        "occ_points": 10040,
+        "mask_score": 0.9235,
+        "view_consistency": 0.9023,
         "seen_in": "before",
+        "reason_class": "never_observed",
         "vlm_verdict": "rejected",
-        "vlm_reason": "The highlighted region shows a section of a wall or ceiling, part of the room's structure."
+        "vlm_reason": "The highlighted region shows a section of a wooden floor and a dark vertical edge, likely part of a cabinet or furniture, not a reflection."
       },
-      "description": "An object about 1.05 x 0.55 x 1.22 m at (0.75, 0.15, -1.86) was seen only in the before recording; the after recording never observed that space, so no verdict is possible.",
+      "description": "An object about 0.92 x 0.55 x 1.22 m at (0.72, 0.15, -1.85) was seen only in the before recording; the after recording never observed that space, so no verdict is possible.",
       "crops": {
         "before": "crops/5_before.jpg",
         "after": null
@@ -438,143 +370,74 @@
     {
       "id": 6,
       "type": "unverified",
-      "label": "wooden table leg",
-      "confidence": 0.448,
+      "label": "wooden floor",
+      "confidence": 0.398,
       "before": null,
       "after": {
-        "instance_id": 4,
+        "instance_id": 3,
         "centroid": [
-          -0.12210000306367874,
-          0.09910000115633011,
-          -2.143699884414673
+          -0.08160000294446945,
+          0.11710000038146973,
+          -2.149600028991699
         ],
         "aabb": [
           [
-            -0.5906000137329102,
-            0.020899999886751175,
+            -0.42669999599456787,
+            0.019999999552965164,
             -2.550600051879883
           ],
           [
             0.45419999957084656,
-            0.397599995136261,
+            0.45179998874664307,
             -1.3420000076293945
           ]
         ],
         "extents": [
-          1.044800043106079,
-          0.3767000138759613,
+          0.8809000253677368,
+          0.4318000078201294,
           1.2086000442504883
         ],
         "obb": {
           "center": [
-            0.0309,
-            0.2092,
-            -1.9376
+            0.0615,
+            0.2359,
+            -1.9276
           ],
           "extents": [
-            0.5486,
-            0.3767,
-            1.3691
+            0.4575,
+            0.4318,
+            1.3245
           ],
-          "yaw_deg": 36.55
+          "yaw_deg": 32.49
         },
-        "n_points": 9116,
+        "n_points": 10269,
         "blob_ids": [
-          8
+          4
         ],
         "source": "geometry"
       },
       "transform": null,
       "evidence": {
-        "free_rays": 34,
-        "free_frames_mean": 0.04,
+        "free_rays": 32,
+        "free_frames_mean": 0.05,
         "observing_views": 0,
-        "occ_points": 5555,
-        "mask_score": 0.8472,
-        "view_consistency": 0.9463,
+        "occ_points": 3675,
+        "mask_score": 0.7959,
+        "view_consistency": 0.9837,
         "seen_in": "after",
+        "reason_class": "never_observed",
         "vlm_verdict": "rejected",
-        "vlm_reason": "The highlighted region shows part of the tiled floor and the leg of a wooden table, both real physical objects."
+        "vlm_reason": "The highlighted region shows a tiled floor and part of a wooden table edge, which are part of the room's structure."
       },
-      "description": "An object about 1.04 x 0.38 x 1.21 m at (-0.12, 0.10, -2.14) was seen only in the after recording; the before recording never observed that space, so no verdict is possible.",
+      "description": "An object about 0.88 x 0.43 x 1.21 m at (-0.08, 0.12, -2.15) was seen only in the after recording; the before recording never observed that space, so no verdict is possible.",
       "crops": {
         "after": "crops/6_after.jpg",
         "before": null
       },
-      "attributes": "light brown wood",
-      "object_description": "A sturdy wooden leg of a table, showing part of its structure and supporting the tabletop.",
-      "motion_kind": null
-    },
-    {
-      "id": 7,
-      "type": "unverified",
-      "label": "wooden chair leg",
-      "confidence": 0.442,
-      "before": {
-        "instance_id": 2,
-        "centroid": [
-          1.1784000396728516,
-          0.02199999988079071,
-          1.1195000410079956
-        ],
-        "aabb": [
-          [
-            0.9229000210762024,
-            0.00839999970048666,
-            0.8255000114440918
-          ],
-          [
-            1.3847999572753906,
-            0.22699999809265137,
-            1.3524999618530273
-          ]
-        ],
-        "extents": [
-          0.461899995803833,
-          0.21860000491142273,
-          0.5270000100135803
-        ],
-        "obb": {
-          "center": [
-            1.1375,
-            0.1177,
-            1.0993
-          ],
-          "extents": [
-            0.4403,
-            0.2186,
-            0.4972
-          ],
-          "yaw_deg": 8.11
-        },
-        "n_points": 3148,
-        "blob_ids": [
-          11
-        ],
-        "source": "geometry"
-      },
-      "after": null,
-      "transform": null,
-      "evidence": {
-        "free_rays": 5,
-        "free_frames_mean": 0.01,
-        "observing_views": 0,
-        "occ_points": 12612,
-        "mask_score": 0.8437,
-        "view_consistency": 0.9255,
-        "seen_in": "before",
-        "vlm_verdict": "rejected",
-        "vlm_reason": "The highlighted region shows a plain wall surface with a decorative border, not a reflection."
-      },
-      "description": "An object about 0.46 x 0.22 x 0.53 m at (1.18, 0.02, 1.12) was seen only in the before recording; the after recording never observed that space, so no verdict is possible.",
-      "crops": {
-        "before": "crops/7_before.jpg",
-        "after": "crops/7_after.jpg"
-      },
-      "attributes": "light brown wood",
-      "object_description": "A single leg of a wooden chair, showing its smooth, polished surface and sturdy construction.",
+      "attributes": "light brown, smooth",
+      "object_description": "a section of a light brown wooden floor with visible planks.",
       "motion_kind": null
     }
   ],
-  "summary": "3 changes: 0 moved, 2 added, 1 removed; 1 unverified. The black and silver scissors were removed from the middle of the room, while a black and gold tea canister and a green plastic bucket were added to the far part and left side of the room, respectively. A blue hard-shell suitcase may have appeared on the far left, but this cannot be confirmed as the earlier video did not capture that spot."
+  "summary": "3 changes: 0 moved, 2 added, 1 removed; 1 unverified. The black and red plastic scissors were removed from the middle of the room, while a green plastic bucket and a black and gold tea canister were added to the left side and far part of the room, respectively. A blue hard-shell suitcase may have appeared in the far left, but this cannot be confirmed as the earlier video did not capture that spot."
 }

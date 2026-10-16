@@ -51,6 +51,12 @@ visibility:
                          # surfaces are only 2-3 voxels thick
   min_blob_volume: 0.0015  # m^3, smaller candidate blobs are dropped ...
   min_blob_voxels: 8     # ... as are blobs with fewer voxels
+  unverified_floor_cut: 0.06  # m: voxels less than this above the fitted floor plane (levelled
+                         # frame, y = 0) are left out of the unverified candidates. Floor that only
+                         # one video filmed is not an object, and objects standing on it were joined
+                         # through it into room-sized regions (tabletop_1: 3.4-3.7 m strips named
+                         # "wooden stool" after the objects on them). Only when recon levelled the
+                         # frame on a floor plane; 0 = off; disappeared / appeared are untouched
   weak_alignment_demotes: false  # recon verdict "alignment WEAK" (the two reconstructions do not
                          # line up, so "seen empty" may be misalignment): every disappeared /
                          # appeared blob becomes unverified_before / unverified_after. Off: one

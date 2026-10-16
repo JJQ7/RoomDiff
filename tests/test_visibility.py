@@ -22,9 +22,12 @@ from roomdiff.projection import (
 )
 from roomdiff.recon import write_recon
 from roomdiff.visibility import (
+    CANDIDATE_TYPES,
     FREE,
     OCCUPIED,
     UNKNOWN,
+    Grid,
+    cut_floor,
     label_blobs,
     load_grid,
     make_grid,
@@ -205,6 +208,46 @@ def test_cli_visibility_and_viz(tmp_path):
     result = runner.invoke(app, ["viz", "--out", str(out)])
     assert result.exit_code == 0, result.output
     assert "2 candidate blobs" in result.output and (out / "scene.rrd").exists()
+
+
+# ------------------------------------------------------------------ floor cut
+
+
+def levelled(out):
+    """Mark `<out>/recon/meta.json` as levelled on a RANSAC floor plane (floor at y = 0)."""
+    (out / "recon" / "meta.json").write_text(json.dumps(
+        {"diagnostics": {}, "levelled": True, "level": {"method": "ransac floor plane"}}))
+    return out
+
+
+def test_floor_cut_drops_unverified_voxels_near_the_floor_plane(tmp_path):
+    """Box C (y = -0.3) lies entirely below a cut 6 cm above y = 0: with the recon levelled
+    on a floor plane its unverified blob disappears, the disappeared / appeared blobs of
+    boxes A and B stay, and meta.json records the cut. Without a floor plane in the
+    recon meta the cut is skipped and box C comes back."""
+    out = levelled(make_scene(tmp_path / "cut", [BOX_A, BOX_C], [BOX_B]))
+    meta = run_visibility(out, cfg(unverified_floor_cut=0.06))
+    assert meta["unverified_floor_cut"]["applied"] is True
+    assert meta["unverified_floor_cut"]["removed_voxels"]["unverified_before"] > 0
+    types = [b["type"] for b in blobs_of(out)]
+    assert "disappeared" in types and "appeared" in types
+    assert not any(t.startswith("unverified") for t in types)
+
+    plain = make_scene(tmp_path / "plain", [BOX_A, BOX_C], [BOX_B])
+    meta = run_visibility(plain, cfg(unverified_floor_cut=0.06))
+    assert meta["unverified_floor_cut"]["applied"] is False
+    assert any(b["type"] == "unverified_before" and near_box(b["centroid"], BOX_C)
+               for b in blobs_of(plain))
+
+
+def test_cut_floor_touches_only_the_unverified_masks():
+    grid = Grid(np.array([0.0, -0.1, 0.0]), 0.02, (2, 10, 2))
+    masks = {k: np.ones((2, 10, 2), bool) for k in CANDIDATE_TYPES}
+    removed = cut_floor(masks, grid, 0.055)
+    # voxel centres at y = -0.09, -0.07, ..., 0.09: eight of the ten rows lie below 0.055
+    assert removed == {"unverified_before": 32, "unverified_after": 32}
+    assert masks["disappeared"].all() and masks["appeared"].all()
+    assert masks["unverified_before"].sum() == 8 and masks["unverified_after"].sum() == 8
 
 
 # ------------------------------------------------------------------ alignment gate

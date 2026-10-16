@@ -7,7 +7,8 @@ before the observed surface), else *unknown*. Change candidates compare the two 
 * disappeared: occupied before, free after          (something was removed)
 * appeared:    occupied after,  free before         (something was added)
 * unverified_before / unverified_after: occupied in one recording, never observed by the
-  other (no verdict possible)
+  other (no verdict possible); voxels less than `unverified_floor_cut` above the floor
+  plane are left out of these two (floor that one video filmed is not an object)
 
 Voxels closer than `dist_margin` to a surface of the other recording are ignored
 (residual misalignment), the two change masks get a binary opening with a small cube
@@ -277,6 +278,23 @@ def candidate_masks(
     return masks
 
 
+def cut_floor(masks: dict[str, np.ndarray], grid: Grid, height: float) -> dict[str, int]:
+    """Drop the voxels less than `height` m above the floor plane (y = 0 in the levelled
+    frame) from the unverified candidate masks, in place; returns the voxels removed per
+    type. Floor that only one recording filmed is not an object, and objects standing on
+    it would otherwise be joined through it into one room-sized component (a 3.7 m
+    "wooden stool" on tabletop_1). The disappeared / appeared masks are left alone."""
+    y = grid.origin[1] + (np.arange(grid.dims[1]) + 0.5) * grid.voxel_size
+    low = (y < height)[None, :, None]
+    removed = {}
+    for kind, mask in masks.items():
+        if kind.startswith("unverified"):
+            before = int(mask.sum())
+            mask &= ~low
+            removed[kind] = before - int(mask.sum())
+    return removed
+
+
 def label_blobs(
     mask: np.ndarray, voxel: float, opening: int, min_volume: float, min_voxels: int
 ) -> tuple[np.ndarray, list[int], int]:
@@ -498,6 +516,10 @@ def run_visibility(out_dir: str | Path, cfg: Mapping[str, Any]) -> dict[str, Any
            for s in states]
     raw = candidate_masks(states, far)
     del far
+    floor_cut = float(params.get("unverified_floor_cut") or 0.0)
+    floor_known = bool(recon_meta.get("levelled")) and \
+        (recon_meta.get("level") or {}).get("method") == "ransac floor plane"
+    floor_removed = cut_floor(raw, grid, floor_cut) if floor_cut > 0 and floor_known else None
     times["distance_and_candidates"] = time.perf_counter() - t0
 
     t0 = time.perf_counter()
@@ -577,6 +599,8 @@ def run_visibility(out_dir: str | Path, cfg: Mapping[str, Any]) -> dict[str, Any
         "points": dict(zip(RECORDINGS, n_points)),
         "voxels_per_state": state_counts,
         "candidate_voxels": candidate_voxels,
+        "unverified_floor_cut": {"height_m": floor_cut, "applied": floor_removed is not None,
+                                 "removed_voxels": floor_removed},
         "alignment_verdict": verdict,
         "demoted": demoted,
         "demotion_reason": demotion_reason,
@@ -589,6 +613,12 @@ def run_visibility(out_dir: str | Path, cfg: Mapping[str, Any]) -> dict[str, Any
     vram = f", peak VRAM {peak['allocated']:.2f} GB" if peak else ""
     print(f"[visibility] grid {'x'.join(map(str, grid.dims))} at {100 * grid.voxel_size:.2f} cm"
           f" ({voxel_source}), {times['total']:.1f} s{vram} -> {out}")
+    if floor_cut > 0:
+        print("[visibility] unverified floor cut "
+              + (f"{100 * floor_cut:.0f} cm: " + ", ".join(
+                  f"{v} {k} voxels" for k, v in floor_removed.items()) + " removed"
+                 if floor_removed is not None else
+                 "skipped: the reconstruction is not levelled on a floor plane"))
     if verdict == VERDICT_WEAK:
         print(f"[visibility] {verdict} in recon/meta.json: " + (
             f"{demoted['disappeared']} disappeared / {demoted['appeared']} appeared blobs "

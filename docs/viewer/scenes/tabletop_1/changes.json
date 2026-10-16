@@ -8,8 +8,8 @@
     {
       "id": 1,
       "type": "moved",
-      "label": "white product box",
-      "confidence": 0.915,
+      "label": "white cardboard box",
+      "confidence": 0.972,
       "before": {
         "instance_id": 1,
         "centroid": [
@@ -49,7 +49,7 @@
         },
         "n_points": 4006,
         "blob_ids": [
-          6
+          4
         ],
         "source": "geometry"
       },
@@ -92,7 +92,7 @@
         },
         "n_points": 3558,
         "blob_ids": [
-          7
+          5
         ],
         "source": "geometry"
       },
@@ -135,26 +135,26 @@
         "mask_score": 0.9525,
         "icp_fitness": 1.0,
         "vlm_verdict": "confirmed",
-        "vlm_reason": "The outlined objects are identical white product boxes with the same barcode, text, and red logo, and appear to be the same box in slightly different poses.",
+        "vlm_reason": "The outlined objects are identical white cardboard boxes with the same red logo and barcode, showing only different poses and positions.",
         "vlm_motion_reason": "The box maintains its rectangular shape and orientation relative to the table in both images, indicating it was moved as a whole without deformation."
       },
-      "description": "The white cardboard product box (about 0.3 x 0.3 x 0.1 m) was moved 0.8 m, from the middle of the room to the near part (0.8 m above the floor both times) and rotated about 54 degrees; the later video shows its old spot empty from 40 viewpoints and the earlier video shows the new spot empty from 33 viewpoints.",
+      "description": "The white cardboard box (white, cardboard; about 0.3 x 0.3 x 0.1 m) was moved 0.8 m, from the middle of the room to the near part (0.8 m above the floor both times) and rotated about 54 degrees; the later video shows its old spot empty from 40 viewpoints and the earlier video shows the new spot empty from 33 viewpoints.",
       "crops": {
         "before": "crops/1_before.jpg",
         "before_place": "crops/1_before_place.jpg",
         "after": "crops/1_after.jpg",
         "after_place": "crops/1_after_place.jpg"
       },
-      "attributes": "white cardboard",
-      "object_description": "a rectangular white cardboard box with text and barcode on its side.",
+      "attributes": "white, cardboard",
+      "object_description": "a white rectangular cardboard box with printed text and a barcode on its side.",
       "motion_kind": "rigid",
-      "description_template": "The white product box (white cardboard; about 0.3 x 0.3 x 0.1 m) moved 0.8 m, from the middle of the room to the near part of the room (0.8 m above the floor both times) and turned by about 54 degrees; the after recording saw the old place empty from 40 viewpoints and the before recording saw the new place empty from 33 viewpoints."
+      "description_template": "The white cardboard box (white, cardboard; about 0.3 x 0.3 x 0.1 m) moved 0.8 m, from the middle of the room to the near part of the room (0.8 m above the floor both times) and turned by about 54 degrees; the after recording saw the old place empty from 40 viewpoints and the before recording saw the new place empty from 33 viewpoints."
     },
     {
       "id": 2,
       "type": "moved",
-      "label": "silver trash can",
-      "confidence": 0.908,
+      "label": "decorative fabric runner",
+      "confidence": 0.904,
       "before": {
         "instance_id": 2,
         "centroid": [
@@ -194,7 +194,7 @@
         },
         "n_points": 2866,
         "blob_ids": [
-          25
+          16
         ],
         "source": "geometry"
       },
@@ -237,7 +237,7 @@
         },
         "n_points": 3620,
         "blob_ids": [
-          21
+          12
         ],
         "source": "geometry"
       },
@@ -280,26 +280,26 @@
         "mask_score": 0.8399,
         "icp_fitness": 0.6544,
         "vlm_verdict": "confirmed",
-        "vlm_reason": "The outlined objects are identical silver trash cans with the same cylindrical shape, color, and visible label design, consistent across both images despite different camera angles and lighting.",
-        "vlm_motion_reason": "The trash can appears unchanged in shape and orientation between the two images, indicating it was moved as a whole."
+        "vlm_reason": "The outlined objects are identical in color, pattern, and material, and appear to be the same decorative fabric runner, just in different poses or positions within the room.",
+        "vlm_motion_reason": "The object's shape and orientation remain consistent between the two images, indicating it was moved as a whole without deformation."
       },
-      "description": "The silver metal trash can (about 0.5 x 0.3 x 0.2 m) was moved 0.2 m within the near left part of the room (on the floor both times) and rotated about 14 degrees; the later video shows its old spot empty from 7 viewpoints and the earlier video shows the new spot empty from 10 viewpoints.",
+      "description": "The decorative fabric runner (blue patterned fabric; about 0.5 x 0.3 x 0.2 m) was moved 0.2 m within the near left part of the room (on the floor both times) and rotated about 14 degrees; the later video shows its old spot empty from 7 viewpoints and the earlier video shows the new spot empty from 10 viewpoints.",
       "crops": {
         "before": "crops/2_before.jpg",
         "before_place": "crops/2_before_place.jpg",
         "after": "crops/2_after.jpg",
         "after_place": "crops/2_after_place.jpg"
       },
-      "attributes": "silver metal",
-      "object_description": "a cylindrical silver metal trash can with a lid.",
+      "attributes": "blue patterned fabric",
+      "object_description": "a blue patterned fabric runner draped over the edge of a wooden surface.",
       "motion_kind": "rigid",
-      "description_template": "The silver trash can (silver metal; about 0.5 x 0.3 x 0.2 m) moved 0.2 m within the near left part of the room (on the floor both times) and turned by about 14 degrees; the after recording saw the old place empty from 7 viewpoints and the before recording saw the new place empty from 10 viewpoints."
+      "description_template": "The decorative fabric runner (blue patterned fabric; about 0.5 x 0.3 x 0.2 m) moved 0.2 m within the near left part of the room (on the floor both times) and turned by about 14 degrees; the after recording saw the old place empty from 7 viewpoints and the before recording saw the new place empty from 10 viewpoints."
     },
     {
       "id": 3,
       "type": "removed",
       "label": "tea canister",
-      "confidence": 0.944,
+      "confidence": 0.974,
       "before": {
         "instance_id": 3,
         "centroid": [
@@ -339,7 +339,7 @@
         },
         "n_points": 2237,
         "blob_ids": [
-          9
+          6
         ],
         "source": "geometry"
       },
@@ -353,309 +353,23 @@
         "mask_score": 0.957,
         "view_consistency": 0.8548,
         "vlm_verdict": "confirmed",
-        "vlm_reason": "The tea canister is no longer in the highlighted spot in image 2; the area now contains only the wooden table surface."
+        "vlm_reason": "The tea canister is present in image 1 but absent in image 2 within the highlighted region."
       },
-      "description": "The black and yellow tea canister (about 25 x 20 x 19 cm), which was 0.8 m above the floor in the middle of the room, was removed: the later video looked at that spot from 40 viewpoints and saw it empty.",
+      "description": "The tea canister (black and yellow; about 25 x 20 x 19 cm), which was 0.8 m above the floor in the middle of the room, was removed: the later video looked at that spot from 40 viewpoints and saw it empty.",
       "crops": {
         "before": "crops/3_before.jpg",
         "after": "crops/3_after.jpg"
       },
       "attributes": "black and yellow",
-      "object_description": "a cylindrical container for tea with a black lid and yellow label.",
+      "object_description": "a cylindrical container for tea with a perforated lid.",
       "motion_kind": null,
       "description_template": "The tea canister (black and yellow; about 25 x 20 x 19 cm), which was 0.8 m above the floor in the middle of the room, was removed: the after recording looked at that spot from 40 viewpoints and saw it empty."
     },
     {
-      "id": 9,
-      "type": "unverified",
-      "label": "wooden stool",
-      "confidence": 0.452,
-      "before": {
-        "instance_id": 5,
-        "centroid": [
-          0.5195000171661377,
-          0.012799999676644802,
-          -1.5161999464035034
-        ],
-        "aabb": [
-          [
-            0.08730000257492065,
-            -0.01759999990463257,
-            -2.051100015640259
-          ],
-          [
-            1.2146999835968018,
-            0.15639999508857727,
-            1.3020000457763672
-          ]
-        ],
-        "extents": [
-          1.127500057220459,
-          0.17399999499320984,
-          3.353100061416626
-        ],
-        "obb": {
-          "center": [
-            0.8225,
-            0.0694,
-            -0.364
-          ],
-          "extents": [
-            0.5656,
-            0.174,
-            3.3989
-          ],
-          "yaw_deg": 18.63
-        },
-        "n_points": 3034,
-        "blob_ids": [
-          8
-        ],
-        "source": "geometry"
-      },
-      "after": null,
-      "transform": null,
-      "evidence": {
-        "free_rays": 0,
-        "free_frames_mean": 0.0,
-        "observing_views": 0,
-        "occ_points": 43322,
-        "mask_score": 0.8909,
-        "view_consistency": 0.9156,
-        "seen_in": "before",
-        "vlm_verdict": "confirmed",
-        "vlm_reason": "The outline covers a light blue cup and a wooden stool, both distinct movable objects."
-      },
-      "description": "The light brown wooden stool (about 3.4 x 0.6 x 0.2 m), on the floor in the far right part of the room, was seen only in the earlier video; the later video never looked at that spot, so this possible change cannot be verified.",
-      "crops": {
-        "before": "crops/9_before.jpg",
-        "after": "crops/9_after.jpg"
-      },
-      "attributes": "light brown wood",
-      "object_description": "a small wooden stool with a flat seat and four legs.",
-      "motion_kind": null,
-      "description_template": "A wooden stool (light brown wood; about 3.4 x 0.6 x 0.2 m), on the floor in the far right part of the room, was seen only in the before recording; the after recording never looked at that spot, so this possible change cannot be verified."
-    },
-    {
-      "id": 10,
-      "type": "unverified",
-      "label": "black office chair",
-      "confidence": 0.445,
-      "before": null,
-      "after": {
-        "instance_id": 5,
-        "centroid": [
-          -1.8214999437332153,
-          0.49050000309944153,
-          -1.6512999534606934
-        ],
-        "aabb": [
-          [
-            -2.445199966430664,
-            0.014100000262260437,
-            -2.182300090789795
-          ],
-          [
-            -1.340999960899353,
-            0.8641999959945679,
-            -1.378499984741211
-          ]
-        ],
-        "extents": [
-          1.104200005531311,
-          0.8501999974250793,
-          0.8036999702453613
-        ],
-        "obb": {
-          "center": [
-            -1.8749,
-            0.4392,
-            -1.6584
-          ],
-          "extents": [
-            0.8196,
-            0.8502,
-            0.8753
-          ],
-          "yaw_deg": -40.84
-        },
-        "n_points": 4369,
-        "blob_ids": [
-          13
-        ],
-        "source": "geometry"
-      },
-      "transform": null,
-      "evidence": {
-        "free_rays": 11,
-        "free_frames_mean": 0.02,
-        "observing_views": 0,
-        "occ_points": 2959,
-        "mask_score": 0.8187,
-        "view_consistency": 0.9627,
-        "seen_in": "after",
-        "vlm_verdict": "confirmed",
-        "vlm_reason": "The outline traces the legs of a chair, a distinct movable object."
-      },
-      "description": "The black plastic office chair (about 0.9 x 0.9 x 0.8 m), on the floor in the far left part of the room, was seen only in the later video; the earlier video never looked at that spot, so this possible change cannot be verified.",
-      "crops": {
-        "after": "crops/10_after.jpg",
-        "before": "crops/10_before.jpg"
-      },
-      "attributes": "black plastic",
-      "object_description": "a black plastic office chair with a swivel base and casters.",
-      "motion_kind": null,
-      "description_template": "A black office chair (black plastic; about 0.9 x 0.9 x 0.8 m), on the floor in the far left part of the room, was seen only in the after recording; the before recording never looked at that spot, so this possible change cannot be verified."
-    },
-    {
-      "id": 11,
-      "type": "unverified",
-      "label": "blue suitcase",
-      "confidence": 0.429,
-      "before": {
-        "instance_id": 4,
-        "centroid": [
-          -0.3483000099658966,
-          -0.011300000362098217,
-          -1.9004000425338745
-        ],
-        "aabb": [
-          [
-            -1.733199954032898,
-            -0.15299999713897705,
-            -3.018399953842163
-          ],
-          [
-            0.6128000020980835,
-            0.037300001829862595,
-            0.47999998927116394
-          ]
-        ],
-        "extents": [
-          2.3459999561309814,
-          0.19040000438690186,
-          3.4983999729156494
-        ],
-        "obb": {
-          "center": [
-            -0.569,
-            -0.0578,
-            -1.1686
-          ],
-          "extents": [
-            0.9957,
-            0.1904,
-            3.7192
-          ],
-          "yaw_deg": -23.06
-        },
-        "n_points": 18805,
-        "blob_ids": [
-          5
-        ],
-        "source": "geometry"
-      },
-      "after": null,
-      "transform": null,
-      "evidence": {
-        "free_rays": 59,
-        "free_frames_mean": 0.02,
-        "observing_views": 0,
-        "occ_points": 32299,
-        "mask_score": 0.8567,
-        "view_consistency": 0.8596,
-        "seen_in": "before",
-        "vlm_verdict": "confirmed",
-        "vlm_reason": "The contour covers a blue suitcase, a distinct movable object."
-      },
-      "description": "The blue hard-shell suitcase (about 3.7 x 1.0 x 0.2 m), on the floor in the far part of the room, was seen only in the earlier video; the later video never looked at that spot, so this possible change cannot be verified.",
-      "crops": {
-        "before": "crops/11_before.jpg",
-        "after": null
-      },
-      "attributes": "blue hard-shell",
-      "object_description": "A blue hard-shell suitcase with wheels and a combination lock, standing on a tiled floor next to a wooden table.",
-      "motion_kind": null,
-      "description_template": "A blue suitcase (blue hard-shell; about 3.7 x 1.0 x 0.2 m), on the floor in the far part of the room, was seen only in the before recording; the after recording never looked at that spot, so this possible change cannot be verified."
-    },
-    {
-      "id": 12,
-      "type": "unverified",
-      "label": "wooden stool",
-      "confidence": 0.401,
-      "before": null,
-      "after": {
-        "instance_id": 3,
-        "centroid": [
-          1.18340003490448,
-          0.007300000172108412,
-          -2.2704999446868896
-        ],
-        "aabb": [
-          [
-            0.12439999729394913,
-            -0.049800001084804535,
-            -2.9814999103546143
-          ],
-          [
-            2.3069000244140625,
-            0.1242000013589859,
-            -1.305899977684021
-          ]
-        ],
-        "extents": [
-          2.182499885559082,
-          0.17409999668598175,
-          1.6756000518798828
-        ],
-        "obb": {
-          "center": [
-            1.1603,
-            0.0372,
-            -1.9755
-          ],
-          "extents": [
-            1.9408,
-            0.1741,
-            1.5452
-          ],
-          "yaw_deg": 19.16
-        },
-        "n_points": 9517,
-        "blob_ids": [
-          12
-        ],
-        "source": "geometry"
-      },
-      "transform": null,
-      "evidence": {
-        "free_rays": 105,
-        "free_frames_mean": 0.19,
-        "observing_views": 0,
-        "occ_points": 17266,
-        "mask_score": 0.7614,
-        "view_consistency": 0.8445,
-        "seen_in": "after",
-        "vlm_verdict": "confirmed",
-        "vlm_reason": "The outline traces a wooden stool and part of a wooden table, both distinct movable furniture items."
-      },
-      "description": "The light brown wooden stool (about 1.9 x 1.5 x 0.2 m), on the floor in the far right part of the room, was seen only in the later video; the earlier video never looked at that spot, so this possible change cannot be verified.",
-      "crops": {
-        "after": "crops/12_after.jpg",
-        "before": "crops/12_before.jpg"
-      },
-      "attributes": "light brown wood",
-      "object_description": "A small, simple wooden stool with four legs and a flat seat, placed on a tiled floor next to a table.",
-      "motion_kind": null,
-      "description_template": "A wooden stool (light brown wood; about 1.9 x 1.5 x 0.2 m), on the floor in the far right part of the room, was seen only in the after recording; the before recording never looked at that spot, so this possible change cannot be verified."
-    }
-  ],
-  "rejected": [
-    {
       "id": 4,
       "type": "removed",
       "label": "office chair leg",
-      "confidence": 0.731,
+      "confidence": 0.625,
       "before": {
         "instance_id": 6,
         "centroid": [
@@ -714,100 +428,25 @@
           "geom_term": 0.6661,
           "partners_visible": 4
         },
-        "vlm_verdict": "rejected",
-        "vlm_reason": "in place: same; The region in both images contains the same office chair leg and floor, with no object replacement or removal.",
-        "vlm_replace_answer": "same"
+        "vlm_verdict": "confirmed",
+        "vlm_reason": "in place: different; The chair leg in image 1 has visible dirt and debris, while in image 2 it appears clean, indicating cleaning occurred.",
+        "vlm_replace_answer": "different"
       },
-      "description": "An object about 1.06 x 0.43 x 1.25 m was removed from (-1.66, 0.08, -2.47); the after recording saw that space empty in 7 views.",
+      "description": "The office chair leg (black metal; about 1.5 x 0.7 x 0.4 m), which was on the floor in the far part of the room, was removed: the later video looked at that spot from 7 viewpoints and saw it empty.",
       "crops": {
         "before": "crops/4_before.jpg",
         "after": "crops/4_after.jpg"
       },
       "attributes": "black metal",
-      "object_description": "a black metal leg of an office chair with a caster wheel.",
-      "motion_kind": null
-    },
-    {
-      "id": 5,
-      "type": "removed",
-      "label": "wooden floor",
-      "confidence": 0.676,
-      "before": {
-        "instance_id": 7,
-        "centroid": [
-          -0.6248999834060669,
-          0.1265999972820282,
-          2.4625000953674316
-        ],
-        "aabb": [
-          [
-            -0.9018999934196472,
-            -0.05700000002980232,
-            0.6481000185012817
-          ],
-          [
-            -0.2273000031709671,
-            0.7745000123977661,
-            3.4735000133514404
-          ]
-        ],
-        "extents": [
-          0.6747000217437744,
-          0.8314999938011169,
-          2.8252999782562256
-        ],
-        "obb": {
-          "center": [
-            -0.5539,
-            0.3587,
-            2.0685
-          ],
-          "extents": [
-            0.4006,
-            0.8315,
-            2.8528
-          ],
-          "yaw_deg": -10.06
-        },
-        "n_points": 2943,
-        "blob_ids": [],
-        "source": "appearance"
-      },
-      "after": null,
-      "transform": null,
-      "evidence": {
-        "free_rays": 2172,
-        "free_frames_mean": 2.42,
-        "observing_views": 3,
-        "occ_points": 2943,
-        "mask_score": 0.8502,
-        "view_consistency": 0.9251,
-        "appearance": {
-          "cluster": 2,
-          "frames_supporting": 3,
-          "mean_score": 0.9851,
-          "feat_term": 0.2502,
-          "geom_term": 0.7348,
-          "partners_visible": 2
-        },
-        "vlm_verdict": "rejected",
-        "vlm_reason": "in place: same; Both images show the same wooden floor surface within the marked region, with no object present in either image.",
-        "vlm_replace_answer": "same"
-      },
-      "description": "An object about 0.67 x 0.83 x 2.83 m was removed from (-0.62, 0.13, 2.46); the after recording saw that space empty in 3 views.",
-      "crops": {
-        "before": "crops/5_before.jpg",
-        "after": "crops/5_after.jpg"
-      },
-      "attributes": "brown, smooth",
-      "object_description": "a section of a polished wooden floor surface.",
-      "motion_kind": null
+      "object_description": "a black metal leg of an office chair with wheels.",
+      "motion_kind": null,
+      "description_template": "The office chair leg (black metal; about 1.5 x 0.7 x 0.4 m), which was on the floor in the far part of the room, was removed: the after recording looked at that spot from 7 viewpoints and saw it empty."
     },
     {
       "id": 6,
       "type": "removed",
       "label": "wooden coffee table",
-      "confidence": 0.535,
+      "confidence": 0.446,
       "before": {
         "instance_id": 8,
         "centroid": [
@@ -867,28 +506,29 @@
           "partners_visible": 4
         },
         "replace_overlap": 0.3259,
-        "vlm_verdict": "rejected",
-        "vlm_reason": "in place: same; The region inside the contour in both images contains a wooden table surface with a box of biscuits on it, indicating the same object is present in both images.",
-        "vlm_replace_answer": "same"
+        "vlm_verdict": "confirmed",
+        "vlm_reason": "in place: different; The area in image 1 contains a wooden table with various items, while image 2 shows a box of cookies in the same spot, indicating a replacement of objects.",
+        "vlm_replace_answer": "different"
       },
-      "description": "An object about 0.68 x 0.03 x 0.82 m was removed from (-0.10, 0.75, 0.75); the after recording saw that space empty in 38 views.",
+      "description": "The wooden coffee table (light brown wood; about 0.9 x 0.5 x 0.1 m), which was 0.8 m above the floor in the near part of the room, was replaced by the box of cookies: the later video looked at that spot from 38 viewpoints and saw the box of cookies there instead.",
       "crops": {
         "before": "crops/6_before.jpg",
         "after": "crops/6_after.jpg"
       },
       "replaced_by": 7,
       "attributes": "light brown wood",
-      "object_description": "a light brown wooden coffee table with a smooth surface and visible grain.",
-      "motion_kind": null
+      "object_description": "a light brown wooden coffee table with a smooth surface and rounded edges.",
+      "motion_kind": null,
+      "description_template": "The wooden coffee table (light brown wood; about 0.9 x 0.5 x 0.1 m), which was 0.8 m above the floor in the near part of the room, was replaced by the box of cookies: the after recording looked at that spot from 38 viewpoints and saw the box of cookies there instead."
     },
     {
       "id": 7,
       "type": "added",
-      "label": "box of biscuits",
-      "confidence": 0.898,
+      "label": "box of cookies",
+      "confidence": 0.724,
       "before": null,
       "after": {
-        "instance_id": 6,
+        "instance_id": 4,
         "centroid": [
           -0.24560000002384186,
           0.8073999881744385,
@@ -945,28 +585,29 @@
           "partners_visible": 24
         },
         "replace_overlap": 0.3259,
-        "vlm_verdict": "rejected",
-        "vlm_reason": "in place: same; The region inside the contour in both images contains a wooden table surface with a box of biscuits on it, indicating the same object is present in both images.",
-        "vlm_replace_answer": "same"
+        "vlm_verdict": "confirmed",
+        "vlm_reason": "in place: different; The area in image 1 contains a wooden table with various items, while image 2 shows a box of cookies in the same spot, indicating a replacement of objects.",
+        "vlm_replace_answer": "different"
       },
-      "description": "An object about 0.28 x 0.10 x 0.28 m was added at (-0.25, 0.81, 0.18); the before recording saw that space empty in 47 views.",
+      "description": "The box of cookies (blue and white cardboard; about 26 x 25 x 10 cm) took the place of the wooden coffee table 0.8 m above the floor in the middle of the room: the before recording looked at that spot from 47 viewpoints and saw the wooden coffee table there.",
       "crops": {
         "after": "crops/7_after.jpg",
         "before": "crops/7_before.jpg"
       },
       "replaces": 6,
       "attributes": "blue and white cardboard",
-      "object_description": "a rectangular cardboard box of biscuits with a colorful label featuring images of cookies.",
-      "motion_kind": null
+      "object_description": "a rectangular cardboard box of 'Sunny Fields' brand cookies sitting on a wooden surface.",
+      "motion_kind": null,
+      "description_template": "The box of cookies (blue and white cardboard; about 26 x 25 x 10 cm) took the place of the wooden coffee table 0.8 m above the floor in the middle of the room: the before recording looked at that spot from 47 viewpoints and saw the wooden coffee table there."
     },
     {
       "id": 8,
       "type": "added",
       "label": "wooden coffee table",
-      "confidence": 0.764,
+      "confidence": 0.501,
       "before": null,
       "after": {
-        "instance_id": 7,
+        "instance_id": 5,
         "centroid": [
           -0.08129999786615372,
           0.7419000267982483,
@@ -1022,89 +663,314 @@
           "geom_term": 0.0,
           "partners_visible": 2
         },
-        "vlm_verdict": "rejected",
-        "vlm_reason": "in place: same; The blue bottle is present in both images, and the surface is the same wooden table top.",
-        "vlm_replace_answer": "same"
+        "vlm_verdict": "confirmed",
+        "vlm_reason": "in place: different; Image 2 contains additional objects (scissors and a box) not present in Image 1.",
+        "vlm_replace_answer": "different"
       },
-      "description": "An object about 0.70 x 0.02 x 0.37 m was added at (-0.08, 0.74, -0.63); the before recording saw that space empty in 36 views.",
+      "description": "A wooden coffee table (light brown wood; about 0.7 x 0.4 x 0.1 m) appeared 0.8 m above the floor in the middle of the room: the earlier video looked at that spot from 36 viewpoints and saw it empty.",
       "crops": {
         "after": "crops/8_after.jpg",
         "before": "crops/8_before.jpg"
       },
       "attributes": "light brown wood",
       "object_description": "a light brown wooden coffee table with a visible grain pattern and a lower shelf.",
-      "motion_kind": null
+      "motion_kind": null,
+      "description_template": "A wooden coffee table (light brown wood; about 0.7 x 0.4 x 0.1 m) appeared 0.8 m above the floor in the middle of the room: the before recording looked at that spot from 36 viewpoints and saw it empty."
     },
     {
-      "id": 13,
+      "id": 10,
       "type": "unverified",
-      "label": "wooden stool",
-      "confidence": 0.343,
-      "before": null,
-      "after": {
-        "instance_id": 4,
+      "label": "suitcase",
+      "confidence": 0.42,
+      "before": {
+        "instance_id": 5,
         "centroid": [
-          -1.2253999710083008,
-          -0.008200000040233135,
-          -1.2512999773025513
+          -1.153499960899353,
+          0.5534999966621399,
+          0.4456999897956848
         ],
         "aabb": [
           [
-            -1.962499976158142,
-            -0.023099999874830246,
-            -2.000499963760376
+            -1.253100037574768,
+            0.006399999838322401,
+            0.21580000221729279
           ],
           [
-            -0.7950000166893005,
-            0.1437000036239624,
-            -0.8202999830245972
+            -0.9822999835014343,
+            0.9832000136375427,
+            0.5662999749183655
           ]
         ],
         "extents": [
-          1.1675000190734863,
-          0.16680000722408295,
-          1.1801999807357788
+          0.27070000767707825,
+          0.9768000245094299,
+          0.3504999876022339
         ],
         "obb": {
           "center": [
-            -1.5048,
-            0.0603,
-            -1.3587
+            -1.1483,
+            0.4948,
+            0.4265
           ],
           "extents": [
-            1.239,
-            0.1668,
-            0.9574
+            0.1825,
+            0.9768,
+            0.3819
           ],
-          "yaw_deg": -19.9
+          "yaw_deg": 26.76
         },
-        "n_points": 4686,
+        "n_points": 4991,
         "blob_ids": [
-          10
+          3
         ],
         "source": "geometry"
       },
+      "after": null,
       "transform": null,
       "evidence": {
         "free_rays": 0,
         "free_frames_mean": 0.0,
         "observing_views": 0,
-        "occ_points": 68294,
-        "mask_score": 0.6543,
-        "view_consistency": 0.7158,
-        "seen_in": "after",
-        "vlm_verdict": "rejected",
-        "vlm_reason": "The highlighted region covers part of a wooden table and tiled floor, which are real furniture and flooring."
+        "occ_points": 23398,
+        "mask_score": 0.8398,
+        "view_consistency": 0.879,
+        "seen_in": "before",
+        "reason_class": "never_observed",
+        "vlm_verdict": "confirmed",
+        "vlm_reason": "The contour outlines a dark-colored suitcase with wheels and a handle, a distinct movable object."
       },
-      "description": "An object about 1.17 x 0.17 x 1.18 m at (-1.23, -0.01, -1.25) was seen only in the after recording; the before recording never observed that space, so no verdict is possible.",
+      "description": "A suitcase (dark grey hard shell; about 1.0 x 0.4 x 0.2 m), 0.2 m above the floor on the left side of the room, was seen only in the earlier video; the later video never looked at that spot, so this possible change cannot be verified.",
       "crops": {
-        "after": "crops/13_after.jpg",
-        "before": null
+        "before": "crops/10_before.jpg",
+        "after": null
+      },
+      "attributes": "dark grey hard shell",
+      "object_description": "a dark grey hard-shell suitcase with wheels and a combination lock, standing on a tiled floor.",
+      "motion_kind": null,
+      "description_template": "A suitcase (dark grey hard shell; about 1.0 x 0.4 x 0.2 m), 0.2 m above the floor on the left side of the room, was seen only in the before recording; the after recording never looked at that spot, so this possible change cannot be verified."
+    },
+    {
+      "id": 11,
+      "type": "unverified",
+      "label": "black office chair",
+      "confidence": 0.409,
+      "before": null,
+      "after": {
+        "instance_id": 3,
+        "centroid": [
+          -1.8214999437332153,
+          0.49050000309944153,
+          -1.6512999534606934
+        ],
+        "aabb": [
+          [
+            -2.445199966430664,
+            0.014100000262260437,
+            -2.182300090789795
+          ],
+          [
+            -1.340999960899353,
+            0.8641999959945679,
+            -1.378499984741211
+          ]
+        ],
+        "extents": [
+          1.104200005531311,
+          0.8501999974250793,
+          0.8036999702453613
+        ],
+        "obb": {
+          "center": [
+            -1.8749,
+            0.4392,
+            -1.6584
+          ],
+          "extents": [
+            0.8196,
+            0.8502,
+            0.8753
+          ],
+          "yaw_deg": -40.84
+        },
+        "n_points": 4369,
+        "blob_ids": [
+          8
+        ],
+        "source": "geometry"
+      },
+      "transform": null,
+      "evidence": {
+        "free_rays": 11,
+        "free_frames_mean": 0.02,
+        "observing_views": 0,
+        "occ_points": 2959,
+        "mask_score": 0.8187,
+        "view_consistency": 0.9627,
+        "seen_in": "after",
+        "reason_class": "never_observed",
+        "vlm_verdict": "confirmed",
+        "vlm_reason": "The outline traces the base of a chair, a distinct movable object."
+      },
+      "description": "A black office chair (black plastic; about 0.9 x 0.9 x 0.8 m), on the floor in the far left part of the room, was seen only in the later video; the earlier video never looked at that spot, so this possible change cannot be verified.",
+      "crops": {
+        "after": "crops/11_after.jpg",
+        "before": "crops/11_before.jpg"
+      },
+      "attributes": "black plastic",
+      "object_description": "the base of a black office chair with five legs.",
+      "motion_kind": null,
+      "description_template": "A black office chair (black plastic; about 0.9 x 0.9 x 0.8 m), on the floor in the far left part of the room, was seen only in the after recording; the before recording never looked at that spot, so this possible change cannot be verified."
+    }
+  ],
+  "rejected": [
+    {
+      "id": 5,
+      "type": "removed",
+      "label": "wall",
+      "confidence": 0.56,
+      "before": {
+        "instance_id": 7,
+        "centroid": [
+          -0.6248999834060669,
+          0.1265999972820282,
+          2.4625000953674316
+        ],
+        "aabb": [
+          [
+            -0.9018999934196472,
+            -0.05700000002980232,
+            0.6481000185012817
+          ],
+          [
+            -0.2273000031709671,
+            0.7745000123977661,
+            3.4735000133514404
+          ]
+        ],
+        "extents": [
+          0.6747000217437744,
+          0.8314999938011169,
+          2.8252999782562256
+        ],
+        "obb": {
+          "center": [
+            -0.5539,
+            0.3587,
+            2.0685
+          ],
+          "extents": [
+            0.4006,
+            0.8315,
+            2.8528
+          ],
+          "yaw_deg": -10.06
+        },
+        "n_points": 2943,
+        "blob_ids": [],
+        "source": "appearance"
+      },
+      "after": null,
+      "transform": null,
+      "evidence": {
+        "free_rays": 2172,
+        "free_frames_mean": 2.42,
+        "observing_views": 3,
+        "occ_points": 2943,
+        "mask_score": 0.8502,
+        "view_consistency": 0.9251,
+        "appearance": {
+          "cluster": 2,
+          "frames_supporting": 3,
+          "mean_score": 0.9851,
+          "feat_term": 0.2502,
+          "geom_term": 0.7348,
+          "partners_visible": 2
+        },
+        "vlm_verdict": "rejected",
+        "vlm_reason": "in place: same; The region in image 1 is a wall, while in image 2 it is a wooden floor, indicating a change in the surface. (answered different; object1=False, object2=False: same)",
+        "vlm_replace_answer": "same",
+        "reason_class": "room_or_surface"
+      },
+      "description": "An object about 0.67 x 0.83 x 2.83 m was removed from (-0.62, 0.13, 2.46); the after recording saw that space empty in 3 views.",
+      "crops": {
+        "before": "crops/5_before.jpg",
+        "after": "crops/5_after.jpg"
+      },
+      "attributes": "brown, smooth",
+      "object_description": "a section of a brown, smooth wall.",
+      "motion_kind": null
+    },
+    {
+      "id": 9,
+      "type": "unverified",
+      "label": "wooden table top",
+      "confidence": 0.468,
+      "before": {
+        "instance_id": 4,
+        "centroid": [
+          0.39649999141693115,
+          0.04529999941587448,
+          2.7599000930786133
+        ],
+        "aabb": [
+          [
+            -0.09679999947547913,
+            -0.043800000101327896,
+            2.210700035095215
+          ],
+          [
+            1.0622999668121338,
+            0.19859999418258667,
+            3.2578001022338867
+          ]
+        ],
+        "extents": [
+          1.15910005569458,
+          0.24240000545978546,
+          1.0470999479293823
+        ],
+        "obb": {
+          "center": [
+            0.5224,
+            0.0774,
+            2.6786
+          ],
+          "extents": [
+            1.1973,
+            0.2424,
+            0.9516
+          ],
+          "yaw_deg": 11.38
+        },
+        "n_points": 9361,
+        "blob_ids": [
+          7
+        ],
+        "source": "geometry"
+      },
+      "after": null,
+      "transform": null,
+      "evidence": {
+        "free_rays": 0,
+        "free_frames_mean": 0.0,
+        "observing_views": 0,
+        "occ_points": 3337,
+        "mask_score": 0.9362,
+        "view_consistency": 0.9637,
+        "seen_in": "before",
+        "reason_class": "never_observed",
+        "vlm_verdict": "rejected",
+        "vlm_reason": "The outline covers part of a wooden table surface, which is part of the room's furniture."
+      },
+      "description": "An object about 1.16 x 0.24 x 1.05 m at (0.40, 0.05, 2.76) was seen only in the before recording; the after recording never observed that space, so no verdict is possible.",
+      "crops": {
+        "before": "crops/9_before.jpg",
+        "after": null
       },
       "attributes": "light brown wood",
-      "object_description": "a small wooden stool with four legs and a square seat.",
+      "object_description": "a smooth, light brown wooden surface forming part of a table.",
       "motion_kind": null
     }
   ],
-  "summary": "3 changes: 2 moved, 0 added, 1 removed; 4 unverified. The white cardboard box was moved closer to the camera and rotated slightly, while the silver trash can was shifted slightly within the near left area and also rotated. The black and yellow tea canister was removed from its central position. Four other items \u2014 a light brown stool, a black office chair, a blue suitcase, and another light brown stool \u2014 were seen only in one video or the other, but their presence or absence cannot be verified due to limited camera coverage."
+  "summary": "7 changes: 2 moved, 2 added, 3 removed; 2 unverified. The white cardboard box and decorative fabric runner were moved within the room, while the tea canister and office chair leg were removed. The wooden coffee table was replaced by a box of cookies, and a smaller wooden coffee table was added in the middle. Two items\u2014a suitcase and a black office chair\u2014are unverified changes because the later or earlier video did not capture the spot where they were seen."
 }

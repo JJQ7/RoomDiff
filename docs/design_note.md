@@ -62,6 +62,22 @@ voxel channel finds there. A size rule (demote only blobs shorter than about 1.2
 separates the cars from the signs and bumpers on these two pairs) is fitted on 11 changes
 and was not adopted.
 
+*Floor is not an object.* An unverified blob is occupied space the other recording never
+looked at, and the floor is occupied space: on the top-down tabletop videos the first
+run's unverified regions were patches of floor that one video had filmed, joined through
+the floor with whatever stood on them, and SAM's mask then followed the floor and the
+table edge to 3.4-3.7 m; the judge, shown a crop with a stool or a suitcase in it,
+confirmed "a distinct object" and named it so. Since 16 October the voxels less than 6 cm
+above the fitted floor plane are left out of the two unverified masks before the
+components are labelled (`visibility.unverified_floor_cut`, only when the recon levelled
+the frame on a floor plane; the disappeared / appeared masks are untouched, since a
+removed object leaves free space, not floor). Objects standing on an unobserved patch of
+floor keep their own blobs: tabletop_1's four strips become the suitcase and the chair,
+tabletop_3's 2.6 m "wooden table" the stool, bucket, brush and cookie box on that floor,
+and every reported change of the three pairs stays the same. On the 20 reported benchmark
+pairs the unverified regions that pass the size filters go from 109 to 111 (some floor
+patches vanish, others split into the objects on them); they are not scored.
+
 ## 2b. Appearance channel: what the voxels cannot see
 For every keyframe we pick the two best co-visible keyframes of the other recording (same
 surfaces, depth-consistent after reprojection). Each DINOv3 patch of a keyframe is
@@ -192,7 +208,9 @@ the LiDAR meshes with 1.7-2.9 cm median residual, but at a scale of 0.55-0.57 fo
 recordings (the two scans of a pair agree within 0.7-3.6 %), i.e. 1.8x too large, while
 the relative geometry (a 0.44 m move, a 54 deg turn) is fine. (3) One Pi3X pass needs one
 image size: mixed portrait / landscape pairs are handled by centre-cropping both videos to
-squares (see below), with a warning from `scripts/check_video.py`.
+squares (see below), with a warning from `scripts/check_video.py`. (4) Floor is not an
+object: the first run's unverified regions on these top-down videos were floor patches
+named after whatever stood on them (section 2, floor cut).
 
 *No-change control (14 October).* The before video of tabletop_2 cut into its first and
 second half, two sweeps of the same unchanged table, run as a pair: the reconstructions

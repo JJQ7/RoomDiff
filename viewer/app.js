@@ -708,6 +708,7 @@ async function main() {
   });
   if (!changes.length) list.append(el('li', 'empty', 'No changes in changes.json.'));
   spreadLabels();
+  updateLabels(); // unverified labels stay hidden until their region is selected
   buildHeader(scene, doc, counts);
   buildFilters(counts);
 

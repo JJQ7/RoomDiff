@@ -9,7 +9,7 @@
       "id": 1,
       "type": "moved",
       "label": "blue laundry detergent",
-      "confidence": 0.952,
+      "confidence": 0.978,
       "before": {
         "instance_id": 1,
         "centroid": [
@@ -136,9 +136,9 @@
         "icp_fitness": 0.9977,
         "vlm_verdict": "confirmed",
         "vlm_reason": "The blue laundry detergent bottle is identical in color, label, shape, and material in both images, indicating it is the same object.",
-        "vlm_motion_reason": "The blue detergent bottle appears unchanged in shape and orientation between the two images, indicating it was moved as a whole."
+        "vlm_motion_reason": "The blue detergent bottle appears unchanged in shape and orientation between the two images, indicating it was moved as a whole without deformation."
       },
-      "description": "The blue laundry detergent (blue plastic with white cap; about 0.4 x 0.3 x 0.1 m) was shifted 0.5 m, from near the front of the room to the middle (0.8 m above the floor both times) and rotated about 24 degrees; the later video shows its old spot empty from 23 viewpoints and the earlier video shows the new spot empty from 38 viewpoints.",
+      "description": "The blue laundry detergent (blue plastic with white cap; about 0.4 x 0.3 x 0.1 m) was moved 0.5 m, from the near part of the room to the middle of the room (0.8 m above the floor both times) and rotated by about 24 degrees; the later video shows its old spot empty from 23 viewpoints and the earlier video shows the new spot empty from 38 viewpoints.",
       "crops": {
         "before": "crops/1_before.jpg",
         "before_place": "crops/1_before_place.jpg",
@@ -146,15 +146,15 @@
         "after_place": "crops/1_after_place.jpg"
       },
       "attributes": "blue plastic with white cap",
-      "object_description": "a blue plastic bottle of laundry detergent with a white cap, sitting on a wooden table.",
+      "object_description": "a blue plastic bottle of laundry detergent with a white cap, standing on a wooden table.",
       "motion_kind": "rigid",
       "description_template": "The blue laundry detergent (blue plastic with white cap; about 0.4 x 0.3 x 0.1 m) moved 0.5 m, from the near part of the room to the middle of the room (0.8 m above the floor both times) and turned by about 24 degrees; the after recording saw the old place empty from 23 viewpoints and the before recording saw the new place empty from 38 viewpoints."
     },
     {
       "id": 2,
       "type": "removed",
-      "label": "canned food",
-      "confidence": 0.95,
+      "label": "yellow can",
+      "confidence": 0.979,
       "before": {
         "instance_id": 2,
         "centroid": [
@@ -208,26 +208,190 @@
         "mask_score": 0.9655,
         "view_consistency": 0.8663,
         "vlm_verdict": "confirmed",
-        "vlm_reason": "The object highlighted in image 1 is a can, and image 2 shows the same spot on the floor with no can present, indicating the object is absent."
+        "vlm_reason": "The yellow can is present in image 1 but absent in image 2, as the same location in image 2 is empty."
       },
-      "description": "The canned food (yellow and black metal; about 24 x 20 x 19 cm), located 0.8 m above the floor on the right side of the room, was no longer there: the later video shows that spot empty from 23 viewpoints.",
+      "description": "The yellow can (yellow metal; about 24 x 20 x 19 cm), which was 0.8 m above the floor on the right side of the room, was no longer there: the later video looked at that spot from 23 viewpoints and saw it empty.",
       "crops": {
         "before": "crops/2_before.jpg",
         "after": "crops/2_after.jpg"
       },
-      "attributes": "yellow and black metal",
-      "object_description": "a cylindrical metal can with a black lid, likely containing food, sitting on a wooden surface.",
+      "attributes": "yellow metal",
+      "object_description": "a yellow metal can with a black lid sitting on a wooden surface.",
       "motion_kind": null,
-      "description_template": "The canned food (yellow and black metal; about 24 x 20 x 19 cm), which was 0.8 m above the floor on the right side of the room, was removed: the after recording looked at that spot from 23 viewpoints and saw it empty."
+      "description_template": "The yellow can (yellow metal; about 24 x 20 x 19 cm), which was 0.8 m above the floor on the right side of the room, was removed: the after recording looked at that spot from 23 viewpoints and saw it empty."
+    },
+    {
+      "id": 5,
+      "type": "added",
+      "label": "wooden table",
+      "confidence": 0.708,
+      "before": null,
+      "after": {
+        "instance_id": 7,
+        "centroid": [
+          -0.1302,
+          0.8517,
+          -0.3959
+        ],
+        "aabb": [
+          [
+            -0.9262,
+            0.438,
+            -1.1936
+          ],
+          [
+            0.6613,
+            1.1844,
+            0.4621
+          ]
+        ],
+        "extents": [
+          1.5874,
+          0.7464,
+          1.6557
+        ],
+        "obb": {
+          "center": [
+            -0.0123,
+            0.8112,
+            -0.3028
+          ],
+          "extents": [
+            1.1229,
+            0.7464,
+            1.7136
+          ],
+          "yaw_deg": 41.76
+        },
+        "n_points": 15397,
+        "blob_ids": [],
+        "source": "appearance",
+        "instance_ids": [
+          7,
+          8
+        ]
+      },
+      "transform": null,
+      "evidence": {
+        "free_rays": 35527,
+        "free_frames_mean": 13.0,
+        "observing_views": 45,
+        "occ_points": 15397,
+        "mask_score": 0.9539,
+        "view_consistency": 0.5597,
+        "appearance": {
+          "cluster": 4,
+          "frames_supporting": 44,
+          "mean_score": 0.9152,
+          "feat_term": 0.6608,
+          "geom_term": 0.2544,
+          "partners_visible": 23
+        },
+        "vlm_verdict": "confirmed",
+        "vlm_reason": "in place: different; Both images show a wooden table with two distinct movable objects on it, though the specific objects differ slightly.",
+        "merged_from": [
+          5,
+          6
+        ],
+        "merged_types": [
+          "added",
+          "added"
+        ],
+        "merged_part_reason": "The contour and rectangle both trace the same wooden table surface and legs, indicating it's one continuous object.",
+        "fragment_gap_m": 0.028,
+        "vlm_replace_answer": "different"
+      },
+      "description": "A wooden table (light brown wood; about 1.7 x 1.1 x 0.7 m) appeared 0.8 m above the floor in the middle of the room: the earlier video looked at that spot from 45 viewpoints and saw it empty.",
+      "crops": {
+        "after": "crops/5_after.jpg",
+        "before": "crops/5_before.jpg",
+        "after_part": "crops/6_after.jpg"
+      },
+      "attributes": "light brown wood",
+      "object_description": "a light brown wooden table with a visible grain pattern and a simple X-shaped leg design.",
+      "motion_kind": null,
+      "description_template": "A wooden table (light brown wood; about 1.7 x 1.1 x 0.7 m) appeared 0.8 m above the floor in the middle of the room: the before recording looked at that spot from 45 viewpoints and saw it empty."
     },
     {
       "id": 7,
       "type": "unverified",
+      "label": "wooden stool",
+      "confidence": 0.486,
+      "before": {
+        "instance_id": 4,
+        "centroid": [
+          -0.4262999892234802,
+          0.45899999141693115,
+          -1.6689000129699707
+        ],
+        "aabb": [
+          [
+            -0.7038000226020813,
+            0.24560000002384186,
+            -1.8430999517440796
+          ],
+          [
+            -0.1395999938249588,
+            0.5065000057220459,
+            -1.406499981880188
+          ]
+        ],
+        "extents": [
+          0.5641999840736389,
+          0.26089999079704285,
+          0.436599999666214
+        ],
+        "obb": {
+          "center": [
+            -0.4301,
+            0.3761,
+            -1.6889
+          ],
+          "extents": [
+            0.4895,
+            0.2609,
+            0.39
+          ],
+          "yaw_deg": 40.61
+        },
+        "n_points": 3371,
+        "blob_ids": [
+          3
+        ],
+        "source": "geometry"
+      },
+      "after": null,
+      "transform": null,
+      "evidence": {
+        "free_rays": 0,
+        "free_frames_mean": 0.0,
+        "observing_views": 0,
+        "occ_points": 112381,
+        "mask_score": 0.9712,
+        "view_consistency": 0.659,
+        "seen_in": "before",
+        "reason_class": "never_observed",
+        "vlm_verdict": "confirmed",
+        "vlm_reason": "The highlighted region shows a wooden stool, a distinct movable object."
+      },
+      "description": "A wooden stool (light brown wood; about 0.5 x 0.4 x 0.3 m), 0.4 m above the floor in the near right part of the room, was only visible in the earlier video; the later video never looked at that spot, so this possible change cannot be verified.",
+      "crops": {
+        "before": "crops/7_before.jpg",
+        "after": null
+      },
+      "attributes": "light brown wood",
+      "object_description": "a small wooden stool with a square seat and visible grain.",
+      "motion_kind": null,
+      "description_template": "A wooden stool (light brown wood; about 0.5 x 0.4 x 0.3 m), 0.4 m above the floor in the near right part of the room, was seen only in the before recording; the after recording never looked at that spot, so this possible change cannot be verified."
+    },
+    {
+      "id": 8,
+      "type": "unverified",
       "label": "blue suitcase",
-      "confidence": 0.483,
+      "confidence": 0.479,
       "before": null,
       "after": {
-        "instance_id": 2,
+        "instance_id": 3,
         "centroid": [
           -1.085800051689148,
           0.7860000133514404,
@@ -265,7 +429,7 @@
         },
         "n_points": 3547,
         "blob_ids": [
-          8
+          10
         ],
         "source": "geometry"
       },
@@ -278,13 +442,14 @@
         "mask_score": 0.9587,
         "view_consistency": 0.9719,
         "seen_in": "after",
+        "reason_class": "never_observed",
         "vlm_verdict": "confirmed",
         "vlm_reason": "The contour covers a blue suitcase, a distinct movable object."
       },
-      "description": "The blue suitcase (blue hard-shell; about 0.7 x 0.7 x 0.3 m), positioned 0.4 m above the floor in the far right of the room, appeared only in the later video; the earlier video never captured that spot, so this change cannot be confirmed.",
+      "description": "A blue suitcase (blue hard-shell; about 0.7 x 0.7 x 0.3 m), 0.4 m above the floor in the far right part of the room, was only visible in the later video; the earlier video never looked at that spot, so this possible change cannot be verified.",
       "crops": {
-        "after": "crops/7_after.jpg",
-        "before": "crops/7_before.jpg"
+        "after": "crops/8_after.jpg",
+        "before": "crops/8_before.jpg"
       },
       "attributes": "blue hard-shell",
       "object_description": "a blue hard-shell suitcase with a handle and zipper.",
@@ -292,13 +457,85 @@
       "description_template": "A blue suitcase (blue hard-shell; about 0.7 x 0.7 x 0.3 m), 0.4 m above the floor in the far right part of the room, was seen only in the after recording; the before recording never looked at that spot, so this possible change cannot be verified."
     },
     {
-      "id": 8,
+      "id": 9,
       "type": "unverified",
-      "label": "donna butter cookies",
-      "confidence": 0.466,
+      "label": "paintbrush",
+      "confidence": 0.472,
       "before": null,
       "after": {
-        "instance_id": 3,
+        "instance_id": 5,
+        "centroid": [
+          -0.25029999017715454,
+          0.19130000472068787,
+          1.0870000123977661
+        ],
+        "aabb": [
+          [
+            -0.3635999858379364,
+            0.009200000204145908,
+            0.9660999774932861
+          ],
+          [
+            -0.15610000491142273,
+            0.28529998660087585,
+            1.1718000173568726
+          ]
+        ],
+        "extents": [
+          0.20749999582767487,
+          0.2759999930858612,
+          0.20559999346733093
+        ],
+        "obb": {
+          "center": [
+            -0.26,
+            0.1472,
+            1.0682
+          ],
+          "extents": [
+            0.2055,
+            0.276,
+            0.2044
+          ],
+          "yaw_deg": 4.52
+        },
+        "n_points": 1928,
+        "blob_ids": [
+          9
+        ],
+        "source": "geometry"
+      },
+      "transform": null,
+      "evidence": {
+        "free_rays": 0,
+        "free_frames_mean": 0.0,
+        "observing_views": 0,
+        "occ_points": 27660,
+        "mask_score": 0.9437,
+        "view_consistency": 0.7862,
+        "seen_in": "after",
+        "reason_class": "never_observed",
+        "vlm_verdict": "confirmed",
+        "vlm_reason": "The contour outlines a dark, curved object that appears to be a brush or similar tool, not part of the room structure."
+      },
+      "description": "A paintbrush (black bristles, wooden handle; about 28 x 21 x 20 cm), on the floor in the far part of the room, was only visible in the later video; the earlier video never looked at that spot, so this possible change cannot be verified.",
+      "crops": {
+        "after": "crops/9_after.jpg",
+        "before": null
+      },
+      "attributes": "black bristles, wooden handle",
+      "object_description": "A paintbrush with black bristles and a wooden handle, partially dipped in paint.",
+      "motion_kind": null,
+      "description_template": "A paintbrush (black bristles, wooden handle; about 28 x 21 x 20 cm), on the floor in the far part of the room, was seen only in the after recording; the before recording never looked at that spot, so this possible change cannot be verified."
+    },
+    {
+      "id": 10,
+      "type": "unverified",
+      "label": "donna butter cookie",
+      "confidence": 0.469,
+      "before": null,
+      "after": {
+        "instance_id": 6,
         "centroid": [
           -0.15629999339580536,
           0.23659999668598175,
@@ -349,18 +586,163 @@
         "mask_score": 0.9374,
         "view_consistency": 0.9257,
         "seen_in": "after",
+        "reason_class": "never_observed",
         "vlm_verdict": "confirmed",
-        "vlm_reason": "The contour covers a small box of Danisa Butter Cookies on a wooden floor."
+        "vlm_reason": "The contour covers a small box of Danisa butter cookies on a wooden floor."
       },
-      "description": "The donna butter cookies (blue and white cardboard; about 23 x 21 x 20 cm), 0.2 m above the floor in the far part of the room, was seen only in the after recording; the before recording never looked at that spot, so this possible change cannot be verified.",
+      "description": "A donna butter cookie (blue and white cardboard; about 23 x 21 x 20 cm), 0.2 m above the floor in the far part of the room, was only visible in the later video; the earlier video never looked at that spot, so this possible change cannot be verified.",
       "crops": {
-        "after": "crops/8_after.jpg",
+        "after": "crops/10_after.jpg",
         "before": null
       },
       "attributes": "blue and white cardboard",
-      "object_description": "a small rectangular box of Donna brand butter cookies sitting on a wooden surface.",
+      "object_description": "a blue and white cardboard box of Donna butter cookies sitting on a wooden floor.",
       "motion_kind": null,
-      "description_template": "The donna butter cookies (blue and white cardboard; about 23 x 21 x 20 cm), 0.2 m above the floor in the far part of the room, was seen only in the after recording; the before recording never looked at that spot, so this possible change cannot be verified."
+      "description_template": "A donna butter cookie (blue and white cardboard; about 23 x 21 x 20 cm), 0.2 m above the floor in the far part of the room, was seen only in the after recording; the before recording never looked at that spot, so this possible change cannot be verified."
+    },
+    {
+      "id": 11,
+      "type": "unverified",
+      "label": "blue plastic bucket",
+      "confidence": 0.455,
+      "before": null,
+      "after": {
+        "instance_id": 2,
+        "centroid": [
+          -0.4375,
+          0.23690000176429749,
+          0.70660001039505
+        ],
+        "aabb": [
+          [
+            -0.692799985408783,
+            0.002300000051036477,
+            0.4887000024318695
+          ],
+          [
+            -0.25949999690055847,
+            0.5202999711036682,
+            0.974399983882904
+          ]
+        ],
+        "extents": [
+          0.4332999885082245,
+          0.5180000066757202,
+          0.48570001125335693
+        ],
+        "obb": {
+          "center": [
+            -0.4751,
+            0.2613,
+            0.7334
+          ],
+          "extents": [
+            0.416,
+            0.518,
+            0.4805
+          ],
+          "yaw_deg": 38.99
+        },
+        "n_points": 11922,
+        "blob_ids": [
+          2
+        ],
+        "source": "geometry"
+      },
+      "transform": null,
+      "evidence": {
+        "free_rays": 0,
+        "free_frames_mean": 0.0,
+        "observing_views": 0,
+        "occ_points": 69161,
+        "mask_score": 0.9098,
+        "view_consistency": 0.8589,
+        "seen_in": "after",
+        "reason_class": "never_observed",
+        "vlm_verdict": "confirmed",
+        "vlm_reason": "The contour outlines the interior of a blue cylindrical container, likely a bucket or bin, which is a distinct movable object."
+      },
+      "description": "A blue plastic bucket (blue, plastic; about 0.5 x 0.5 x 0.4 m), on the floor in the far part of the room, was only visible in the later video; the earlier video never looked at that spot, so this possible change cannot be verified.",
+      "crops": {
+        "after": "crops/11_after.jpg",
+        "before": null
+      },
+      "attributes": "blue, plastic",
+      "object_description": "a blue plastic bucket with some dirt at the bottom.",
+      "motion_kind": null,
+      "description_template": "A blue plastic bucket (blue, plastic; about 0.5 x 0.5 x 0.4 m), on the floor in the far part of the room, was seen only in the after recording; the before recording never looked at that spot, so this possible change cannot be verified."
+    },
+    {
+      "id": 13,
+      "type": "unverified",
+      "label": "wooden table leg",
+      "confidence": 0.411,
+      "before": {
+        "instance_id": 3,
+        "centroid": [
+          0.1607999950647354,
+          0.45509999990463257,
+          -0.8205999732017517
+        ],
+        "aabb": [
+          [
+            -0.23770000040531158,
+            0.0215000007301569,
+            -1.2762000560760498
+          ],
+          [
+            0.7656999826431274,
+            0.7757999897003174,
+            -0.066600002348423
+          ]
+        ],
+        "extents": [
+          1.003499984741211,
+          0.7542999982833862,
+          1.2095999717712402
+        ],
+        "obb": {
+          "center": [
+            0.2303,
+            0.3986,
+            -0.6139
+          ],
+          "extents": [
+            0.3209,
+            0.7543,
+            1.5254
+          ],
+          "yaw_deg": 39.94
+        },
+        "n_points": 7900,
+        "blob_ids": [
+          1
+        ],
+        "source": "geometry"
+      },
+      "after": null,
+      "transform": null,
+      "evidence": {
+        "free_rays": 54,
+        "free_frames_mean": 0.03,
+        "observing_views": 0,
+        "occ_points": 100560,
+        "mask_score": 0.823,
+        "view_consistency": 0.9522,
+        "seen_in": "before",
+        "reason_class": "never_observed",
+        "vlm_verdict": "confirmed",
+        "vlm_reason": "The highlighted region shows the decorative wooden leg of a table, a distinct movable furniture piece."
+      },
+      "description": "A wooden table leg (brown wood; about 1.5 x 0.8 x 0.3 m), on the floor in the near part of the room, was only visible in the earlier video; the later video never looked at that spot, so this possible change cannot be verified.",
+      "crops": {
+        "before": "crops/13_before.jpg",
+        "after": "crops/13_after.jpg"
+      },
+      "attributes": "brown wood",
+      "object_description": "a brown wooden leg of a table with a zigzag pattern.",
+      "motion_kind": null,
+      "description_template": "A wooden table leg (brown wood; about 1.5 x 0.8 x 0.3 m), on the floor in the near part of the room, was seen only in the before recording; the after recording never looked at that spot, so this possible change cannot be verified."
     }
   ],
   "rejected": [
@@ -368,9 +750,9 @@
       "id": 3,
       "type": "removed",
       "label": "wooden table surface",
-      "confidence": 0.719,
+      "confidence": 0.459,
       "before": {
-        "instance_id": 5,
+        "instance_id": 6,
         "centroid": [
           0.4074999988079071,
           0.7731000185012817,
@@ -428,8 +810,9 @@
           "partners_visible": 9
         },
         "vlm_verdict": "rejected",
-        "vlm_reason": "in place: same; The region inside the contour in both images shows only the wooden table surface, with no objects present in either image.",
-        "vlm_replace_answer": "same"
+        "vlm_reason": "in place: same; Both images show only the bare wooden table surface inside the outlined region, with no objects present.",
+        "vlm_replace_answer": "same",
+        "reason_class": "room_or_surface"
       },
       "description": "An object about 0.17 x 0.01 x 0.30 m was removed from (0.41, 0.77, -0.05); the after recording saw that space empty in 32 views.",
       "crops": {
@@ -437,16 +820,16 @@
         "after": "crops/3_after.jpg"
       },
       "attributes": "light brown wood",
-      "object_description": "a section of a wooden table with visible grain patterns.",
+      "object_description": "a smooth, light brown wooden table surface with visible grain patterns.",
       "motion_kind": null
     },
     {
       "id": 4,
       "type": "removed",
       "label": "shadow",
-      "confidence": 0.605,
+      "confidence": 0.385,
       "before": {
-        "instance_id": 4,
+        "instance_id": 5,
         "centroid": [
           0.23839999735355377,
           0.011300000362098217,
@@ -504,179 +887,90 @@
           "partners_visible": 2
         },
         "vlm_verdict": "rejected",
-        "vlm_reason": "in place: same; The region in both images shows the same floor area, with the same shadow pattern and no object present in either image.",
-        "vlm_replace_answer": "same"
+        "vlm_reason": "in place: added; Image 1 shows a shadow on the floor, while Image 2 shows a wooden table corner, indicating a physical object was placed there.",
+        "vlm_replace_answer": "added",
+        "reason_class": "room_or_surface"
       },
       "description": "An object about 0.45 x 0.02 x 0.20 m was removed from (0.24, 0.01, -1.05); the after recording saw that space empty in 4 views.",
       "crops": {
         "before": "crops/4_before.jpg",
         "after": "crops/4_after.jpg"
       },
-      "attributes": "dark grey, undefined shape",
-      "object_description": "A dark, irregular shadow cast on the tiled floor beneath a wooden table leg.",
+      "attributes": "dark grey, undefined",
+      "object_description": "a dark shadow cast by a wooden table leg on the tiled floor.",
       "motion_kind": null
     },
     {
-      "id": 5,
-      "type": "added",
-      "label": "wooden table",
-      "confidence": 0.854,
+      "id": 12,
+      "type": "unverified",
+      "label": "wooden table leg",
+      "confidence": 0.439,
       "before": null,
       "after": {
         "instance_id": 4,
         "centroid": [
-          -0.1302,
-          0.8517,
-          -0.3959
+          0.21879999339580536,
+          0.37229999899864197,
+          1.0055999755859375
         ],
         "aabb": [
           [
-            -0.9262,
-            0.438,
-            -1.1936
+            -0.07270000129938126,
+            0.006200000178068876,
+            0.6299999952316284
           ],
           [
-            0.6613,
-            1.1844,
-            0.4621
+            0.3917999863624573,
+            0.6822999715805054,
+            1.1890000104904175
           ]
         ],
         "extents": [
-          1.5874,
-          0.7464,
-          1.6557
+          0.4645000100135803,
+          0.6761000156402588,
+          0.5590999722480774
         ],
         "obb": {
           "center": [
-            -0.0123,
-            0.8112,
-            -0.3028
+            0.1564,
+            0.3443,
+            0.9315
           ],
           "extents": [
-            1.1229,
-            0.7464,
-            1.7136
+            0.1196,
+            0.6761,
+            0.6976
           ],
-          "yaw_deg": 41.76
+          "yaw_deg": 41.27
         },
-        "n_points": 15397,
-        "blob_ids": [],
-        "source": "appearance",
-        "instance_ids": [
-          4,
-          5
-        ]
-      },
-      "transform": null,
-      "evidence": {
-        "free_rays": 35527,
-        "free_frames_mean": 13.0,
-        "observing_views": 45,
-        "occ_points": 15397,
-        "mask_score": 0.9539,
-        "view_consistency": 0.5597,
-        "appearance": {
-          "cluster": 4,
-          "frames_supporting": 44,
-          "mean_score": 0.9152,
-          "feat_term": 0.6608,
-          "geom_term": 0.2544,
-          "partners_visible": 23
-        },
-        "vlm_verdict": "rejected",
-        "vlm_reason": "in place: same; The same two objects (blue bottle and cookie tin) are present in both images, though their positions and the lighting differ.",
-        "merged_from": [
-          5,
-          6
-        ],
-        "merged_types": [
-          "added",
-          "added"
-        ],
-        "merged_part_reason": "The contour and rectangle both trace the same wooden table surface and legs, indicating they are parts of one continuous object.",
-        "fragment_gap_m": 0.028,
-        "vlm_replace_answer": "same"
-      },
-      "description": "",
-      "crops": {
-        "after": "crops/5_after.jpg",
-        "before": "crops/5_before.jpg",
-        "after_part": "crops/6_after.jpg"
-      },
-      "attributes": "light brown wood",
-      "object_description": "a light brown wooden table with a visible grain pattern and a few items on top.",
-      "motion_kind": null
-    },
-    {
-      "id": 9,
-      "type": "unverified",
-      "label": "wooden table",
-      "confidence": 0.434,
-      "before": {
-        "instance_id": 3,
-        "centroid": [
-          0.9991999864578247,
-          0.026799999177455902,
-          -2.081899881362915
-        ],
-        "aabb": [
-          [
-            -0.0658000037074089,
-            -0.15109999477863312,
-            -3.194700002670288
-          ],
-          [
-            1.7628999948501587,
-            0.10509999841451645,
-            -0.8515999913215637
-          ]
-        ],
-        "extents": [
-          1.8286999464035034,
-          0.25619998574256897,
-          2.343100070953369
-        ],
-        "obb": {
-          "center": [
-            0.9858,
-            -0.023,
-            -2.2255
-          ],
-          "extents": [
-            1.2376,
-            0.2562,
-            2.5755
-          ],
-          "yaw_deg": 35.93
-        },
-        "n_points": 23564,
+        "n_points": 3368,
         "blob_ids": [
-          3
+          8
         ],
         "source": "geometry"
       },
-      "after": null,
       "transform": null,
       "evidence": {
-        "free_rays": 0,
-        "free_frames_mean": 0.0,
+        "free_rays": 6,
+        "free_frames_mean": 0.01,
         "observing_views": 0,
-        "occ_points": 61948,
-        "mask_score": 0.914,
-        "view_consistency": 0.822,
-        "seen_in": "before",
+        "occ_points": 24231,
+        "mask_score": 0.8782,
+        "view_consistency": 0.817,
+        "seen_in": "after",
+        "reason_class": "never_observed",
         "vlm_verdict": "rejected",
-        "vlm_reason": "The outline covers a wooden table with various items on it, including a bottle, a box, and a hair dryer."
+        "vlm_reason": "part of the room: The contour outlines a wooden table leg and part of the tabletop, which are distinct real furniture objects."
       },
-      "description": "An object about 1.83 x 0.26 x 2.34 m at (1.00, 0.03, -2.08) was seen only in the before recording; the after recording never observed that space, so no verdict is possible.",
+      "description": "An object about 0.46 x 0.68 x 0.56 m at (0.22, 0.37, 1.01) was seen only in the after recording; the before recording never observed that space, so no verdict is possible.",
       "crops": {
-        "before": "crops/9_before.jpg",
-        "after": null
+        "after": "crops/12_after.jpg",
+        "before": null
       },
-      "attributes": "light brown wood",
-      "object_description": "a light brown wooden table with visible grain patterns and various items placed on it.",
+      "attributes": "brown wood",
+      "object_description": "a sturdy brown wooden leg supporting a table.",
       "motion_kind": null
     }
   ],
-  "summary": "2 changes: 1 moved, 0 added, 1 removed; 2 unverified. The blue laundry detergent was moved from near the front to the middle of the room and slightly rotated. The canned food on the right side is no longer there. Two other items \u2014 a blue suitcase and a box of butter cookies \u2014 appear only in the later video, but their presence cannot be confirmed due to camera angles not capturing those spots in the earlier video."
+  "summary": "3 changes: 1 moved, 1 added, 1 removed; 6 unverified. The blue laundry detergent was moved from the near part of the room to the middle, and the yellow can was removed from the right side. A wooden table was added in the middle of the room. Several other items\u2014such as a wooden stool, a blue suitcase, a paintbrush, a cookie box, a blue bucket, and a table leg\u2014are unverified changes because the videos did not capture those spots from all angles."
 }

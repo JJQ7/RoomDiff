@@ -86,7 +86,11 @@ volume, ids 1..N unique across types. Types (own recording = where it is occupie
 `disappeared` = occupied(before) & free(after), `appeared` = occupied(after) &
 free(before), `unverified_before` / `unverified_after` = occupied in that recording and
 unknown in the other; voxels within `dist_margin` of the other recording's surfaces are
-excluded. Per blob: `id, type, voxels, volume_m3, centroid, aabb [[min], [max]]`,
+excluded, and the unverified masks also lose the voxels less than `unverified_floor_cut`
+(default 0.06 m) above the fitted floor plane (y = 0 of the levelled frame; only when
+`recon/meta.json` says `levelled` with the "ransac floor plane" method): floor that only
+one video filmed is not an object, and objects standing on it were joined through it into
+room-sized regions. Per blob: `id, type, voxels, volume_m3, centroid, aabb [[min], [max]]`,
 `evidence {free_frames_mean` (mean free_count of the other recording over the blob),
 `occ_points` (points of the own recording), `observing_views` (keyframes of the other
 recording that saw past the centroid), `min_camera_distance` (centroid to the nearest
@@ -116,7 +120,9 @@ images, so the ranking does not change when the world frame is turned about +Y
 (`tests/test_visibility.py`); the previous ranking by the projected axis-aligned box did.
 
 `meta.json`: parameters used, voxel size source, grid, voxels per state, candidate voxel
-counts (raw / after opening / in blobs, per type before any demotion), `alignment_verdict`
+counts (raw / after opening / in blobs, per type before any demotion; the unverified
+counts are after the floor cut), `unverified_floor_cut` {`height_m`, `applied` (false
+without a floor plane or with 0), `removed_voxels` per unverified type}, `alignment_verdict`
 (the M2 verdict, null without one), `demoted` {`disappeared`, `appeared`} (blobs demoted to
 unverified; the M5 report's coverage note states their number), `demotion_reason`
 ("weak_alignment", or null), blobs per type (after the demotion), runtime, peak VRAM.
