@@ -6,7 +6,9 @@ from different viewpoints, and reports which objects were **added**, **removed**
 videos are reconstructed into one shared 3D frame; every reported change is backed by
 explicit geometric, appearance and visual-language evidence, and changes in space the
 other video never observed are reported as **unverified** instead of being guessed.
-See [docs/PLAN.md](docs/PLAN.md) for the design.
+The choices behind it, what was tried and what is known not to work are in
+[docs/design_note.md](docs/design_note.md); [docs/PLAN.md](docs/PLAN.md) is the day-1 plan,
+kept for the record; a map of the documentation is at the end of this README.
 
 *By Jingqi Jiang (Imperial College London), October 2026: a five-day take-home challenge,
 "What changed in the room?".*
@@ -16,6 +18,25 @@ See [docs/PLAN.md](docs/PLAN.md) for the design.
 *The web viewer on SceneDiff pair living_room_1: both point clouds in one frame, a box per change (red removed, green added, blue moved with an arrow from the old place, yellow unverified) and the change list with its evidence and crops. Live: <https://jjq7.github.io/RoomDiff/viewer/?scene=scenes/scenediff_living_room_1>.*
 
 ![Orbit around the living_room_1 reconstruction](docs/img/viewer/living_room_1_orbit.gif)
+
+## Results at a glance
+
+Scored with the official evaluator of the public [SceneDiff](https://github.com/yuqunw/scene_diff)
+benchmark (final code, default settings; the full table and what each row changed are in the
+[benchmark section](#benchmark-scenediff-validation-subset)):
+
+| | per-view AP | per-scene AP | typed AP |
+|---|---|---|---|
+| SceneDiff `val` / `varied`, the 20 pairs reported during development | 0.468 | 0.433 | 0.316 |
+| SceneDiff whole `val` set, 105 pairs | 0.385 | 0.351 | 0.242 |
+| its `varied` half, 50 pairs | 0.552 | 0.517 | 0.416 |
+| its `kitchen` half, 55 pairs (short sweeps, little overlap between the videos) | 0.187 | 0.183 | 0.076 |
+| SceneDiff paper, whole `val` set, for reference | 0.496 | 0.463 | 0.255 |
+
+On [our own three tabletop pairs](#held-out-scenes-our-own-recordings) (held out, each run once
+with frozen settings) 5 of the 9 staged changes came back with the right type and object, 2 more
+as one half, with 1 false positive. A pair takes about 2 minutes on an RTX 5090; everything runs
+locally, no API keys.
 
 ## How it works
 
@@ -452,6 +473,23 @@ Median run time per pair: 70 s at 1 s keyframes, 85 s at 0.5 s (RTX 5090).
 python -m roomdiff.cli eval --split val --set varied --limit 20 --out-root outputs/scenediff_eval \
     -o ingest.mode=fixed -o ingest.fixed_interval_s=0.5     # -o overrides config values here
 ```
+
+## Documentation
+
+- [docs/design_note.md](docs/design_note.md): why the pipeline is built this way, what was tried
+  and not kept, the limitations we know about.
+- [docs/interfaces.md](docs/interfaces.md): what every stage reads and writes under
+  `outputs/<scene>/`, the `changes.json` schema and the benchmark submission format.
+- [docs/capture_protocol.md](docs/capture_protocol.md): how to record your own before / after
+  videos, the `gt.yaml` ground-truth schema and the capture-day tools.
+- [docs/env_report.md](docs/env_report.md): the tested environment: package versions, model
+  revisions and checksums, VRAM measurements, smoke tests.
+- [docs/PLAN.md](docs/PLAN.md): the day-1 plan, frozen for the record.
+- [configs/default.yaml](configs/default.yaml): every parameter, with a comment on where its
+  value comes from.
+- [examples/](examples/): report, `changes.json` and crops of six runs (three SceneDiff pairs,
+  three tabletop pairs with their `gt.yaml`, scores and LiDAR checks); their point clouds are in
+  the live viewer, <https://jjq7.github.io/RoomDiff/>.
 
 ## Development
 
