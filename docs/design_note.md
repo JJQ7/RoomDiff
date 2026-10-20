@@ -308,6 +308,37 @@ SAM 3 could not find on the object lowered per-scene AP from 0.383 to 0.374, bec
 is sensitive to wording ("closed laptop" scores 0.06 where "laptop" scores 0.92). The stage
 stays in the code as optional evidence (`recheck.enabled`), without the penalty.
 
+*Glob3R in place of the joint Pi3X pass (19 October).* The alignment verdict is FAIR or WEAK
+on 19 of the 105 validation pairs (13 `kitchen`, 6 `varied`), and the gate of section 2 can
+only trade false changes for missed ones there. Glob3R (arXiv 2607.09225, code at commit
+553096e) keeps Pi3X frozen and adds what a classical global SfM back end would: a dense
+matching head gives multi-view tracks, rotation and translation averaging and bundle
+adjustment refine the poses, and the dense depth of each keyframe is rescaled by a RANSAC
+fit to the optimised sparse points. We ran it in its unordered mode (SALAD retrieval orders
+the 15-51 keyframes of both recordings into one pseudo-sequence) with its photo-collection
+settings on those 19 pairs, wrote its poses and per-frame depth into `recon.npz` and left
+the rest of the pipeline unchanged (`scripts/run_glob3r.sh`, `scripts/glob3r_to_npz.py`,
+`scripts/exp_glob3r.py`; Glob3R exports no per-frame depth and centre-crops portrait
+frames, so `scripts/glob3r_roomdiff.patch` adds both as opt-in flags). Glob3R works in a
+normalised frame (camera-path box diagonal 10), so its output was put back on Pi3X's scale
+with one factor per pair; the converter reproduces the Pi3X diagnostics to +-0.01 when fed
+the Pi3X result itself. The co-visible 3 cm share fell by 0.10 on average (median -0.05):
+up on 6 pairs (+0.03 to +0.22, two of them now OK, the medians there 1.4-2.6 cm -> 0.9-1.5
+cm), down on 8 (-0.02 to -0.40, four FAIR pairs now WEAK), the three low-overlap WEAK pairs
+unchanged in substance. The large losses are one failure: Glob3R gave the two recordings
+different scales (`street`: before frames at 0.9x, after at 1.3-1.9x Pi3X's depth;
+`bed_3_bed_4`: 3.35 against 4.5; `gas_station`: some after frames collapsed a hundredfold
+and the run took 199 s instead of 23-54 s), the relative-scale error of the separate mode of
+section 1 again, now inside one run. Scored end to end on the same 19 pairs (the Glob3R runs with `visibility.unverified_floor_cut` off, like the validation runs they are compared
+with), per-view / per-scene / typed AP went from 0.229 / 0.203 / 0.140 to 0.154 /
+0.084 / 0.047 and the pixel IoU from 0.384 to 0.269, with 13 instead of 17 objects
+found and 35 instead of 27 false positives. Glob3R is deterministic
+run to run, needs 9-11 GB of VRAM and 23-54 s of inference per pair on top of its own
+environment (a conda prefix with the CUDA toolkit, 13 GB), and would bring GPL (SALAD) and
+CC BY-NC (InstantSfM, the VGGSfM keyframe ranking) code into the pipeline. Nothing in the
+inputs (coverage, Pi3X confidence) tells the pairs it helps from the pairs it breaks, so
+the joint Pi3X pass stays; the scripts remain for reproduction.
+
 ## Limitations we know about
 - Small, flat or thin objects are missed by the geometric channel; the appearance channel
   recovers many of them but depends on co-visible keyframes (at about 1 keyframe per

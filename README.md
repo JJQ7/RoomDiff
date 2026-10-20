@@ -501,6 +501,10 @@ co-visible keyframes, so the kitchen pairs yield almost no candidates, and 55 of
 false positives there are appearance regions the judge confirmed. The remaining gap is
 therefore coverage: recall of small objects in recordings with few co-visible keyframes,
 and the precision of the VLM judge on close-range views; see `docs/design_note.md`.
+Refining the Pi3X poses with Glob3R's global bundle adjustment did not help the 19
+FAIR / WEAK pairs either: the co-visible 3 cm share fell by 0.10 on average and the
+per-scene AP of those pairs from 0.20 to 0.08, because several pairs came out with the
+two recordings at different scales (design note, "what we tried").
 Median run time per pair: 70 s at 1 s keyframes, 85 s at 0.5 s (RTX 5090).
 
 ```bash

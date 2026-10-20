@@ -1,0 +1,191 @@
+diff --git a/glob3r/inference/cli.py b/glob3r/inference/cli.py
+index 37a07dc..961e218 100644
+--- a/glob3r/inference/cli.py
++++ b/glob3r/inference/cli.py
+@@ -32,6 +32,14 @@ def build_parser(*, unordered=False):
+     parser.add_argument("--save_dense", action="store_true")
+     parser.add_argument("--coarse_loop", action="store_true")
+     parser.add_argument("--plot_matching", action="store_true")
++    # --- RoomDiff patch (not upstream): opt-in flags, defaults keep upstream behaviour ---
++    parser.add_argument("--save_frames", action="store_true",
++                        help="Also write frames.npz: per-frame depth, confidence, scale, poses, intrinsics.")
++    parser.add_argument("--resize_mode", choices=("crop", "pad", "fit"), default="crop",
++                        help="crop (upstream): width=target, centre-crop height; fit: keep aspect, long side=target.")
++    parser.add_argument("--target_size", type=int, default=518,
++                        help="Network image size (upstream 518); a multiple of 14.")
++    # --- end RoomDiff patch ---
+     if not unordered:
+         parser.add_argument("--keyframe_mode", choices=("fixed", "dynamic"), default="fixed")
+         parser.add_argument("--pgo_noise", type=float, default=0.1)
+diff --git a/glob3r/inference/images.py b/glob3r/inference/images.py
+index 3f37b8b..6d6d2b6 100644
+--- a/glob3r/inference/images.py
++++ b/glob3r/inference/images.py
+@@ -52,6 +52,12 @@ def stack_images(images):
+ def preprocess_image(image, mode, target_size):
+     """Resize to the historical 14-pixel grid, then center crop or pad."""
+     width, height = image.size
++    if mode == "fit":  # RoomDiff patch: keep the aspect ratio, long side = target, no crop / pad
++        if height > width:
++            new_height, new_width = target_size, round(width * target_size / height / 14) * 14
++        else:
++            new_width, new_height = target_size, round(height * target_size / width / 14) * 14
++        return to_tensor(image.resize((new_width, new_height), Image.Resampling.BICUBIC))
+     if mode == "pad" and height > width:
+         new_height = target_size
+         new_width = round(width * (new_height / height) / 14) * 14
+@@ -71,8 +77,8 @@ def preprocess_image(image, mode, target_size):
+ def load_images(path, interval=1, load_range=None, mode="crop", target_size=518,
+                 return_img_list=False):
+     """Load network inputs as a float32 [N, 3, H, W] tensor in [0, 1]."""
+-    if mode not in ("crop", "pad"):
+-        raise ValueError("Mode must be either 'crop' or 'pad'.")
++    if mode not in ("crop", "pad", "fit"):  # RoomDiff patch: "fit" added
++        raise ValueError("Mode must be 'crop', 'pad' or 'fit'.")
+     paths = image_paths(path, interval, load_range)
+     images = stack_images([preprocess_image(read_rgb(name), mode, target_size)
+                            for name in paths])
+diff --git a/glob3r/inference/ordered.py b/glob3r/inference/ordered.py
+index 9d16292..ba5334c 100644
+--- a/glob3r/inference/ordered.py
++++ b/glob3r/inference/ordered.py
+@@ -47,6 +47,7 @@ def load_inputs(args: argparse.Namespace, device: torch.device):
+         interval=args.interval,
+         load_range=[args.start, args.end],
+         return_img_list=True,
++        mode=args.resize_mode, target_size=args.target_size,  # RoomDiff patch: mode/size flags
+     )
+     imgs = imgs.to(device)
+     imgs_origin: Tensor = load_original_images(
+@@ -685,6 +686,10 @@ def run_post_optimization(
+         shared_intrinsics=True,
+         loop_ba_weight=args.loop_ba_weight,
+     )
++    if args.save_frames:  # RoomDiff patch: per-frame export (ordered mode keeps the input order)
++        from .frames_export import save_frames_npz
++        save_frames_npz(rotation_estimator, args.save_path, image_path_list,
++                        list(range(len(image_path_list))), scale_w, scale_h)
+ 
+     if args.save_tum_pose:
+         timestamp = [float(os.path.splitext(os.path.basename(path))[0]) for path in image_path_list]
+diff --git a/glob3r/inference/unordered.py b/glob3r/inference/unordered.py
+index d4eb961..ba4c621 100644
+--- a/glob3r/inference/unordered.py
++++ b/glob3r/inference/unordered.py
+@@ -34,7 +34,8 @@ def reconstruct(args):
+ 
+     loop_detector = load_loop_detector(args.loop_conf, args.weights_dir, top_k=20)
+ 
+-    imgs, image_path_list = (load_images(args.data_path, interval=args.interval, load_range=[args.start, args.end],return_img_list=True))
++    imgs, image_path_list = (load_images(args.data_path, interval=args.interval, load_range=[args.start, args.end],return_img_list=True,
++                                         mode=args.resize_mode, target_size=args.target_size))  # RoomDiff patch: mode/size flags
+ 
+     imgs = imgs.to(device)
+     loop_detector.extract_descriptors_img(imgs)
+@@ -386,6 +387,9 @@ def reconstruct(args):
+     save_kitti_poses(rotation_estimator.extrinsic_estimated[ori_order], os.path.join(args.save_path, "poses_final.txt"), w2c=True)
+     np.savetxt(os.path.join(args.save_path, "intrinsics.txt"), rotation_estimator.intrinsics.reshape(-1, 9).numpy()[ori_order])
+     np.savetxt(os.path.join(args.save_path, "distortions.txt"), rotation_estimator.distortion_coefficients.numpy()[ori_order])
++    if args.save_frames:  # RoomDiff patch: per-frame export, rows in processing (reordered) order
++        from .frames_export import save_frames_npz
++        save_frames_npz(rotation_estimator, args.save_path, image_path_list, reorder, scale_w, scale_h)
+     if args.save_tum_pose:
+         timestamp = [float(os.path.splitext(os.path.basename(i))[0]) for i in image_path_list]
+         save_tum_txt(
+diff --git a/glob3r/optimization/reconstruction.py b/glob3r/optimization/reconstruction.py
+index 78abab1..dbceff4 100644
+--- a/glob3r/optimization/reconstruction.py
++++ b/glob3r/optimization/reconstruction.py
+@@ -629,6 +629,7 @@ class ReconstructionOptimizer:
+ 
+         self.c2w_pose[:, :3, 3] = (coords - mean_coord) * scale
+         self.point_clouds_local = self.point_clouds_local * scale
++        self.init_norm_scale = float(scale)  # RoomDiff patch: metric Pi3X -> normalised frame factor
+ 
+     def coarse_loop_estimation(
+         self,
+@@ -2334,6 +2335,7 @@ class ReconstructionOptimizer:
+             Sets self.scale Tensor[N].
+         """
+         self.scale = []
++        self.scale_num_points = []  # RoomDiff patch: BA points behind each scale (0 = fallback 1.0)
+         for cam_idx in range(self.N):
+             points = self.reproj[cam_idx]["3d_points"].cpu().to(torch.float32)
+             pixels = self.reproj[cam_idx]["2d_points"].cpu()
+@@ -2346,6 +2348,7 @@ class ReconstructionOptimizer:
+                 & (cols >= 0) & (cols < self.h)
+             )
+             points = points[valid]
++            self.scale_num_points.append(int(len(points)))  # RoomDiff patch
+             if len(points) == 0:
+                 # Without valid BA reprojections, retain initialization depth.
+                 self.scale.append(1.0)
+diff --git a/glob3r/inference/frames_export.py b/glob3r/inference/frames_export.py
+new file mode 100644
+index 0000000..1392c4b
+--- /dev/null
++++ b/glob3r/inference/frames_export.py
+@@ -0,0 +1,63 @@
++# --- RoomDiff patch (not upstream) -------------------------------------------------------------
++"""Per-frame export for --save_frames: dense depth, confidence and scale for EVERY input frame.
++
++Upstream --save_dense only writes a fused points_dense.ply from the keyframes. This writes
++frames.npz in Glob3R's processing order (the --unordered retrieval order; identity for ordered
++mode) together with the image path of every row, so rows map to input files by name.
++
++Arrays (N = all input frames, h x w = network resolution):
++  image_paths (N,) str   input image path of each row
++  order       (N,) int64 index of each row in the sorted input listing (unordered: `reorder`)
++  w2c         (N,4,4) float64 world-to-camera after the final BA (same as poses_final.txt, inverted)
++  K_orig      (N,3,3) float64 BA intrinsics in original-image pixels (one focal, centre principal point)
++  k1          (N,) float64 SIMPLE_RADIAL k1 (0 when BA used plain pinhole)
++  depth       (N,h,w) float32 z-depth = Pi3X local z (after the init normalisation) * scale
++  conf        (N,h,w) float32 sigmoid(Pi3X depth-confidence logit) in [0,1]
++  scale       (N,) float32 per-frame depth scale from recompute_depth_scales (RANSAC on BA points)
++  scale_points(N,) int64 BA points used for that scale; 0 means scale fell back to 1.0 (unreliable)
++  is_keyframe (N,) bool  frame is one of Glob3R's selected (anchor) keyframes
++  init_norm_scale ()     factor normalize_initial_poses applied to the (metric) Pi3X local points;
++                         depth / (init_norm_scale * scale) = the raw Pi3X metric z-depth of the
++                         window that initialised the frame
++  scale_wh    (2,) float64 original-to-network pixel scale (scale_w, scale_h)
++  net_hw      (2,) int64   network image size (h, w)
++  torch_peak_reserved_gb () float64 torch.cuda.max_memory_reserved() at export time (NaN without CUDA)
++"""
++import os
++
++import numpy as np
++import torch
++
++
++def save_frames_npz(estimator, save_path, image_path_list, order, scale_w, scale_h):
++    if not hasattr(estimator, "scale"):
++        estimator.recompute_depth_scales()
++    scale = torch.as_tensor(estimator.scale, dtype=torch.float32).reshape(-1)
++    depth = estimator.point_clouds_local[..., 2].float() * scale[:, None, None]
++    n = depth.shape[0]
++    k1 = torch.zeros(n, dtype=torch.float64)
++    dist = getattr(estimator, "distortion_coefficients", None)
++    if dist is not None and dist.numel() and dist.shape[-1] >= 1:
++        k1 = dist.reshape(n, -1)[:, 0].double()
++    is_kf = np.zeros(n, dtype=bool)
++    is_kf[list(estimator.selected_idx)] = True
++    np.savez_compressed(
++        os.path.join(save_path, "frames.npz"),
++        image_paths=np.array([str(p) for p in image_path_list]),
++        order=np.asarray(order, dtype=np.int64),
++        w2c=estimator.extrinsic_estimated.detach().cpu().double().numpy(),
++        K_orig=estimator.intrinsics.detach().cpu().double().numpy(),
++        k1=k1.cpu().numpy(),
++        depth=depth.detach().cpu().numpy().astype(np.float32),
++        conf=estimator.point_conf.detach().cpu().float().reshape(depth.shape).numpy(),
++        scale=scale.numpy(),
++        scale_points=np.asarray(getattr(estimator, "scale_num_points", [-1] * n), dtype=np.int64),
++        is_keyframe=is_kf,
++        init_norm_scale=np.float64(getattr(estimator, "init_norm_scale", np.nan)),
++        scale_wh=np.array([scale_w, scale_h], dtype=np.float64),
++        net_hw=np.array([estimator.h, estimator.w], dtype=np.int64),
++        torch_peak_reserved_gb=np.float64(torch.cuda.max_memory_reserved() / 2**30
++                                          if torch.cuda.is_available() else np.nan),
++    )
++    print(f"[save_frames] wrote {n} frames to {os.path.join(save_path, 'frames.npz')}")
++# --- end RoomDiff patch ------------------------------------------------------------------------
