@@ -148,7 +148,51 @@
       "attributes": "white, cardboard",
       "object_description": "a white rectangular cardboard box with printed text and a barcode on its side.",
       "motion_kind": "rigid",
-      "description_template": "The white cardboard box (white, cardboard; about 0.3 x 0.3 x 0.1 m) moved 0.8 m, from the middle of the room to the near part of the room (0.8 m above the floor both times) and turned by about 54 degrees; the after recording saw the old place empty from 40 viewpoints and the before recording saw the new place empty from 33 viewpoints."
+      "description_template": "The white cardboard box (white, cardboard; about 0.3 x 0.3 x 0.1 m) moved 0.8 m, from the middle of the room to the near part of the room (0.8 m above the floor both times) and turned by about 54 degrees; the after recording saw the old place empty from 40 viewpoints and the before recording saw the new place empty from 33 viewpoints.",
+      "relations": {
+        "before": {
+          "support": {
+            "kind": "surface",
+            "height": 0.738,
+            "gap": 0.009,
+            "coverage": 1.0,
+            "points": 29622,
+            "spread": 0.01
+          },
+          "cover": null,
+          "objects": [
+            {
+              "relation": "on",
+              "other_change_id": 6
+            }
+          ]
+        },
+        "after": {
+          "support": {
+            "kind": "surface",
+            "height": 0.748,
+            "gap": 0.008,
+            "coverage": 1.0,
+            "points": 22810,
+            "spread": 0.0087
+          },
+          "cover": null,
+          "objects": []
+        },
+        "moved": {
+          "from": {
+            "kind": "surface",
+            "height": 0.738
+          },
+          "to": {
+            "kind": "surface",
+            "height": 0.748
+          },
+          "distance_m": 0.7892,
+          "horizontal_m": 0.795
+        },
+        "text": "on a surface 0.75 m above the floor both times"
+      }
     },
     {
       "id": 2,
@@ -293,7 +337,44 @@
       "attributes": "blue patterned fabric",
       "object_description": "a blue patterned fabric runner draped over the edge of a wooden surface.",
       "motion_kind": "rigid",
-      "description_template": "The decorative fabric runner (blue patterned fabric; about 0.5 x 0.3 x 0.2 m) moved 0.2 m within the near left part of the room (on the floor both times) and turned by about 14 degrees; the after recording saw the old place empty from 7 viewpoints and the before recording saw the new place empty from 10 viewpoints."
+      "description_template": "The decorative fabric runner (blue patterned fabric; about 0.5 x 0.3 x 0.2 m) moved 0.2 m within the near left part of the room (on the floor both times) and turned by about 14 degrees; the after recording saw the old place empty from 7 viewpoints and the before recording saw the new place empty from 10 viewpoints.",
+      "relations": {
+        "before": {
+          "support": {
+            "kind": "floor",
+            "height": -0.013,
+            "gap": 0.003,
+            "coverage": 0.577,
+            "points": 2841,
+            "spread": 0.0105
+          },
+          "cover": null,
+          "objects": []
+        },
+        "after": {
+          "support": {
+            "kind": "floor",
+            "height": 0.001,
+            "gap": -0.019,
+            "coverage": 0.679,
+            "points": 1695,
+            "spread": 0.0129
+          },
+          "cover": null,
+          "objects": []
+        },
+        "moved": {
+          "from": {
+            "kind": "floor"
+          },
+          "to": {
+            "kind": "floor"
+          },
+          "distance_m": 0.1881,
+          "horizontal_m": 0.203
+        },
+        "text": "on the floor both times"
+      }
     },
     {
       "id": 3,
@@ -363,7 +444,23 @@
       "attributes": "black and yellow",
       "object_description": "a cylindrical container for tea with a perforated lid.",
       "motion_kind": null,
-      "description_template": "The tea canister (black and yellow; about 25 x 20 x 19 cm), which was 0.8 m above the floor in the middle of the room, was removed: the after recording looked at that spot from 40 viewpoints and saw it empty."
+      "description_template": "The tea canister (black and yellow; about 25 x 20 x 19 cm), which was 0.8 m above the floor in the middle of the room, was removed: the after recording looked at that spot from 40 viewpoints and saw it empty.",
+      "relations": {
+        "before": {
+          "support": {
+            "kind": "surface",
+            "height": 0.744,
+            "gap": 0.004,
+            "coverage": 1.0,
+            "points": 34006,
+            "spread": 0.0102
+          },
+          "cover": null,
+          "objects": []
+        },
+        "after": null,
+        "text": "on a surface 0.74 m above the floor"
+      }
     },
     {
       "id": 4,
@@ -440,7 +537,23 @@
       "attributes": "black metal",
       "object_description": "a black metal leg of an office chair with wheels.",
       "motion_kind": null,
-      "description_template": "The office chair leg (black metal; about 1.5 x 0.7 x 0.4 m), which was on the floor in the far part of the room, was removed: the after recording looked at that spot from 7 viewpoints and saw it empty."
+      "description_template": "The office chair leg (black metal; about 1.5 x 0.7 x 0.4 m), which was on the floor in the far part of the room, was removed: the after recording looked at that spot from 7 viewpoints and saw it empty.",
+      "relations": {
+        "before": {
+          "support": {
+            "kind": "floor",
+            "height": 0.003,
+            "gap": 0.007,
+            "coverage": 0.263,
+            "points": 646,
+            "spread": 0.0144
+          },
+          "cover": null,
+          "objects": []
+        },
+        "after": null,
+        "text": "on the floor"
+      }
     },
     {
       "id": 6,
@@ -519,7 +632,23 @@
       "attributes": "light brown wood",
       "object_description": "a light brown wooden coffee table with a smooth surface and rounded edges.",
       "motion_kind": null,
-      "description_template": "The wooden coffee table (light brown wood; about 0.9 x 0.5 x 0.1 m), which was 0.8 m above the floor in the near part of the room, was replaced by the box of cookies: the after recording looked at that spot from 38 viewpoints and saw the box of cookies there instead."
+      "description_template": "The wooden coffee table (light brown wood; about 0.9 x 0.5 x 0.1 m), which was 0.8 m above the floor in the near part of the room, was replaced by the box of cookies: the after recording looked at that spot from 38 viewpoints and saw the box of cookies there instead.",
+      "relations": {
+        "before": {
+          "support": {
+            "kind": "surface",
+            "height": 0.745,
+            "gap": -0.01,
+            "coverage": 0.846,
+            "points": 61768,
+            "spread": 0.0115
+          },
+          "cover": null,
+          "objects": []
+        },
+        "after": null,
+        "text": "on a surface 0.74 m above the floor"
+      }
     },
     {
       "id": 7,
@@ -598,7 +727,23 @@
       "attributes": "blue and white cardboard",
       "object_description": "a rectangular cardboard box of 'Sunny Fields' brand cookies sitting on a wooden surface.",
       "motion_kind": null,
-      "description_template": "The box of cookies (blue and white cardboard; about 26 x 25 x 10 cm) took the place of the wooden coffee table 0.8 m above the floor in the middle of the room: the before recording looked at that spot from 47 viewpoints and saw the wooden coffee table there."
+      "description_template": "The box of cookies (blue and white cardboard; about 26 x 25 x 10 cm) took the place of the wooden coffee table 0.8 m above the floor in the middle of the room: the before recording looked at that spot from 47 viewpoints and saw the wooden coffee table there.",
+      "relations": {
+        "before": null,
+        "after": {
+          "support": {
+            "kind": "surface",
+            "height": 0.748,
+            "gap": -0.0,
+            "coverage": 1.0,
+            "points": 41165,
+            "spread": 0.0117
+          },
+          "cover": null,
+          "objects": []
+        },
+        "text": "on a surface 0.75 m above the floor"
+      }
     },
     {
       "id": 8,
@@ -675,7 +820,23 @@
       "attributes": "light brown wood",
       "object_description": "a light brown wooden coffee table with a visible grain pattern and a lower shelf.",
       "motion_kind": null,
-      "description_template": "A wooden coffee table (light brown wood; about 0.7 x 0.4 x 0.1 m) appeared 0.8 m above the floor in the middle of the room: the before recording looked at that spot from 36 viewpoints and saw it empty."
+      "description_template": "A wooden coffee table (light brown wood; about 0.7 x 0.4 x 0.1 m) appeared 0.8 m above the floor in the middle of the room: the before recording looked at that spot from 36 viewpoints and saw it empty.",
+      "relations": {
+        "before": null,
+        "after": {
+          "support": {
+            "kind": "surface",
+            "height": 0.75,
+            "gap": -0.019,
+            "coverage": 0.894,
+            "points": 49181,
+            "spread": 0.0086
+          },
+          "cover": null,
+          "objects": []
+        },
+        "text": "on a surface 0.75 m above the floor"
+      }
     },
     {
       "id": 10,
@@ -747,7 +908,23 @@
       "attributes": "dark grey hard shell",
       "object_description": "a dark grey hard-shell suitcase with wheels and a combination lock, standing on a tiled floor.",
       "motion_kind": null,
-      "description_template": "A suitcase (dark grey hard shell; about 1.0 x 0.4 x 0.2 m), 0.2 m above the floor on the left side of the room, was seen only in the before recording; the after recording never looked at that spot, so this possible change cannot be verified."
+      "description_template": "A suitcase (dark grey hard shell; about 1.0 x 0.4 x 0.2 m), 0.2 m above the floor on the left side of the room, was seen only in the before recording; the after recording never looked at that spot, so this possible change cannot be verified.",
+      "relations": {
+        "before": {
+          "support": {
+            "kind": "floor",
+            "height": -0.021,
+            "gap": 0.09,
+            "coverage": 0.682,
+            "points": 7638,
+            "spread": 0.0077
+          },
+          "cover": null,
+          "objects": []
+        },
+        "after": null,
+        "text": "on the floor"
+      }
     },
     {
       "id": 11,
@@ -819,7 +996,23 @@
       "attributes": "black plastic",
       "object_description": "the base of a black office chair with five legs.",
       "motion_kind": null,
-      "description_template": "A black office chair (black plastic; about 0.9 x 0.9 x 0.8 m), on the floor in the far left part of the room, was seen only in the after recording; the before recording never looked at that spot, so this possible change cannot be verified."
+      "description_template": "A black office chair (black plastic; about 0.9 x 0.9 x 0.8 m), on the floor in the far left part of the room, was seen only in the after recording; the before recording never looked at that spot, so this possible change cannot be verified.",
+      "relations": {
+        "before": null,
+        "after": {
+          "support": {
+            "kind": "floor",
+            "height": 0.027,
+            "gap": 0.002,
+            "coverage": 0.446,
+            "points": 646,
+            "spread": 0.0147
+          },
+          "cover": null,
+          "objects": []
+        },
+        "text": "on the floor"
+      }
     }
   ],
   "rejected": [
@@ -898,7 +1091,23 @@
       },
       "attributes": "brown, smooth",
       "object_description": "a section of a brown, smooth wall.",
-      "motion_kind": null
+      "motion_kind": null,
+      "relations": {
+        "before": {
+          "support": {
+            "kind": "floor",
+            "height": -0.018,
+            "gap": -0.02,
+            "coverage": 0.519,
+            "points": 17613,
+            "spread": 0.0077
+          },
+          "cover": null,
+          "objects": []
+        },
+        "after": null,
+        "text": "on the floor"
+      }
     },
     {
       "id": 9,
@@ -969,8 +1178,58 @@
       },
       "attributes": "light brown wood",
       "object_description": "a smooth, light brown wooden surface forming part of a table.",
-      "motion_kind": null
+      "motion_kind": null,
+      "relations": {
+        "before": {
+          "support": {
+            "kind": "floor",
+            "height": -0.008,
+            "gap": -0.03,
+            "coverage": 0.407,
+            "points": 943,
+            "spread": 0.0146
+          },
+          "cover": null,
+          "objects": []
+        },
+        "after": null,
+        "text": "on the floor"
+      }
     }
   ],
-  "summary": "7 changes: 2 moved, 2 added, 3 removed; 2 unverified. The white cardboard box and decorative fabric runner were moved within the room, while the tea canister and office chair leg were removed. The wooden coffee table was replaced by a box of cookies, and a smaller wooden coffee table was added in the middle. Two items\u2014a suitcase and a black office chair\u2014are unverified changes because the later or earlier video did not capture the spot where they were seen."
+  "summary": "7 changes: 2 moved, 2 added, 3 removed; 2 unverified. The white cardboard box and decorative fabric runner were moved within the room, while the tea canister and office chair leg were removed. The wooden coffee table was replaced by a box of cookies, and a smaller wooden coffee table was added in the middle. Two items\u2014a suitcase and a black office chair\u2014are unverified changes because the later or earlier video did not capture the spot where they were seen.",
+  "relations_info": {
+    "levelled": true,
+    "reason": null,
+    "floor_known": true,
+    "floor_note": null,
+    "floor_method": "ransac floor plane",
+    "floor_inliers_fraction": 0.8751,
+    "supports": {
+      "floor": 7,
+      "surface": 6,
+      "none": 0
+    },
+    "params": {
+      "enabled": true,
+      "cloud_stride": 2,
+      "support_pad": 0.08,
+      "support_depth": 0.1,
+      "support_tol": 0.03,
+      "own_dist": 0.02,
+      "support_spread": 0.015,
+      "support_min_frac": 0.25,
+      "support_min_points": 30,
+      "peak_frac": 0.5,
+      "floor_max": 0.05,
+      "floor_min_inliers": 0.5,
+      "cover_gap": 0.02,
+      "cover_max": 1.2,
+      "cover_min_frac": 0.15,
+      "on_tol": 0.05,
+      "on_overlap": 0.3,
+      "beside_gap": 0.15,
+      "same_height_tol": 0.05
+    }
+  }
 }

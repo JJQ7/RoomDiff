@@ -148,7 +148,43 @@
       "attributes": "grey fabric seat, black mesh back",
       "object_description": "A modern office chair with a grey fabric seat and black mesh backrest, positioned at a desk in an office setting.",
       "motion_kind": "rigid",
-      "description_template": "The office chair (grey fabric seat, black mesh back; about 0.5 x 0.5 x 0.4 m) moved 0.6 m within the near part of the room (lowest part 0.3 m above the floor before, 0.2 m above the floor after) and turned by about 54 degrees; the after recording saw the old place empty from 7 viewpoints and the before recording saw the new place empty from 32 viewpoints."
+      "description_template": "The office chair (grey fabric seat, black mesh back; about 0.5 x 0.5 x 0.4 m) moved 0.6 m within the near part of the room (lowest part 0.3 m above the floor before, 0.2 m above the floor after) and turned by about 54 degrees; the after recording saw the old place empty from 7 viewpoints and the before recording saw the new place empty from 32 viewpoints.",
+      "relations": {
+        "before": {
+          "support": {
+            "kind": "none",
+            "height": null,
+            "gap": null,
+            "coverage": null,
+            "points": 857
+          },
+          "cover": null,
+          "objects": []
+        },
+        "after": {
+          "support": {
+            "kind": "floor",
+            "height": 0.001,
+            "gap": 0.067,
+            "coverage": 0.861,
+            "points": 63846,
+            "spread": 0.0044
+          },
+          "cover": null,
+          "objects": []
+        },
+        "moved": {
+          "from": {
+            "kind": "none"
+          },
+          "to": {
+            "kind": "floor"
+          },
+          "distance_m": 0.6128,
+          "horizontal_m": 0.598
+        },
+        "text": "to the floor"
+      }
     },
     {
       "id": 3,
@@ -235,7 +271,23 @@
       "attributes": "gray fabric",
       "object_description": "a gray fabric office chair with armrests and a backrest.",
       "motion_kind": null,
-      "description_template": "The office chair (gray fabric; about 0.8 x 0.6 x 0.5 m), which was on the floor in the near part of the room, was removed: the after recording looked at that spot from 32 viewpoints and saw it empty."
+      "description_template": "The office chair (gray fabric; about 0.8 x 0.6 x 0.5 m), which was on the floor in the near part of the room, was removed: the after recording looked at that spot from 32 viewpoints and saw it empty.",
+      "relations": {
+        "before": {
+          "support": {
+            "kind": "floor",
+            "height": -0.0,
+            "gap": 0.007,
+            "coverage": 0.685,
+            "points": 69782,
+            "spread": 0.0036
+          },
+          "cover": null,
+          "objects": []
+        },
+        "after": null,
+        "text": "on the floor"
+      }
     }
   ],
   "rejected": [
@@ -307,7 +359,22 @@
       },
       "attributes": "light beige, smooth",
       "object_description": "a plain, light beige wall in an office cubicle area.",
-      "motion_kind": null
+      "motion_kind": null,
+      "relations": {
+        "before": {
+          "support": {
+            "kind": "none",
+            "height": null,
+            "gap": null,
+            "coverage": null,
+            "points": 6
+          },
+          "cover": null,
+          "objects": []
+        },
+        "after": null,
+        "text": ""
+      }
     },
     {
       "id": 5,
@@ -377,8 +444,57 @@
       },
       "attributes": "plain, smooth, off-white",
       "object_description": "A plain, smooth, off-white wall covering the back and side of the office space.",
-      "motion_kind": null
+      "motion_kind": null,
+      "relations": {
+        "before": null,
+        "after": {
+          "support": {
+            "kind": "none",
+            "height": null,
+            "gap": null,
+            "coverage": null,
+            "points": 11401
+          },
+          "cover": null,
+          "objects": []
+        },
+        "text": ""
+      }
     }
   ],
-  "summary": "2 changes: 1 moved, 0 added, 1 removed; 0 unverified. The office chair was moved slightly within the near part of the room and rotated, while another office chair was removed from the same area. The moved chair\u2019s original spot appears empty in the later video, and the removed chair\u2019s spot is also empty in the later video."
+  "summary": "2 changes: 1 moved, 0 added, 1 removed; 0 unverified. The office chair was moved slightly within the near part of the room and rotated, while another office chair was removed from the same area. The moved chair\u2019s original spot appears empty in the later video, and the removed chair\u2019s spot is also empty in the later video.",
+  "relations_info": {
+    "levelled": true,
+    "reason": null,
+    "floor_known": true,
+    "floor_note": null,
+    "floor_method": "ransac floor plane",
+    "floor_inliers_fraction": 0.9997,
+    "supports": {
+      "floor": 2,
+      "surface": 0,
+      "none": 3
+    },
+    "params": {
+      "enabled": true,
+      "cloud_stride": 2,
+      "support_pad": 0.08,
+      "support_depth": 0.1,
+      "support_tol": 0.03,
+      "own_dist": 0.02,
+      "support_spread": 0.015,
+      "support_min_frac": 0.25,
+      "support_min_points": 30,
+      "peak_frac": 0.5,
+      "floor_max": 0.05,
+      "floor_min_inliers": 0.5,
+      "cover_gap": 0.02,
+      "cover_max": 1.2,
+      "cover_min_frac": 0.15,
+      "on_tol": 0.05,
+      "on_overlap": 0.3,
+      "beside_gap": 0.15,
+      "same_height_tol": 0.05
+    }
+  }
 }

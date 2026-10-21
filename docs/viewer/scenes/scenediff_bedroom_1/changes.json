@@ -144,7 +144,55 @@
       "attributes": "brown, with printed labels",
       "object_description": "A small cardboard box with colorful printed labels, likely used for storage or shipping.",
       "motion_kind": "rigid",
-      "description_template": "The cardboard box (brown, with printed labels; about 0.3 x 0.3 x 0.2 m) moved 0.5 m within the left side of the room (lowest part 0.5 m above the floor before, on the floor after) and turned by about 18 degrees; the after recording saw the old place empty from 9 viewpoints and the before recording saw the new place empty from 21 viewpoints."
+      "description_template": "The cardboard box (brown, with printed labels; about 0.3 x 0.3 x 0.2 m) moved 0.5 m within the left side of the room (lowest part 0.5 m above the floor before, on the floor after) and turned by about 18 degrees; the after recording saw the old place empty from 9 viewpoints and the before recording saw the new place empty from 21 viewpoints.",
+      "relations": {
+        "before": {
+          "support": {
+            "kind": "surface",
+            "height": 0.469,
+            "gap": -0.0,
+            "coverage": 0.311,
+            "points": 6313,
+            "spread": 0.0047
+          },
+          "cover": {
+            "height": 0.796,
+            "coverage": 0.201,
+            "points": 1998,
+            "spread": 0.0137
+          },
+          "objects": [
+            {
+              "relation": "on",
+              "other_change_id": 12
+            }
+          ]
+        },
+        "after": {
+          "support": {
+            "kind": "floor",
+            "height": -0.005,
+            "gap": 0.008,
+            "coverage": 0.764,
+            "points": 10526,
+            "spread": 0.0081
+          },
+          "cover": null,
+          "objects": []
+        },
+        "moved": {
+          "from": {
+            "kind": "surface",
+            "height": 0.469
+          },
+          "to": {
+            "kind": "floor"
+          },
+          "distance_m": 0.5288,
+          "horizontal_m": 0.245
+        },
+        "text": "from the bedside table to the floor"
+      }
     },
     {
       "id": 3,
@@ -289,7 +337,46 @@
       "attributes": "cream-colored, soft fabric",
       "object_description": "A rumpled, cream-colored comforter or duvet cover on a bed.",
       "motion_kind": "deformed",
-      "description_template": "The bedding (cream-colored, soft fabric; about 1.1 x 0.5 x 0.2 m) moved 0.4 m within the far part of the room (0.4 m above the floor both times), mostly by being rearranged or deformed rather than carried as a whole; the after recording saw the old place empty from 11 viewpoints and the before recording saw the new place empty from 5 viewpoints."
+      "description_template": "The bedding (cream-colored, soft fabric; about 1.1 x 0.5 x 0.2 m) moved 0.4 m within the far part of the room (0.4 m above the floor both times), mostly by being rearranged or deformed rather than carried as a whole; the after recording saw the old place empty from 11 viewpoints and the before recording saw the new place empty from 5 viewpoints.",
+      "relations": {
+        "before": {
+          "support": {
+            "kind": "surface",
+            "height": 0.346,
+            "gap": 0.021,
+            "coverage": 0.453,
+            "points": 12527,
+            "spread": 0.0059
+          },
+          "cover": null,
+          "objects": []
+        },
+        "after": {
+          "support": {
+            "kind": "surface",
+            "height": 0.35,
+            "gap": 0.009,
+            "coverage": 0.271,
+            "points": 35840,
+            "spread": 0.0101
+          },
+          "cover": null,
+          "objects": []
+        },
+        "moved": {
+          "from": {
+            "kind": "surface",
+            "height": 0.346
+          },
+          "to": {
+            "kind": "surface",
+            "height": 0.35
+          },
+          "distance_m": 0.4457,
+          "horizontal_m": 0.423
+        },
+        "text": "on a surface 0.35 m above the floor both times"
+      }
     },
     {
       "id": 1,
@@ -361,7 +448,23 @@
         "before": "crops/1_before.jpg",
         "after": "crops/1_before_place.jpg"
       },
-      "description_template": "The black jacket (black fabric; about 0.9 x 0.5 x 0.2 m), which was on the floor in the near left part of the room, was removed: the after recording looked at that spot from 7 viewpoints and saw it empty."
+      "description_template": "The black jacket (black fabric; about 0.9 x 0.5 x 0.2 m), which was on the floor in the near left part of the room, was removed: the after recording looked at that spot from 7 viewpoints and saw it empty.",
+      "relations": {
+        "before": {
+          "support": {
+            "kind": "floor",
+            "height": 0.002,
+            "gap": 0.013,
+            "coverage": 0.897,
+            "points": 40384,
+            "spread": 0.0057
+          },
+          "cover": null,
+          "objects": []
+        },
+        "after": null,
+        "text": "on the floor"
+      }
     },
     {
       "id": 12,
@@ -432,7 +535,23 @@
       "attributes": "black metal",
       "object_description": "a black metal bedside table with items on top.",
       "motion_kind": null,
-      "description_template": "A bedside table (black metal; about 0.6 x 0.5 x 0.3 m), on the floor on the left side of the room, was seen only in the before recording; the after recording never looked at that spot, so this possible change cannot be verified."
+      "description_template": "A bedside table (black metal; about 0.6 x 0.5 x 0.3 m), on the floor on the left side of the room, was seen only in the before recording; the after recording never looked at that spot, so this possible change cannot be verified.",
+      "relations": {
+        "before": {
+          "support": {
+            "kind": "floor",
+            "height": 0.005,
+            "gap": 0.006,
+            "coverage": 0.477,
+            "points": 16397,
+            "spread": 0.0056
+          },
+          "cover": null,
+          "objects": []
+        },
+        "after": null,
+        "text": "on the floor"
+      }
     }
   ],
   "rejected": [
@@ -510,7 +629,22 @@
       },
       "attributes": "grey, soft fabric",
       "object_description": "A soft grey blanket draped over something, likely a person or furniture, with visible folds and creases.",
-      "motion_kind": null
+      "motion_kind": null,
+      "relations": {
+        "before": {
+          "support": {
+            "kind": "none",
+            "height": null,
+            "gap": null,
+            "coverage": null,
+            "points": 26988
+          },
+          "cover": null,
+          "objects": []
+        },
+        "after": null,
+        "text": ""
+      }
     },
     {
       "id": 5,
@@ -586,7 +720,22 @@
       },
       "attributes": "white cotton",
       "object_description": "a white, soft, rumpled duvet cover on a bed.",
-      "motion_kind": null
+      "motion_kind": null,
+      "relations": {
+        "before": {
+          "support": {
+            "kind": "none",
+            "height": null,
+            "gap": null,
+            "coverage": null,
+            "points": 23492
+          },
+          "cover": null,
+          "objects": []
+        },
+        "after": null,
+        "text": ""
+      }
     },
     {
       "id": 6,
@@ -662,7 +811,22 @@
       },
       "attributes": "plain, smooth",
       "object_description": "a plain white wall surface with a slightly uneven red outline tracing its edge.",
-      "motion_kind": null
+      "motion_kind": null,
+      "relations": {
+        "before": {
+          "support": {
+            "kind": "none",
+            "height": null,
+            "gap": null,
+            "coverage": null,
+            "points": 12000
+          },
+          "cover": null,
+          "objects": []
+        },
+        "after": null,
+        "text": ""
+      }
     },
     {
       "id": 7,
@@ -738,7 +902,22 @@
       },
       "attributes": "white, paper",
       "object_description": "a corner of a white sheet of paper, slightly curled at the edge.",
-      "motion_kind": null
+      "motion_kind": null,
+      "relations": {
+        "before": {
+          "support": {
+            "kind": "none",
+            "height": null,
+            "gap": null,
+            "coverage": null,
+            "points": 3923
+          },
+          "cover": null,
+          "objects": []
+        },
+        "after": null,
+        "text": ""
+      }
     },
     {
       "id": 8,
@@ -816,7 +995,23 @@
       "replaced_by": 10,
       "attributes": "gray cotton",
       "object_description": "a wrinkled gray bed sheet covering a bed.",
-      "motion_kind": null
+      "motion_kind": null,
+      "relations": {
+        "before": {
+          "support": {
+            "kind": "surface",
+            "height": 0.349,
+            "gap": -0.01,
+            "coverage": 0.625,
+            "points": 24389,
+            "spread": 0.0102
+          },
+          "cover": null,
+          "objects": []
+        },
+        "after": null,
+        "text": "on a surface 0.35 m above the floor"
+      }
     },
     {
       "id": 9,
@@ -892,7 +1087,22 @@
       },
       "attributes": "white, metal",
       "object_description": "a tall, slender floor lamp with a white shade and metal base.",
-      "motion_kind": null
+      "motion_kind": null,
+      "relations": {
+        "before": {
+          "support": {
+            "kind": "none",
+            "height": null,
+            "gap": null,
+            "coverage": null,
+            "points": 10330
+          },
+          "cover": null,
+          "objects": []
+        },
+        "after": null,
+        "text": ""
+      }
     },
     {
       "id": 13,
@@ -963,6 +1173,22 @@
       "crops": {
         "after": "crops/1_after.jpg",
         "before": "crops/1_after_place.jpg"
+      },
+      "relations": {
+        "before": null,
+        "after": {
+          "support": {
+            "kind": "surface",
+            "height": 0.349,
+            "gap": 0.016,
+            "coverage": 0.302,
+            "points": 58863,
+            "spread": 0.0077
+          },
+          "cover": null,
+          "objects": []
+        },
+        "text": "on a surface 0.35 m above the floor"
       }
     },
     {
@@ -1041,7 +1267,23 @@
       "replaces": 8,
       "attributes": "dark grey fabric",
       "object_description": "a crumpled dark grey bed sheet with folds and creases.",
-      "motion_kind": null
+      "motion_kind": null,
+      "relations": {
+        "before": null,
+        "after": {
+          "support": {
+            "kind": "surface",
+            "height": 0.366,
+            "gap": -0.009,
+            "coverage": 1.0,
+            "points": 37298,
+            "spread": 0.0119
+          },
+          "cover": null,
+          "objects": []
+        },
+        "text": "on a surface 0.37 m above the floor"
+      }
     },
     {
       "id": 11,
@@ -1111,8 +1353,57 @@
       },
       "attributes": "light grey smooth",
       "object_description": "a section of a light grey smooth wall in a room.",
-      "motion_kind": null
+      "motion_kind": null,
+      "relations": {
+        "before": null,
+        "after": {
+          "support": {
+            "kind": "none",
+            "height": null,
+            "gap": null,
+            "coverage": null,
+            "points": 3221
+          },
+          "cover": null,
+          "objects": []
+        },
+        "text": ""
+      }
     }
   ],
-  "summary": "3 changes: 2 moved, 0 added, 1 removed; 1 unverified. The brown cardboard box was moved slightly and rotated, now sitting on the floor where it previously hung above it. The cream-colored bedding was rearranged or deformed, shifting its position slightly within the far part of the room. The black jacket was removed from the floor in the near left corner. A bedside table, visible only in the earlier video, may have been removed or moved, but this cannot be verified as the later video did not show that spot."
+  "summary": "3 changes: 2 moved, 0 added, 1 removed; 1 unverified. The brown cardboard box was moved slightly and rotated, now sitting on the floor where it previously hung above it. The cream-colored bedding was rearranged or deformed, shifting its position slightly within the far part of the room. The black jacket was removed from the floor in the near left corner. A bedside table, visible only in the earlier video, may have been removed or moved, but this cannot be verified as the later video did not show that spot.",
+  "relations_info": {
+    "levelled": true,
+    "reason": null,
+    "floor_known": true,
+    "floor_note": null,
+    "floor_method": "ransac floor plane",
+    "floor_inliers_fraction": 0.9589,
+    "supports": {
+      "floor": 3,
+      "surface": 6,
+      "none": 6
+    },
+    "params": {
+      "enabled": true,
+      "cloud_stride": 2,
+      "support_pad": 0.08,
+      "support_depth": 0.1,
+      "support_tol": 0.03,
+      "own_dist": 0.02,
+      "support_spread": 0.015,
+      "support_min_frac": 0.25,
+      "support_min_points": 30,
+      "peak_frac": 0.5,
+      "floor_max": 0.05,
+      "floor_min_inliers": 0.5,
+      "cover_gap": 0.02,
+      "cover_max": 1.2,
+      "cover_min_frac": 0.15,
+      "on_tol": 0.05,
+      "on_overlap": 0.3,
+      "beside_gap": 0.15,
+      "same_height_tol": 0.05
+    }
+  }
 }

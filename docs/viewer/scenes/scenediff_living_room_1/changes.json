@@ -149,7 +149,48 @@
       "attributes": "light-colored, floral pattern",
       "object_description": "A light-colored curtain with a floral pattern, hanging in a bedroom window.",
       "motion_kind": "rigid",
-      "description_template": "The curtain (light-colored, floral pattern; about 1.0 x 0.7 x 0.1 m) moved 1.1 m within the far left part of the room (lowest part 0.5 m above the floor before, on the floor after) and turned by about 10 degrees; the after recording saw the old place empty from 6 viewpoints and the before recording saw the new place empty from 7 viewpoints."
+      "description_template": "The curtain (light-colored, floral pattern; about 1.0 x 0.7 x 0.1 m) moved 1.1 m within the far left part of the room (lowest part 0.5 m above the floor before, on the floor after) and turned by about 10 degrees; the after recording saw the old place empty from 6 viewpoints and the before recording saw the new place empty from 7 viewpoints.",
+      "relations": {
+        "before": {
+          "support": {
+            "kind": "none",
+            "height": null,
+            "gap": null,
+            "coverage": null,
+            "points": 1558
+          },
+          "cover": null,
+          "objects": [
+            {
+              "relation": "beside",
+              "other_change_id": 7
+            }
+          ]
+        },
+        "after": {
+          "support": {
+            "kind": "floor",
+            "height": 0.038,
+            "gap": 0.037,
+            "coverage": 0.296,
+            "points": 1377,
+            "spread": 0.0085
+          },
+          "cover": null,
+          "objects": []
+        },
+        "moved": {
+          "from": {
+            "kind": "none"
+          },
+          "to": {
+            "kind": "floor"
+          },
+          "distance_m": 1.114,
+          "horizontal_m": 1.117
+        },
+        "text": "to the floor"
+      }
     },
     {
       "id": 2,
@@ -294,7 +335,44 @@
       "attributes": "brown wood",
       "object_description": "a tall, narrow wooden ladder-style shelf with multiple rungs, leaning against a wall.",
       "motion_kind": "rigid",
-      "description_template": "The wooden ladder shelf (brown wood; about 1.4 x 0.5 x 0.1 m) moved 0.3 m within the far part of the room (lowest part 0.3 m above the floor before, on the floor after); the after recording saw the old place empty from 4 viewpoints and the before recording saw the new place empty from 9 viewpoints."
+      "description_template": "The wooden ladder shelf (brown wood; about 1.4 x 0.5 x 0.1 m) moved 0.3 m within the far part of the room (lowest part 0.3 m above the floor before, on the floor after); the after recording saw the old place empty from 4 viewpoints and the before recording saw the new place empty from 9 viewpoints.",
+      "relations": {
+        "before": {
+          "support": {
+            "kind": "floor",
+            "height": 0.02,
+            "gap": 0.085,
+            "coverage": 0.831,
+            "points": 5871,
+            "spread": 0.0147
+          },
+          "cover": null,
+          "objects": []
+        },
+        "after": {
+          "support": {
+            "kind": "floor",
+            "height": 0.007,
+            "gap": -0.001,
+            "coverage": 0.567,
+            "points": 5289,
+            "spread": 0.0043
+          },
+          "cover": null,
+          "objects": []
+        },
+        "moved": {
+          "from": {
+            "kind": "floor"
+          },
+          "to": {
+            "kind": "floor"
+          },
+          "distance_m": 0.2916,
+          "horizontal_m": 0.256
+        },
+        "text": "on the floor both times"
+      }
     },
     {
       "id": 3,
@@ -371,7 +449,23 @@
       "attributes": "black leather",
       "object_description": "a small black leather wallet sitting on a surface.",
       "motion_kind": null,
-      "description_template": "The black wallet (black leather; about 10 x 10 x 2 cm), which was 0.6 m above the floor in the near right part of the room, was removed: the after recording looked at that spot from 12 viewpoints and saw it empty."
+      "description_template": "The black wallet (black leather; about 10 x 10 x 2 cm), which was 0.6 m above the floor in the near right part of the room, was removed: the after recording looked at that spot from 12 viewpoints and saw it empty.",
+      "relations": {
+        "before": {
+          "support": {
+            "kind": "surface",
+            "height": 0.615,
+            "gap": -0.0,
+            "coverage": 0.611,
+            "points": 9851,
+            "spread": 0.0065
+          },
+          "cover": null,
+          "objects": []
+        },
+        "after": null,
+        "text": "on a surface 0.61 m above the floor"
+      }
     },
     {
       "id": 5,
@@ -441,7 +535,23 @@
       "attributes": "dark brown, leather",
       "object_description": "a brown leather bag lying on a wooden floor.",
       "motion_kind": null,
-      "description_template": "The brown leather bag (dark brown, leather; about 0.4 x 0.3 x 0.2 m), which was on the floor on the right side of the room, was removed: the after recording looked at that spot from 7 viewpoints and saw it empty."
+      "description_template": "The brown leather bag (dark brown, leather; about 0.4 x 0.3 x 0.2 m), which was on the floor on the right side of the room, was removed: the after recording looked at that spot from 7 viewpoints and saw it empty.",
+      "relations": {
+        "before": {
+          "support": {
+            "kind": "floor",
+            "height": 0.008,
+            "gap": 0.001,
+            "coverage": 0.497,
+            "points": 13018,
+            "spread": 0.0055
+          },
+          "cover": null,
+          "objects": []
+        },
+        "after": null,
+        "text": "on the floor"
+      }
     },
     {
       "id": 7,
@@ -511,7 +621,27 @@
       "attributes": "white with dark grey flowers",
       "object_description": "A sheer curtain with a floral pattern featuring dark grey flowers and leaves, hanging in a window.",
       "motion_kind": null,
-      "description_template": "The curtain (white with dark grey flowers; about 1.3 x 0.9 x 0.1 m), which was 0.5 m above the floor in the far left part of the room, was removed: the after recording looked at that spot from 4 viewpoints and saw it empty."
+      "description_template": "The curtain (white with dark grey flowers; about 1.3 x 0.9 x 0.1 m), which was 0.5 m above the floor in the far left part of the room, was removed: the after recording looked at that spot from 4 viewpoints and saw it empty.",
+      "relations": {
+        "before": {
+          "support": {
+            "kind": "none",
+            "height": null,
+            "gap": null,
+            "coverage": null,
+            "points": 1121
+          },
+          "cover": null,
+          "objects": [
+            {
+              "relation": "beside",
+              "other_change_id": 1
+            }
+          ]
+        },
+        "after": null,
+        "text": "beside the curtain"
+      }
     },
     {
       "id": 10,
@@ -590,7 +720,23 @@
       "attributes": "black bristles, pink handle",
       "object_description": "a hairbrush with black bristles and a pink handle lying on a bed.",
       "motion_kind": null,
-      "description_template": "A hairbrush (black bristles, pink handle; about 23 x 11 x 1 cm) appeared 0.4 m above the floor in the middle of the room: the before recording looked at that spot from 11 viewpoints and saw it empty."
+      "description_template": "A hairbrush (black bristles, pink handle; about 23 x 11 x 1 cm) appeared 0.4 m above the floor in the middle of the room: the before recording looked at that spot from 11 viewpoints and saw it empty.",
+      "relations": {
+        "before": null,
+        "after": {
+          "support": {
+            "kind": "surface",
+            "height": 0.433,
+            "gap": -0.006,
+            "coverage": 1.0,
+            "points": 13036,
+            "spread": 0.0047
+          },
+          "cover": null,
+          "objects": []
+        },
+        "text": "on a surface 0.43 m above the floor"
+      }
     },
     {
       "id": 17,
@@ -662,7 +808,23 @@
       "attributes": "white, wooden",
       "object_description": "A white wooden dresser with a mirror on top, cluttered with clothes and items.",
       "motion_kind": null,
-      "description_template": "A white dresser (white, wooden; about 1.6 x 1.3 x 0.7 m), on the floor in the near right part of the room, was seen only in the after recording; the before recording never looked at that spot, so this possible change cannot be verified."
+      "description_template": "A white dresser (white, wooden; about 1.6 x 1.3 x 0.7 m), on the floor in the near right part of the room, was seen only in the after recording; the before recording never looked at that spot, so this possible change cannot be verified.",
+      "relations": {
+        "before": null,
+        "after": {
+          "support": {
+            "kind": "floor",
+            "height": 0.003,
+            "gap": 0.012,
+            "coverage": 0.483,
+            "points": 28868,
+            "spread": 0.005
+          },
+          "cover": null,
+          "objects": []
+        },
+        "text": "on the floor"
+      }
     }
   ],
   "rejected": [
@@ -742,7 +904,23 @@
       "replaced_by": 10,
       "attributes": "gray cotton",
       "object_description": "A gray cotton bed sheet, slightly wrinkled and lying flat on a bed.",
-      "motion_kind": null
+      "motion_kind": null,
+      "relations": {
+        "before": {
+          "support": {
+            "kind": "surface",
+            "height": 0.436,
+            "gap": -0.009,
+            "coverage": 0.681,
+            "points": 34149,
+            "spread": 0.0084
+          },
+          "cover": null,
+          "objects": []
+        },
+        "after": null,
+        "text": "on a surface 0.44 m above the floor"
+      }
     },
     {
       "id": 6,
@@ -818,7 +996,23 @@
       },
       "attributes": "grey and black",
       "object_description": "a messy pile of mixed clothing items on the wooden floor.",
-      "motion_kind": null
+      "motion_kind": null,
+      "relations": {
+        "before": {
+          "support": {
+            "kind": "floor",
+            "height": -0.001,
+            "gap": -0.009,
+            "coverage": 0.724,
+            "points": 13900,
+            "spread": 0.0034
+          },
+          "cover": null,
+          "objects": []
+        },
+        "after": null,
+        "text": "on the floor"
+      }
     },
     {
       "id": 8,
@@ -894,7 +1088,23 @@
       },
       "attributes": "dark, plaid pattern",
       "object_description": "a dark, plaid-patterned blanket draped over a surface.",
-      "motion_kind": null
+      "motion_kind": null,
+      "relations": {
+        "before": {
+          "support": {
+            "kind": "surface",
+            "height": 0.444,
+            "gap": 0.005,
+            "coverage": 0.601,
+            "points": 42613,
+            "spread": 0.0066
+          },
+          "cover": null,
+          "objects": []
+        },
+        "after": null,
+        "text": "on a surface 0.44 m above the floor"
+      }
     },
     {
       "id": 9,
@@ -970,7 +1180,22 @@
       },
       "attributes": "white painted",
       "object_description": "A plain white painted wall with a wooden ladder leaning against it.",
-      "motion_kind": null
+      "motion_kind": null,
+      "relations": {
+        "before": {
+          "support": {
+            "kind": "none",
+            "height": null,
+            "gap": null,
+            "coverage": null,
+            "points": 7660
+          },
+          "cover": null,
+          "objects": []
+        },
+        "after": null,
+        "text": ""
+      }
     },
     {
       "id": 11,
@@ -1046,7 +1271,23 @@
       },
       "attributes": "brown wood",
       "object_description": "a section of a wooden floor with visible grain and planks.",
-      "motion_kind": null
+      "motion_kind": null,
+      "relations": {
+        "before": null,
+        "after": {
+          "support": {
+            "kind": "floor",
+            "height": 0.01,
+            "gap": -0.003,
+            "coverage": 1.0,
+            "points": 25322,
+            "spread": 0.0053
+          },
+          "cover": null,
+          "objects": []
+        },
+        "text": "on the floor"
+      }
     },
     {
       "id": 12,
@@ -1122,7 +1363,22 @@
       },
       "attributes": "green outline, metallic frame",
       "object_description": "a mirror mounted on the wall with a green outline tracing its edge.",
-      "motion_kind": null
+      "motion_kind": null,
+      "relations": {
+        "before": null,
+        "after": {
+          "support": {
+            "kind": "none",
+            "height": null,
+            "gap": null,
+            "coverage": null,
+            "points": 7063
+          },
+          "cover": null,
+          "objects": []
+        },
+        "text": ""
+      }
     },
     {
       "id": 13,
@@ -1192,7 +1448,27 @@
       },
       "attributes": "dark brown wood",
       "object_description": "a dark brown wooden bed frame with visible grain and a curved corner detail.",
-      "motion_kind": null
+      "motion_kind": null,
+      "relations": {
+        "before": {
+          "support": {
+            "kind": "none",
+            "height": null,
+            "gap": null,
+            "coverage": null,
+            "points": 5965
+          },
+          "cover": {
+            "height": 0.342,
+            "coverage": 0.192,
+            "points": 18003,
+            "spread": 0.0114
+          },
+          "objects": []
+        },
+        "after": null,
+        "text": "partly under a surface 0.34 m above the floor"
+      }
     },
     {
       "id": 14,
@@ -1262,7 +1538,22 @@
       },
       "attributes": "dark, reflective",
       "object_description": "The mirror reflects a distorted view of the room's floor and wall, showing a cluttered area with objects and a pipe.",
-      "motion_kind": null
+      "motion_kind": null,
+      "relations": {
+        "before": {
+          "support": {
+            "kind": "none",
+            "height": null,
+            "gap": null,
+            "coverage": null,
+            "points": 3314
+          },
+          "cover": null,
+          "objects": []
+        },
+        "after": null,
+        "text": ""
+      }
     },
     {
       "id": 15,
@@ -1332,7 +1623,22 @@
       },
       "attributes": "brown wood",
       "object_description": "a tall, narrow wooden door reflected in a mirror.",
-      "motion_kind": null
+      "motion_kind": null,
+      "relations": {
+        "before": null,
+        "after": {
+          "support": {
+            "kind": "none",
+            "height": null,
+            "gap": null,
+            "coverage": null,
+            "points": 4
+          },
+          "cover": null,
+          "objects": []
+        },
+        "text": ""
+      }
     },
     {
       "id": 16,
@@ -1402,8 +1708,57 @@
       },
       "attributes": "gray sheets, wooden frame",
       "object_description": "A bed with rumpled gray sheets and a wooden frame, appearing unmade.",
-      "motion_kind": null
+      "motion_kind": null,
+      "relations": {
+        "before": null,
+        "after": {
+          "support": {
+            "kind": "none",
+            "height": null,
+            "gap": null,
+            "coverage": null,
+            "points": 1
+          },
+          "cover": null,
+          "objects": []
+        },
+        "text": ""
+      }
     }
   ],
-  "summary": "6 changes: 2 moved, 1 added, 3 removed; 1 unverified. The light-colored floral curtain and the brown wooden ladder shelf both moved within the far part of the room, with the curtain now on the floor and the shelf lowered. The black leather wallet, dark brown leather bag, and white floral curtain were removed from their respective spots. A pink-handled hairbrush was added in the middle of the room. The white wooden dresser may have been added, but this cannot be verified because the earlier video did not show that area."
+  "summary": "6 changes: 2 moved, 1 added, 3 removed; 1 unverified. The light-colored floral curtain and the brown wooden ladder shelf both moved within the far part of the room, with the curtain now on the floor and the shelf lowered. The black leather wallet, dark brown leather bag, and white floral curtain were removed from their respective spots. A pink-handled hairbrush was added in the middle of the room. The white wooden dresser may have been added, but this cannot be verified because the earlier video did not show that area.",
+  "relations_info": {
+    "levelled": true,
+    "reason": null,
+    "floor_known": true,
+    "floor_note": null,
+    "floor_method": "ransac floor plane",
+    "floor_inliers_fraction": 0.9991,
+    "supports": {
+      "floor": 7,
+      "surface": 4,
+      "none": 8
+    },
+    "params": {
+      "enabled": true,
+      "cloud_stride": 2,
+      "support_pad": 0.08,
+      "support_depth": 0.1,
+      "support_tol": 0.03,
+      "own_dist": 0.02,
+      "support_spread": 0.015,
+      "support_min_frac": 0.25,
+      "support_min_points": 30,
+      "peak_frac": 0.5,
+      "floor_max": 0.05,
+      "floor_min_inliers": 0.5,
+      "cover_gap": 0.02,
+      "cover_max": 1.2,
+      "cover_min_frac": 0.15,
+      "on_tol": 0.05,
+      "on_overlap": 0.3,
+      "beside_gap": 0.15,
+      "same_height_tol": 0.05
+    }
+  }
 }

@@ -80,7 +80,23 @@
       "attributes": "black and red plastic",
       "object_description": "a pair of black and red plastic scissors resting on a wooden table.",
       "motion_kind": null,
-      "description_template": "The scissors (black and red plastic; about 0.8 x 0.2 x 0.1 m), which was 0.8 m above the floor in the middle of the room, was removed: the after recording looked at that spot from 37 viewpoints and saw it empty."
+      "description_template": "The scissors (black and red plastic; about 0.8 x 0.2 x 0.1 m), which was 0.8 m above the floor in the middle of the room, was removed: the after recording looked at that spot from 37 viewpoints and saw it empty.",
+      "relations": {
+        "before": {
+          "support": {
+            "kind": "surface",
+            "height": 0.779,
+            "gap": -0.005,
+            "coverage": 0.789,
+            "points": 80665,
+            "spread": 0.0087
+          },
+          "cover": null,
+          "objects": []
+        },
+        "after": null,
+        "text": "on a surface 0.78 m above the floor"
+      }
     },
     {
       "id": 2,
@@ -150,7 +166,32 @@
       "attributes": "dark green, plastic",
       "object_description": "a dark green plastic bucket partially visible under a wooden table.",
       "motion_kind": null,
-      "description_template": "A green bucket (dark green, plastic; about 0.4 x 0.3 x 0.2 m) appeared 0.3 m above the floor on the left side of the room: the before recording looked at that spot from 9 viewpoints and saw it empty."
+      "description_template": "A green bucket (dark green, plastic; about 0.4 x 0.3 x 0.2 m) appeared 0.3 m above the floor on the left side of the room: the before recording looked at that spot from 9 viewpoints and saw it empty.",
+      "relations": {
+        "before": null,
+        "after": {
+          "support": {
+            "kind": "none",
+            "height": null,
+            "gap": null,
+            "coverage": null,
+            "points": 344
+          },
+          "cover": {
+            "height": 0.773,
+            "coverage": 0.178,
+            "points": 5155,
+            "spread": 0.0077
+          },
+          "objects": [
+            {
+              "relation": "beside",
+              "other_change_id": 4
+            }
+          ]
+        },
+        "text": "partly under a surface 0.77 m above the floor, beside the blue suitcase"
+      }
     },
     {
       "id": 3,
@@ -220,7 +261,23 @@
       "attributes": "black and gold",
       "object_description": "a cylindrical container for storing tea, with a black lid and gold body.",
       "motion_kind": null,
-      "description_template": "A tea canister (black and gold; about 24 x 20 x 20 cm) appeared 0.8 m above the floor in the far part of the room: the before recording looked at that spot from 23 viewpoints and saw it empty."
+      "description_template": "A tea canister (black and gold; about 24 x 20 x 20 cm) appeared 0.8 m above the floor in the far part of the room: the before recording looked at that spot from 23 viewpoints and saw it empty.",
+      "relations": {
+        "before": null,
+        "after": {
+          "support": {
+            "kind": "surface",
+            "height": 0.765,
+            "gap": 0.007,
+            "coverage": 1.0,
+            "points": 33300,
+            "spread": 0.0066
+          },
+          "cover": null,
+          "objects": []
+        },
+        "text": "on a surface 0.77 m above the floor"
+      }
     },
     {
       "id": 4,
@@ -292,7 +349,27 @@
       "attributes": "blue hard-shell",
       "object_description": "a blue hard-shell suitcase with a zipper and handle.",
       "motion_kind": null,
-      "description_template": "A blue suitcase (blue hard-shell; about 1.0 x 0.9 x 0.5 m), 0.3 m above the floor in the far left part of the room, was seen only in the after recording; the before recording never looked at that spot, so this possible change cannot be verified."
+      "description_template": "A blue suitcase (blue hard-shell; about 1.0 x 0.9 x 0.5 m), 0.3 m above the floor in the far left part of the room, was seen only in the after recording; the before recording never looked at that spot, so this possible change cannot be verified.",
+      "relations": {
+        "before": null,
+        "after": {
+          "support": {
+            "kind": "none",
+            "height": null,
+            "gap": null,
+            "coverage": null,
+            "points": 71
+          },
+          "cover": null,
+          "objects": [
+            {
+              "relation": "beside",
+              "other_change_id": 2
+            }
+          ]
+        },
+        "text": "beside the green bucket"
+      }
     }
   ],
   "rejected": [
@@ -365,7 +442,22 @@
       },
       "attributes": "light brown wood",
       "object_description": "a smooth, light brown wooden tabletop surface.",
-      "motion_kind": null
+      "motion_kind": null,
+      "relations": {
+        "before": {
+          "support": {
+            "kind": "none",
+            "height": null,
+            "gap": null,
+            "coverage": null,
+            "points": 129
+          },
+          "cover": null,
+          "objects": []
+        },
+        "after": null,
+        "text": ""
+      }
     },
     {
       "id": 6,
@@ -436,8 +528,57 @@
       },
       "attributes": "light brown, smooth",
       "object_description": "a section of a light brown wooden floor with visible planks.",
-      "motion_kind": null
+      "motion_kind": null,
+      "relations": {
+        "before": null,
+        "after": {
+          "support": {
+            "kind": "none",
+            "height": null,
+            "gap": null,
+            "coverage": null,
+            "points": 641
+          },
+          "cover": null,
+          "objects": []
+        },
+        "text": ""
+      }
     }
   ],
-  "summary": "3 changes: 0 moved, 2 added, 1 removed; 1 unverified. The black and red plastic scissors were removed from the middle of the room, while a green plastic bucket and a black and gold tea canister were added to the left side and far part of the room, respectively. A blue hard-shell suitcase may have appeared in the far left, but this cannot be confirmed as the earlier video did not capture that spot."
+  "summary": "3 changes: 0 moved, 2 added, 1 removed; 1 unverified. The black and red plastic scissors were removed from the middle of the room, while a green plastic bucket and a black and gold tea canister were added to the left side and far part of the room, respectively. A blue hard-shell suitcase may have appeared in the far left, but this cannot be confirmed as the earlier video did not capture that spot.",
+  "relations_info": {
+    "levelled": true,
+    "reason": null,
+    "floor_known": true,
+    "floor_note": null,
+    "floor_method": "ransac floor plane",
+    "floor_inliers_fraction": 0.8726,
+    "supports": {
+      "floor": 0,
+      "surface": 2,
+      "none": 4
+    },
+    "params": {
+      "enabled": true,
+      "cloud_stride": 2,
+      "support_pad": 0.08,
+      "support_depth": 0.1,
+      "support_tol": 0.03,
+      "own_dist": 0.02,
+      "support_spread": 0.015,
+      "support_min_frac": 0.25,
+      "support_min_points": 30,
+      "peak_frac": 0.5,
+      "floor_max": 0.05,
+      "floor_min_inliers": 0.5,
+      "cover_gap": 0.02,
+      "cover_max": 1.2,
+      "cover_min_frac": 0.15,
+      "on_tol": 0.05,
+      "on_overlap": 0.3,
+      "beside_gap": 0.15,
+      "same_height_tol": 0.05
+    }
+  }
 }

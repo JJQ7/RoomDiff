@@ -148,7 +148,51 @@
       "attributes": "blue plastic with white cap",
       "object_description": "a blue plastic bottle of laundry detergent with a white cap, standing on a wooden table.",
       "motion_kind": "rigid",
-      "description_template": "The blue laundry detergent (blue plastic with white cap; about 0.4 x 0.3 x 0.1 m) moved 0.5 m, from the near part of the room to the middle of the room (0.8 m above the floor both times) and turned by about 24 degrees; the after recording saw the old place empty from 23 viewpoints and the before recording saw the new place empty from 38 viewpoints."
+      "description_template": "The blue laundry detergent (blue plastic with white cap; about 0.4 x 0.3 x 0.1 m) moved 0.5 m, from the near part of the room to the middle of the room (0.8 m above the floor both times) and turned by about 24 degrees; the after recording saw the old place empty from 23 viewpoints and the before recording saw the new place empty from 38 viewpoints.",
+      "relations": {
+        "before": {
+          "support": {
+            "kind": "surface",
+            "height": 0.776,
+            "gap": 0.013,
+            "coverage": 1.0,
+            "points": 38930,
+            "spread": 0.0077
+          },
+          "cover": null,
+          "objects": [
+            {
+              "relation": "beside",
+              "other_change_id": 2
+            }
+          ]
+        },
+        "after": {
+          "support": {
+            "kind": "surface",
+            "height": 0.775,
+            "gap": 0.004,
+            "coverage": 1.0,
+            "points": 72352,
+            "spread": 0.0082
+          },
+          "cover": null,
+          "objects": []
+        },
+        "moved": {
+          "from": {
+            "kind": "surface",
+            "height": 0.776
+          },
+          "to": {
+            "kind": "surface",
+            "height": 0.775
+          },
+          "distance_m": 0.527,
+          "horizontal_m": 0.551
+        },
+        "text": "on a surface 0.78 m above the floor both times"
+      }
     },
     {
       "id": 2,
@@ -218,7 +262,28 @@
       "attributes": "yellow metal",
       "object_description": "a yellow metal can with a black lid sitting on a wooden surface.",
       "motion_kind": null,
-      "description_template": "The yellow can (yellow metal; about 24 x 20 x 19 cm), which was 0.8 m above the floor on the right side of the room, was removed: the after recording looked at that spot from 23 viewpoints and saw it empty."
+      "description_template": "The yellow can (yellow metal; about 24 x 20 x 19 cm), which was 0.8 m above the floor on the right side of the room, was removed: the after recording looked at that spot from 23 viewpoints and saw it empty.",
+      "relations": {
+        "before": {
+          "support": {
+            "kind": "surface",
+            "height": 0.775,
+            "gap": 0.009,
+            "coverage": 1.0,
+            "points": 35959,
+            "spread": 0.007
+          },
+          "cover": null,
+          "objects": [
+            {
+              "relation": "beside",
+              "other_change_id": 1
+            }
+          ]
+        },
+        "after": null,
+        "text": "on a surface 0.78 m above the floor, beside the blue laundry detergent"
+      }
     },
     {
       "id": 5,
@@ -310,7 +375,23 @@
       "attributes": "light brown wood",
       "object_description": "a light brown wooden table with a visible grain pattern and a simple X-shaped leg design.",
       "motion_kind": null,
-      "description_template": "A wooden table (light brown wood; about 1.7 x 1.1 x 0.7 m) appeared 0.8 m above the floor in the middle of the room: the before recording looked at that spot from 45 viewpoints and saw it empty."
+      "description_template": "A wooden table (light brown wood; about 1.7 x 1.1 x 0.7 m) appeared 0.8 m above the floor in the middle of the room: the before recording looked at that spot from 45 viewpoints and saw it empty.",
+      "relations": {
+        "before": null,
+        "after": {
+          "support": {
+            "kind": "surface",
+            "height": 0.773,
+            "gap": -0.015,
+            "coverage": 0.481,
+            "points": 115155,
+            "spread": 0.0092
+          },
+          "cover": null,
+          "objects": []
+        },
+        "text": "on a surface 0.77 m above the floor"
+      }
     },
     {
       "id": 7,
@@ -382,7 +463,22 @@
       "attributes": "light brown wood",
       "object_description": "a small wooden stool with a square seat and visible grain.",
       "motion_kind": null,
-      "description_template": "A wooden stool (light brown wood; about 0.5 x 0.4 x 0.3 m), 0.4 m above the floor in the near right part of the room, was seen only in the before recording; the after recording never looked at that spot, so this possible change cannot be verified."
+      "description_template": "A wooden stool (light brown wood; about 0.5 x 0.4 x 0.3 m), 0.4 m above the floor in the near right part of the room, was seen only in the before recording; the after recording never looked at that spot, so this possible change cannot be verified.",
+      "relations": {
+        "before": {
+          "support": {
+            "kind": "none",
+            "height": null,
+            "gap": null,
+            "coverage": null,
+            "points": 165
+          },
+          "cover": null,
+          "objects": []
+        },
+        "after": null,
+        "text": ""
+      }
     },
     {
       "id": 8,
@@ -454,7 +550,27 @@
       "attributes": "blue hard-shell",
       "object_description": "a blue hard-shell suitcase with a handle and zipper.",
       "motion_kind": null,
-      "description_template": "A blue suitcase (blue hard-shell; about 0.7 x 0.7 x 0.3 m), 0.4 m above the floor in the far right part of the room, was seen only in the after recording; the before recording never looked at that spot, so this possible change cannot be verified."
+      "description_template": "A blue suitcase (blue hard-shell; about 0.7 x 0.7 x 0.3 m), 0.4 m above the floor in the far right part of the room, was seen only in the after recording; the before recording never looked at that spot, so this possible change cannot be verified.",
+      "relations": {
+        "before": null,
+        "after": {
+          "support": {
+            "kind": "none",
+            "height": null,
+            "gap": null,
+            "coverage": null,
+            "points": 1156
+          },
+          "cover": null,
+          "objects": [
+            {
+              "relation": "beside",
+              "other_change_id": 11
+            }
+          ]
+        },
+        "text": "beside the blue plastic bucket"
+      }
     },
     {
       "id": 9,
@@ -526,7 +642,28 @@
       "attributes": "black bristles, wooden handle",
       "object_description": "A paintbrush with black bristles and a wooden handle, partially dipped in paint.",
       "motion_kind": null,
-      "description_template": "A paintbrush (black bristles, wooden handle; about 28 x 21 x 20 cm), on the floor in the far part of the room, was seen only in the after recording; the before recording never looked at that spot, so this possible change cannot be verified."
+      "description_template": "A paintbrush (black bristles, wooden handle; about 28 x 21 x 20 cm), on the floor in the far part of the room, was seen only in the after recording; the before recording never looked at that spot, so this possible change cannot be verified.",
+      "relations": {
+        "before": null,
+        "after": {
+          "support": {
+            "kind": "floor",
+            "height": -0.0,
+            "gap": 0.025,
+            "coverage": 0.785,
+            "points": 3749,
+            "spread": 0.0081
+          },
+          "cover": null,
+          "objects": [
+            {
+              "relation": "beside",
+              "other_change_id": 11
+            }
+          ]
+        },
+        "text": "on the floor, beside the blue plastic bucket"
+      }
     },
     {
       "id": 10,
@@ -598,7 +735,22 @@
       "attributes": "blue and white cardboard",
       "object_description": "a blue and white cardboard box of Donna butter cookies sitting on a wooden floor.",
       "motion_kind": null,
-      "description_template": "A donna butter cookie (blue and white cardboard; about 23 x 21 x 20 cm), 0.2 m above the floor in the far part of the room, was seen only in the after recording; the before recording never looked at that spot, so this possible change cannot be verified."
+      "description_template": "A donna butter cookie (blue and white cardboard; about 23 x 21 x 20 cm), 0.2 m above the floor in the far part of the room, was seen only in the after recording; the before recording never looked at that spot, so this possible change cannot be verified.",
+      "relations": {
+        "before": null,
+        "after": {
+          "support": {
+            "kind": "none",
+            "height": null,
+            "gap": null,
+            "coverage": null,
+            "points": 635
+          },
+          "cover": null,
+          "objects": []
+        },
+        "text": ""
+      }
     },
     {
       "id": 11,
@@ -670,7 +822,32 @@
       "attributes": "blue, plastic",
       "object_description": "a blue plastic bucket with some dirt at the bottom.",
       "motion_kind": null,
-      "description_template": "A blue plastic bucket (blue, plastic; about 0.5 x 0.5 x 0.4 m), on the floor in the far part of the room, was seen only in the after recording; the before recording never looked at that spot, so this possible change cannot be verified."
+      "description_template": "A blue plastic bucket (blue, plastic; about 0.5 x 0.5 x 0.4 m), on the floor in the far part of the room, was seen only in the after recording; the before recording never looked at that spot, so this possible change cannot be verified.",
+      "relations": {
+        "before": null,
+        "after": {
+          "support": {
+            "kind": "floor",
+            "height": -0.002,
+            "gap": 0.014,
+            "coverage": 0.638,
+            "points": 7014,
+            "spread": 0.0082
+          },
+          "cover": null,
+          "objects": [
+            {
+              "relation": "beside",
+              "other_change_id": 9
+            },
+            {
+              "relation": "beside",
+              "other_change_id": 8
+            }
+          ]
+        },
+        "text": "on the floor, beside the paintbrush and the blue suitcase"
+      }
     },
     {
       "id": 13,
@@ -742,7 +919,28 @@
       "attributes": "brown wood",
       "object_description": "a brown wooden leg of a table with a zigzag pattern.",
       "motion_kind": null,
-      "description_template": "A wooden table leg (brown wood; about 1.5 x 0.8 x 0.3 m), on the floor in the near part of the room, was seen only in the before recording; the after recording never looked at that spot, so this possible change cannot be verified."
+      "description_template": "A wooden table leg (brown wood; about 1.5 x 0.8 x 0.3 m), on the floor in the near part of the room, was seen only in the before recording; the after recording never looked at that spot, so this possible change cannot be verified.",
+      "relations": {
+        "before": {
+          "support": {
+            "kind": "floor",
+            "height": 0.01,
+            "gap": 0.036,
+            "coverage": 0.71,
+            "points": 53791,
+            "spread": 0.0109
+          },
+          "cover": {
+            "height": 0.783,
+            "coverage": 0.987,
+            "points": 288775,
+            "spread": 0.0073
+          },
+          "objects": []
+        },
+        "after": null,
+        "text": "on the floor, under a surface 0.78 m above the floor"
+      }
     }
   ],
   "rejected": [
@@ -821,7 +1019,23 @@
       },
       "attributes": "light brown wood",
       "object_description": "a smooth, light brown wooden table surface with visible grain patterns.",
-      "motion_kind": null
+      "motion_kind": null,
+      "relations": {
+        "before": {
+          "support": {
+            "kind": "surface",
+            "height": 0.778,
+            "gap": -0.01,
+            "coverage": 1.0,
+            "points": 59644,
+            "spread": 0.0068
+          },
+          "cover": null,
+          "objects": []
+        },
+        "after": null,
+        "text": "on a surface 0.78 m above the floor"
+      }
     },
     {
       "id": 4,
@@ -898,7 +1112,28 @@
       },
       "attributes": "dark grey, undefined",
       "object_description": "a dark shadow cast by a wooden table leg on the tiled floor.",
-      "motion_kind": null
+      "motion_kind": null,
+      "relations": {
+        "before": {
+          "support": {
+            "kind": "floor",
+            "height": 0.014,
+            "gap": -0.006,
+            "coverage": 1.0,
+            "points": 20753,
+            "spread": 0.0069
+          },
+          "cover": {
+            "height": 0.792,
+            "coverage": 0.292,
+            "points": 6604,
+            "spread": 0.0075
+          },
+          "objects": []
+        },
+        "after": null,
+        "text": "on the floor, partly under a surface 0.79 m above the floor"
+      }
     },
     {
       "id": 12,
@@ -969,8 +1204,63 @@
       },
       "attributes": "brown wood",
       "object_description": "a sturdy brown wooden leg supporting a table.",
-      "motion_kind": null
+      "motion_kind": null,
+      "relations": {
+        "before": null,
+        "after": {
+          "support": {
+            "kind": "floor",
+            "height": 0.005,
+            "gap": 0.03,
+            "coverage": 0.936,
+            "points": 18319,
+            "spread": 0.0103
+          },
+          "cover": {
+            "height": 0.771,
+            "coverage": 1.0,
+            "points": 36460,
+            "spread": 0.008
+          },
+          "objects": []
+        },
+        "text": "on the floor, under a surface 0.77 m above the floor"
+      }
     }
   ],
-  "summary": "3 changes: 1 moved, 1 added, 1 removed; 6 unverified. The blue laundry detergent was moved from the near part of the room to the middle, and the yellow can was removed from the right side. A wooden table was added in the middle of the room. Several other items\u2014such as a wooden stool, a blue suitcase, a paintbrush, a cookie box, a blue bucket, and a table leg\u2014are unverified changes because the videos did not capture those spots from all angles."
+  "summary": "3 changes: 1 moved, 1 added, 1 removed; 6 unverified. The blue laundry detergent was moved from the near part of the room to the middle, and the yellow can was removed from the right side. A wooden table was added in the middle of the room. Several other items\u2014such as a wooden stool, a blue suitcase, a paintbrush, a cookie box, a blue bucket, and a table leg\u2014are unverified changes because the videos did not capture those spots from all angles.",
+  "relations_info": {
+    "levelled": true,
+    "reason": null,
+    "floor_known": true,
+    "floor_note": null,
+    "floor_method": "ransac floor plane",
+    "floor_inliers_fraction": 0.954,
+    "supports": {
+      "floor": 5,
+      "surface": 5,
+      "none": 3
+    },
+    "params": {
+      "enabled": true,
+      "cloud_stride": 2,
+      "support_pad": 0.08,
+      "support_depth": 0.1,
+      "support_tol": 0.03,
+      "own_dist": 0.02,
+      "support_spread": 0.015,
+      "support_min_frac": 0.25,
+      "support_min_points": 30,
+      "peak_frac": 0.5,
+      "floor_max": 0.05,
+      "floor_min_inliers": 0.5,
+      "cover_gap": 0.02,
+      "cover_max": 1.2,
+      "cover_min_frac": 0.15,
+      "on_tol": 0.05,
+      "on_overlap": 0.3,
+      "beside_gap": 0.15,
+      "same_height_tol": 0.05
+    }
+  }
 }
