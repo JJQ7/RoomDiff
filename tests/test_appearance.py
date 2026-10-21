@@ -273,8 +273,8 @@ def replaced_scene(tmp_path_factory):
 
 def test_replaced_pair_is_linked(replaced_scene):
     out, meta, doc = replaced_scene
-    assert meta["sources"] == {"before": {"geometry": 0, "appearance": 1},
-                               "after": {"geometry": 0, "appearance": 1}}
+    assert meta["sources"] == {"before": {"geometry": 0, "appearance": 1, "detection": 0},
+                               "after": {"geometry": 0, "appearance": 1, "detection": 0}}
     assert len(meta["appearance"]["added"]) == 2 and meta["appearance"]["covered"] == []
     for name in ("before", "after"):
         data = load_instances(out, name)

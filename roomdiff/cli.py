@@ -73,6 +73,13 @@ def appearance(out: OutOpt, config: ConfigOpt = None, set_: SetOpt = None) -> No
 
 
 @app.command()
+def detect(out: OutOpt, config: ConfigOpt = None, set_: SetOpt = None) -> None:
+    """Detection channel: Qwen3-VL vocabulary, SAM 3 objects in every keyframe, before /
+    after association (<out>/detection/; needs --set detection.enabled=true)."""
+    _detect_stage(out, _load_config(config, set_))
+
+
+@app.command()
 def instances(out: OutOpt, config: ConfigOpt = None, set_: SetOpt = None) -> None:
     """Object instances of the change blobs, SAM 2.1 + DINOv3 (<out>/instances/)."""
     _instances_stage(out, _load_config(config, set_))
@@ -114,8 +121,8 @@ def run(
     config: ConfigOpt = None,
     set_: SetOpt = None,
 ) -> None:
-    """Run ingest -> recon -> visibility -> appearance -> instances -> changes -> describe ->
-    (recheck, if recheck.enabled) -> viz -> viewer."""
+    """Run ingest -> recon -> visibility -> appearance -> detect (if detection.enabled) ->
+    instances -> changes -> describe -> (recheck, if recheck.enabled) -> viz -> viewer."""
     from roomdiff.ingest import ingest_pair
     from roomdiff.recon import run_recon
 
@@ -126,6 +133,7 @@ def run(
         "recon": lambda: run_recon(out, cfg),
         "visibility": lambda: _visibility_stage(out, cfg),
         "appearance": lambda: _appearance_stage(out, cfg),
+        "detect": lambda: _detect_stage(out, cfg),
         "instances": lambda: _instances_stage(out, cfg),
         "changes": lambda: _changes_stage(out, cfg),
         "describe": lambda: _describe_stage(out, cfg),
@@ -211,6 +219,12 @@ def _appearance_stage(out: Path, cfg: Config) -> None:
     from roomdiff.appearance import run_appearance  # models load only when needed
 
     run_appearance(out, cfg)
+
+
+def _detect_stage(out: Path, cfg: Config) -> None:
+    from roomdiff.detection import run_detection  # models load only when needed
+
+    run_detection(out, cfg)
 
 
 def _instances_stage(out: Path, cfg: Config) -> None:

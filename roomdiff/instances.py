@@ -17,7 +17,11 @@ handled in its *owner* recording (where it is occupied):
    object-sized (`merge_close_fragments`);
 5. the appearance clusters of `<out>/appearance/` (`roomdiff.appearance`: small or flat
    changes the voxel differencing misses) that no instance covers yet are appended
-   (`source: "appearance"`, kind disappeared / appeared by recording);
+   (`source: "appearance"`, kind disappeared / appeared by recording), then the detection
+   candidates of `<out>/detection/` (`roomdiff.detection`: objects detected in one
+   recording that the other recording's object table does not hold, past its gate) that
+   no geometry or appearance instance covers (`source: "detection"`, kind disappeared /
+   appeared by recording);
 6. each instance gets a DINOv3 feature (mask-pooled patch tokens, averaged over views)
    and a CLS token of its box crop, and SAM masks in every keyframe of its recording
    where its points are visible (COCO RLE, for the SceneDiff evaluation); SAM sees the
@@ -96,8 +100,9 @@ class Instance:
     merged_from: list[list[int]] = field(default_factory=list)  # blob ids per gap-merged part
     lift_fallback: bool = False  # some view's mask grew too far: bounded lifting was used
     lift_growth: list[float | None] = field(default_factory=list)  # per view (`growth`)
-    source: str = "geometry"  # "geometry" (M3 blobs) | "appearance" (roomdiff.appearance)
-    evidence: dict[str, Any] | None = None  # set for appearance instances (no blobs)
+    # "geometry" (M3 blobs) | "appearance" (roomdiff.appearance) | "detection" (roomdiff.detection)
+    source: str = "geometry"
+    evidence: dict[str, Any] | None = None  # set for appearance / detection instances (no blobs)
 
     @property
     def blob_ids(self) -> list[int]:
@@ -1038,6 +1043,20 @@ def run_instances(
     times["appearance"] = time.perf_counter() - t0
 
     t0 = time.perf_counter()
+    detection_meta = None
+    det = cfg.get("detection") or {}
+    if det.get("enabled") and (paths.detection / "clusters.json").is_file():
+        from roomdiff.detection import load_detection_instances
+
+        extra, detection_meta = load_detection_instances(
+            out_dir, final, det["covered_dist"], det["covered_frac"])
+        for rec, instances in enumerate(extra):  # appended after geometry and appearance
+            for k, inst in enumerate(instances, start=len(final[rec]) + 1):
+                inst.id = k
+            final[rec] += instances
+    times["detection"] = time.perf_counter() - t0
+
+    t0 = time.perf_counter()
     for instances in final:
         for inst in instances:
             describe_features(inst, recon, featurizer, params["mask_erode_px"],
@@ -1073,12 +1092,13 @@ def run_instances(
         "lift_growth": {str(i.blobs[0]["id"]): i.lift_growth for r in raw for i in r},
         "gap_merges": gap_merges,
         "appearance": appearance_meta,
+        "detection": detection_meta,
         "instances": counts,
         "kinds": {name: {k: sum(i.kind == k for i in final[r])
                          for k in (*VERIFIED_TYPES, "unverified")}
                   for r, name in enumerate(RECORDINGS)},
         "sources": {name: {k: sum(i.source == k for i in final[r])
-                           for k in ("geometry", "appearance")}
+                           for k in ("geometry", "appearance", "detection")}
                     for r, name in enumerate(RECORDINGS)},
         "frame_masks": {name: sum(len(i.frame_masks) for i in final[r])
                         for r, name in enumerate(RECORDINGS)},
@@ -1086,9 +1106,10 @@ def run_instances(
         "peak_vram_gb": _cuda_peak_gb(),
     }
     (folder / "meta.json").write_text(json.dumps(meta, indent=2))
-    added = {name: meta["sources"][name]["appearance"] for name in RECORDINGS}
-    extra = (f" (+ appearance {added['before']} / {added['after']})"
-             if appearance_meta is not None else "")
+    extra = "".join(
+        f" (+ {source} {meta['sources']['before'][source]} / {meta['sources']['after'][source]})"
+        for source, used in (("appearance", appearance_meta), ("detection", detection_meta))
+        if used is not None)
     print(f"[instances] {len(selected)} blobs -> fragments "
           f"{meta['fragments']['before']} before / {meta['fragments']['after']} after -> "
           f"instances {counts['before']} / {counts['after']}{extra}, {times['total']:.1f} s"

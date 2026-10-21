@@ -969,3 +969,104 @@ def test_part_similarity_uses_the_best_matching_instances():
     assert cls_similarity == pytest.approx(np.sqrt(0.5), abs=1e-4)
     assert part_similarity(merged, {"instance_id": 1}, {}) == (None, None, None)
     assert part_similarity({"instance_id": 5}, {"instance_id": 1}, features)[0] is None
+
+
+# ------------------------------------------------------------------ detection-channel changes
+
+
+def as_detection(root, ids, see_through=0.0):
+    """Mark the changes `ids` of `root/changes.json` as found by the detection channel."""
+    path = root / "changes.json"
+    doc = json.loads(path.read_text())
+    for c in doc["changes"]:
+        if c["id"] in ids:
+            for name in ("before", "after"):
+                if c[name]:
+                    c[name]["source"] = "detection"
+            c["evidence"]["detection"] = {"top_label": "bag", "mean_score": 0.8,
+                                          "observing_views": 5, "see_through": see_through}
+    path.write_text(json.dumps(doc))
+
+
+@pytest.mark.parametrize("detection_side", [1, 2])
+def test_detection_changes_are_never_re_paired(tmp_path, detection_side):
+    """A removed and an added ladder with matching labels and similar features become one
+    moved change, unless either came from the detection channel (look-alike items in
+    shops were all false moves): then both stay and the re-pairing judge is not asked."""
+    ladder_scene(tmp_path, cosine=0.9, after_colour="red")
+    as_detection(tmp_path, {detection_side})
+    vlm = FakeVLM(ladder_responder)
+    doc = run_semantics(tmp_path, load_config(overrides=FEATURES_ON), vlm)
+    assert sorted(c["type"] for c in doc["changes"]) == ["added", "removed"]
+    assert not any("same physical object" in p for p in vlm.prompts)
+
+
+def test_moved_change_does_not_absorb_a_detection_part(tmp_path):
+    quilt_scene(tmp_path, 0.5)  # absorbed when it is a geometric part (above)
+    as_detection(tmp_path, {2})
+    doc = run_semantics(tmp_path, load_config(), FakeVLM(responder))
+    assert [c["type"] for c in doc["changes"]] == ["moved", "added"]
+
+
+def override_scene(root):
+    """Removed / added changes 10 m apart whose place the judge calls unchanged (the same
+    colour in both crops): detection changes 1 (see_through 0.95), 2 (0.3) and 4 (added,
+    0.8), a geometric change 3."""
+    def far(iid, k):
+        return side(iid, [10.0 * k, 0, 2])
+
+    write_doc(root, [
+        change(k, "removed", before=far(k, k), crops={"before": crop(root, f"{k}_before", "red"),
+                                                      "after": crop(root, f"{k}_after", "red")})
+        for k in (1, 2, 3)] + [
+        change(4, "added", after=far(4, 4), crops={"after": crop(root, "4_after", "green"),
+                                                   "before": crop(root, "4_before", "green")})])
+    as_detection(root, {1}, 0.95)
+    as_detection(root, {2}, 0.3)
+    as_detection(root, {4}, 0.8)
+
+
+def still_there(images, prompt):
+    if "absent from that place in image 2" in prompt or "added between" in prompt:
+        return '{"reason": "it is still at the same place", "verdict": "rejected"}'
+    return responder(images, prompt)
+
+
+def test_geometry_overrides_a_judge_that_calls_a_detection_unchanged(tmp_path):
+    """lounge_3: a removed basket and brush (see_through 0.95 / 0.72) were called "still
+    there" by the judge. From `detection.see_through_override` (0.5) a removed / added
+    detection change keeps a confirmed verdict; the judge's answer stays in the record."""
+    override_scene(tmp_path)
+    doc = run_semantics(tmp_path, load_config(), FakeVLM(still_there))
+    assert sorted(c["id"] for c in doc["changes"]) == [1, 4]
+    for c in doc["changes"]:
+        ev = c["evidence"]
+        assert ev["vlm_verdict"] == "confirmed" and ev["reason_class"] == "geometry_override"
+        assert ev["judge_override"]["verdict"] == "rejected"
+        assert ev["judge_override"]["reason_class"] == "judge_same"
+        assert ev["judge_override"]["reason"] == "it is still at the same place"
+        assert ev["vlm_reason"].startswith("geometry override: see_through")
+    assert {c["id"]: c["evidence"]["reason_class"] for c in doc["rejected"]} == {
+        2: "judge_same", 3: "judge_same"}  # see_through 0.3; a geometric change
+    meta = json.loads((tmp_path / "semantics" / "meta.json").read_text())
+    assert [(o["id"], o["see_through"]) for o in meta["overrides"]] == [(1, 0.95), (4, 0.8)]
+
+    off = load_config(overrides=["detection.see_through_override=2"])
+    doc = run_semantics(tmp_path, off, FakeVLM(still_there))
+    assert doc["changes"] == [] and len(doc["rejected"]) == 4
+
+
+@pytest.mark.parametrize(("detection_ids", "merged"), [({2}, False), ({1, 2}, True)])
+def test_detection_fragments_merge_only_with_detection_fragments(tmp_path, detection_ids,
+                                                                  merged):
+    """lounge_17: a detected whiteboard absorbed the appearance one as a fragment, which
+    dropped the appearance change's in-place link (its partner was then judged alone).
+    A detection change merges only with another detection change."""
+    chair_scene(tmp_path)
+    as_detection(tmp_path, detection_ids)
+    vlm = FakeVLM(chair_responder(
+        '{"reason": "seat and base of one chair", "verdict": "confirmed", '
+        '"label": "an office chair"}'))
+    doc = run_semantics(tmp_path, load_config(), vlm)
+    assert any("parts of one physical object" in p for p in vlm.prompts) == merged
+    assert sorted(c["id"] for c in doc["changes"]) == ([1, 3, 4] if merged else [1, 2, 3, 4])

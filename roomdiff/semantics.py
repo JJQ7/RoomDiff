@@ -10,7 +10,10 @@ the stage can be re-run):
    boxes are within `fragment_gap_m` of each other become one change if the VLM says both
    owner crops show parts of one physical object (a chair seat and its base): geometry from
    the union of their instance points, confidence = max, the larger fragment's id, crops
-   and evidence (+ `<side>_part` crop, summed free rays, `merged_from`).
+   and evidence (+ `<side>_part` crop, summed free rays, `merged_from`). A detection-channel
+   change merges only with another one: absorbing a geometry / appearance change would drop
+   that change's in-place link (lounge_17: a detected whiteboard took in the appearance
+   one, whose in-place partner was then judged alone and kept).
 3. Re-pairing: a `removed` change and an `added` / after-only `unverified` change whose
    centroids are closer than `repair_max_distance` are a candidate pair if their labels
    match (same label, head noun or synonym group) or, whatever their names, if their
@@ -22,7 +25,8 @@ the stage can be re-run):
    says both crops show the same physical object. A `moved` change absorbs an `added`
    change with a matching label whose box lies within `merge_max_distance` of the moved
    after-box (gap between the boxes; a spread-out quilt is one object) if the VLM says
-   both are parts of one object.
+   both are parts of one object. Changes of the detection channel (`from_detection`)
+   take part in neither: they stay removed / added (as in the M4 moved matching).
 4. Judge: type-specific paired-crop questions -> `evidence.vlm_verdict` ("confirmed" /
    "rejected" / "unclear") and `evidence.vlm_reason`. A candidate in-place replacement (a
    removed change `replaced_by` an added one at the same place, from the appearance
@@ -31,7 +35,13 @@ the stage can be re-run):
    both as unclear; a single appearance-channel removed / added change gets the same
    question with the other recording's view of the place (same or the other type:
    rejected; different or its own type: confirmed), and one named like a bare surface or
-   part of the room is rejected; moved also `motion_kind` ("rigid" /
+   part of the room is rejected. A removed / added detection-channel change that the judge
+   rejects as still / already at its place (`judge_same`) stays confirmed if at least
+   `detection.see_through_override` of its visible points are seen through in the other
+   recording (`geometry_override`: the judge's answer is kept in
+   `evidence.judge_override`, `evidence.reason_class` = "geometry_override"; a judge that
+   misreads the viewpoint called a removed basket and brush unchanged); moved also
+   `motion_kind` ("rigid" /
    "deformed" / "unknown"). Rejected changes move to the `rejected` list, with
    `evidence.reason_class` saying why (`REJECT_CLASSES`); unclear ones keep
    `confidence * unclear_factor`. A rejected `moved` change keeps its geometry: it is split
@@ -88,6 +98,9 @@ MOTION_KINDS = ("rigid", "deformed", "unknown")
 # test's mirror / room flags); the judge saw no change (in-place "same" or the other type, a
 # removed / added question answered "still / already there"); any other judge rejection
 REJECT_CLASSES = ("room_or_surface", "judge_same", "judge_rejected")
+# `evidence.reason_class` of a kept detection change whose judge rejection the geometry
+# overruled (`geometry_override`)
+OVERRIDE_CLASS = "geometry_override"
 ARTICLES = {"a", "an", "the", "some"}
 TRAILING_WORDS = {"of", "on", "in", "with", "and", "against", "at", "for", "to"}
 CUT_WORDS = {"on", "in", "with", "against", "at", "near", "under", "behind", "from"}
@@ -575,6 +588,31 @@ def from_appearance(change: Mapping[str, Any]) -> bool:
     return side.get("source") == "appearance"
 
 
+def from_detection(change: Mapping[str, Any]) -> bool:
+    """A side of the change came from the detection channel (`source` "detection")."""
+    return any((change.get(name) or {}).get("source") == "detection" for name in RECORDINGS)
+
+
+def geometry_override(change: dict[str, Any], verdict: str, reason: str, reject_as: str,
+                      threshold: float) -> tuple[str, str]:
+    """(verdict, reason) of a judged change after the geometry override (module docstring,
+    step 4): a removed / added detection change rejected as still / already at its place
+    (`reject_as` "judge_same") whose `evidence.detection.see_through` is at least
+    `threshold` is confirmed instead; `evidence.judge_override` keeps the judge's verdict,
+    reason and class, `evidence.reason_class` becomes `OVERRIDE_CLASS`. Anything else is
+    returned unchanged."""
+    through = (change["evidence"].get("detection") or {}).get("see_through")
+    if verdict != "rejected" or reject_as != "judge_same" or through is None \
+            or change["type"] not in ("removed", "added") or not from_detection(change) \
+            or through < threshold:
+        return verdict, reason
+    change["evidence"]["judge_override"] = {"verdict": verdict, "reason": reason,
+                                            "reason_class": reject_as, "see_through": through}
+    change["evidence"]["reason_class"] = OVERRIDE_CLASS
+    return "confirmed", (f"geometry override: see_through {through:.2f} >= {threshold:g} (the "
+                         f"other video sees through the place); the judge said: {reason}")
+
+
 def in_place_answer(vlm: BaseVLM, shown: Sequence[tuple[Image.Image, str] | None],
                     labels: str, tag: str, describe_first: bool = False
                     ) -> tuple[str, str] | None:
@@ -835,7 +873,8 @@ def merge_fragments(vlm: BaseVLM, crops: Crops, changes: list[dict[str, Any]],
     removed or added / added changes with matching labels whose oriented boxes are at
     most `fragment_gap_m` apart, closest first, each change in at most one merge, if the
     VLM says both owner crops show parts of one physical object. `only`: consider just
-    the pairs with one of these ids. Returns the new change list and one record per VLM
+    the pairs with one of these ids. A detection-channel change pairs only with another
+    one (`from_detection`). Returns the new change list and one record per VLM
     pair check."""
     by_id = {c["id"]: c for c in changes}
     pairs = []
@@ -844,6 +883,8 @@ def merge_fragments(vlm: BaseVLM, crops: Crops, changes: list[dict[str, Any]],
         for k, x in enumerate(group):
             for y in group[k + 1:]:
                 if only is not None and x["id"] not in only and y["id"] not in only:
+                    continue
+                if from_detection(x) != from_detection(y):  # channels kept apart (step 2)
                     continue
                 if labels_match(x["label"], y["label"]):
                     gap = change_gap(x[name], y[name])
@@ -903,8 +944,9 @@ def repair(vlm: BaseVLM, crops: Crops, changes: list[dict[str, Any]],
                   ) -> tuple[str, float | None, float | None] | None:
         """(why, patch cosine, CLS cosine) if removed `r` and `a` are a candidate pair:
         "label" (matching labels, not the two sides of one in-place pair) or "features"
-        (similar DINOv3 features and sizes, both named as objects); else None."""
-        if not wanted(r, a):
+        (similar DINOv3 features and sizes, both named as objects); else None. Never for a
+        detection-channel change."""
+        if not wanted(r, a) or from_detection(r) or from_detection(a):
             return None
         similarity, cls_similarity, parts = part_similarity(r["before"], a["after"],
                                                             features or {})
@@ -954,7 +996,8 @@ def repair(vlm: BaseVLM, crops: Crops, changes: list[dict[str, Any]],
     added = [c for c in by_id.values() if c["type"] == "added"]
     pairs = sorted((change_gap(m["after"], a["after"]), m["id"], a["id"])
                    for m in moved for a in added
-                   if labels_match(m["label"], a["label"]) and wanted(m, a))
+                   if labels_match(m["label"], a["label"]) and wanted(m, a)
+                   and not from_detection(a))
     for gap, mid, aid in pairs:
         if gap > params["merge_max_distance"] or aid not in by_id or mid not in by_id:
             continue
@@ -1293,6 +1336,7 @@ def run_semantics(out_dir: str | Path, cfg: Mapping[str, Any],
     next_id = max([c["id"] for c in doc["changes"]], default=0) + 1
     by_id = {c["id"]: c for c in changes}
     replace_verdicts: dict[int, tuple[str, str, str]] = {}  # id -> answer, verdict, reason
+    override_at = float((cfg.get("detection") or {}).get("see_through_override", 2.0))
     for c in changes:
         if not params["enable_judge"]:
             kept.append(c)
@@ -1321,8 +1365,9 @@ def run_semantics(out_dir: str | Path, cfg: Mapping[str, Any],
             surface = surface_rejection(c)
             if surface is not None and verdict != "rejected":
                 verdict, reason = "rejected", f"{surface}: {reason}"
-            keep = apply_verdict(c, verdict, reason, params["unclear_factor"],
-                                 "room_or_surface" if surface else "judge_same")
+            reject_as = "room_or_surface" if surface else "judge_same"
+            verdict, reason = geometry_override(c, verdict, reason, reject_as, override_at)
+            keep = apply_verdict(c, verdict, reason, params["unclear_factor"], reject_as)
             (kept if keep else rejected).append(c)
             continue
         verdict, reason, reject_as = judge_change(vlm, crops, c, describe_first)
@@ -1346,8 +1391,9 @@ def run_semantics(out_dir: str | Path, cfg: Mapping[str, Any],
                            "labels": [h["label"] for h in halves], "reason": reason,
                            "verdicts": [h["evidence"]["vlm_verdict"] for h in halves]})
             continue
-        keep = apply_verdict(c, verdict, reason, params["unclear_factor"],
-                             "room_or_surface" if surface else reject_as)
+        reject_as = "room_or_surface" if surface else reject_as
+        verdict, reason = geometry_override(c, verdict, reason, reject_as, override_at)
+        keep = apply_verdict(c, verdict, reason, params["unclear_factor"], reject_as)
         (kept if keep else rejected).append(c)
     halves = {i for x in splits for i in x["into"]}
     if splits and params["enable_fragment_merge"]:  # a kept half may be part of another change
@@ -1408,6 +1454,9 @@ def run_semantics(out_dir: str | Path, cfg: Mapping[str, Any],
         "splits": splits,
         "replacements": replacements,
         "verdicts": {str(c["id"]): c["evidence"]["vlm_verdict"] for c in kept + rejected},
+        "overrides": [{"id": c["id"], "type": c["type"], "label": c["label"],
+                       **c["evidence"]["judge_override"]}
+                      for c in kept if c["evidence"].get("judge_override")],
         "polished": sum(p is not None for p in polished),
         "template_kept": sum(p is None for p in polished),
         "scene_frame": None if frame is None else {

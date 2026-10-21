@@ -4,6 +4,7 @@
 <out>/keyframes/before/*.jpg     <out>/recon/          <out>/changes.json
 <out>/keyframes/after/*.jpg      <out>/visibility/     <out>/report.md
 <out>/keyframes/index.json       <out>/appearance/     <out>/viewer/
+                                 <out>/detection/
                                  <out>/instances/
 ```
 """
@@ -50,6 +51,10 @@ class OutputPaths:
     @property
     def appearance(self) -> Path:
         return self.root / "appearance"
+
+    @property
+    def detection(self) -> Path:
+        return self.root / "detection"
 
     @property
     def instances(self) -> Path:

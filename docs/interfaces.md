@@ -194,6 +194,130 @@ recording seeing >= 15 % of the points unoccluded, 5 cm), `free_rays` / `free_fr
 {used, fixed, max_entropy, mode}, score stats, regions / candidates / clusters per
 recording, region outcomes, dropped clusters, runtime, `peak_vram_gb`, `peak_ram_gb`).
 
+## Detection channel -> `<out>/detection/`
+Implemented (`roomdiff/detection.py`, command `roomdiff detect`, run between appearance and
+instances; parameters in `configs/default.yaml: detection`; `enabled: false` by default:
+the stage writes nothing, `roomdiff run` skips it and the instance stage ignores any old
+output). Detects every object in both recordings and associates the two object tables;
+what fails to associate is a change candidate (the other channels need a difference
+first). Models, one after the other in one process, each freed before the next loads:
+Qwen3-VL (`semantics.model` / `device` / `image_max_side`), SAM 3 (`recheck.model` /
+`device`, `Sam3TextSegmenter`), DINOv3 (`instances.dino_model`); lifting parameters
+(`lift_voxel`, `lift_cell_m`, `lift_link_m`, `mask_erode_px`) from `instances`.
+
+1. Vocabulary: `vocab_frames` (4) keyframes per recording, the recording cut into that
+   many consecutive segments and the sharpest keyframe of each (`keyframes/index.json`
+   sharpness; the middle one without), each shown alone (full-resolution JPEG) with
+   `VOCAB_PROMPT` ("a photo of a place (a room, a shop, a street, ...)": the earlier "a
+   photo of a room" got no objects on the SceneDiff street pairs; answer `{"objects":
+   [...]}`, at most `vocab_max_tokens`; a reply cut off by the limit keeps the strings
+   listed so far). Phrases: `semantics.normalise_label`
+   (lowercase, no article, cut at a preposition, <= 3 words); dropped if they name part of
+   the room (`semantics.is_background`: floor, wall, ceiling, door, window, mirror, ...) or
+   a generic word (`GENERIC_NOUNS`: object, item, furniture, decoration, person, hand,
+   light, sky, ground, road, street, ...); merged by `phrase_key` (the last word singularised; first spelling kept);
+   ranked by the number of asked keyframes naming them, then first appearance; the first
+   `max_prompts` (40) kept, then `extra_prompts` not yet listed.
+2. Detections: `Sam3TextSegmenter.detect` with every phrase on every keyframe (the image
+   encoded once per keyframe), masks at the recon resolution, scores from `score_min`
+   (0.5); kept with `min_mask_px` (100) .. `max_mask_frac` (0.5) of the image. Per keyframe,
+   greedily by score, a detection whose mask overlaps a kept one at IoU > `merge_iou` (0.7)
+   is merged into it: one detection, the best-scoring mask, votes {phrase: best score}.
+   Memory: the raw detections are held as COCO RLE and decoded one keyframe at a time
+   (decode, filter, merge, lift, free); a merged detection and an object view keep the
+   crop of their mask inside its box (`BoxMask`), the full mask is built only to pool a
+   feature or write an RLE. Store pairs have ~25 000 raw detections of 254 000 pixels each:
+   the detect stage on store_13 with cached detections went from 8.5 GiB peak RSS (7.6 GiB
+   anonymous) to 2.4 GiB (1.5 GiB), the same objects.
+3. Objects per recording: each detection's mask, eroded by `lift_erode_px` (2; the plain
+   mask if fewer than 30 valid pixels remain), lifted (valid depth, `lift_voxel` voxels,
+   radius outliers removed) and cut to its main 3D part(s): cells of `lift_cell_m` linked
+   within `lift_link_m`, parts holding at least half of the largest one's points.
+   Detections with >= 20 points are clustered (union-find, bounding boxes within
+   `cluster_dist` first): more than `cluster_frac` (0.3) of the points of one within
+   `cluster_dist` (3 cm) of the other's and a shared phrase, or more than
+   `cluster_frac_any` (0.5) of each one's points within `cluster_dist` of the other's
+   (fractions on a fixed 400-point subset). Object points = union of the members' points
+   (`lift_voxel`, outliers removed) minus those that fewer than half of the member
+   keyframes seeing them put inside their detection (the appearance consensus; voted
+   only with >= 3 keyframes). Kept: detections in >= `min_views` (2) keyframes, >=
+   `min_points` (50) points, no `floor_obb` side above `max_extent` (2.0 m). Clusters
+   failing only the views / points tests but holding >= 20 points are *weak* objects:
+   counterparts in the association (presence evidence), never candidates. Views: one
+   per keyframe, the member masks united, the best SAM 3 score. Label votes: phrase ->
+   summed SAM 3 score over the member detections; top label = the largest.
+4. Association: feature per object = L2-normalised mean of the mask-pooled DINOv3 patch
+   tokens (`instances.pooled_feature`, erosion `mask_erode_px`) of its `feature_views` (4)
+   best-scoring views. Before object b, after object a (box centres at most 2
+   `max_extent` apart): same place = `instances.near_fraction` (share of the smaller
+   point set within `same_place_dist` (5 cm) of the other) >= `same_place_frac` (0.5), or
+   `obb` centre distance <= max(`same_place_centre_min` (0.10 m), `same_place_centre_rel`
+   (0.25) x the longest box side of the two); compatible labels = equal top labels or
+   vote cosine >= `label_cos_min` (0.3); unchanged = same place, compatible labels and
+   feature cosine >= `same_feature_min` (0.5), for every such pair (not one-to-one, the
+   counterpart may be weak; the partner is the best-cosine one). Then, among the (not
+   weak) objects not unchanged, same-place pairs are `replaced` (greedy one-to-one by
+   `near`, then centre distance); the rest are `unmatched`. `near` is searched only when
+   the point boxes come within `same_place_dist`; weak-weak pairs are not scored. A label +
+   feature match at another place is only recorded (`nearest_compatible`): detection
+   candidates never become moved changes (M4, M5 below).
+5. Gate (before the judge): for every replaced / unmatched object, `place_evidence` in the
+   other recording: `observing_views` (keyframes with >= 15 % of the points not occluded,
+   5 cm, the view scorer with `on_surface` false), and over those views the shares of the
+   visible points (fixed 2000-point subset) whose observed depth lies within 5 cm of the
+   point (`surface_consistent`) or more than 5 cm behind it (`see_through`), null without
+   views; `free_rays` / `free_frames_mean` (M3 free counts of the other recording over the
+   voxels holding the points; 0 without a grid), `min_camera_distance`; `label_count` =
+   the (not weak) objects of its recording with its top label, itself included. It is a
+   candidate, kind disappeared (before) / appeared (after), only if (`gate_reasons`)
+   `observing_views` >= `min_observing_views` (3; 0 = never seen: dropped, the channel makes
+   no unverified regions), mean SAM 3 score >= `min_mean_score` (0.65) and `label_count`
+   <= `max_label_count` (2); otherwise its kind is null and `gate` lists the failed tests
+   (`no_observing_views`, `few_observing_views`, `low_score`, `common_label`). Unchanged
+   objects have no kind and no gate. On the 20 dev pairs (ungated) the false candidates were
+   look-alike shop items (price tags, packages, bottles: top label shared by >= 4 objects),
+   seen in few views and scored lower; the 6 true ones had >= 6 views, label count <= 2
+   and score >= 0.65. `see_through` does not gate (flat objects resting on a support read
+   as surface: laptop 0.01, tissue 0.00); M5 uses it to overrule the judge
+   (`see_through_override`, below).
+
+Files: `vocabulary.json` (`key` {model, prompt, frames per recording} (the answers are
+reused when it matches and no VLM object is passed), `answers` [{recording, frame, file,
+answer (raw text), objects (parsed)}], `prompts`, `counts` (asked keyframes naming each
+phrase), `capped`, `dropped`, `extra`, `vlm` {cached, load_s, seconds, calls,
+peak_vram_gb}); `vlm_log.jsonl` (the VLM calls, `BaseVLM` log format);
+`detections_<rec>.npz` (raw SAM 3 detections >= `score_min`: `frame` recon index,
+`prompt`, `score`, `rle` COCO counts, `size` [H, W]) + `detections_<rec>.json` (cache key:
+model, prompts, score_min, keyframe files, size; reused when it matches and no segmenter is
+passed); `detections.json` (per merged detection: recording, frame, votes, score, box,
+area, lifted points); `clusters.json` (`image_size` [W, H], `prompts`, `clusters`: every
+object of both recordings (objects first, then the weak ones), `id` 1..N over all,
+`recording`, `kind` (disappeared | appeared; null when unchanged, weak or gated out),
+`weak`, `decision` (unchanged | replaced | unmatched), `partner` (id of the matched or
+replacement object of the other recording, else null), `gate` (failed gate tests, [] for a
+candidate, null when unchanged or weak), `top_label`, `label_count` (step 5, null when not
+gated), `label_votes`,
+`mean_score` (mean SAM 3 score of the views), `n_points`, `detections`,
+`consensus_dropped`, `centroid`, `aabb`, `extents`, `obb`, `views` [{frame, file, box,
+mask_box, score}], `place` (step 5; {} when unchanged)); `clusters_points.npz` (`points`,
+`colors`, `cluster`) and `clusters_masks.npz` (`cluster`, `frame`, `rle`, `size`) as in the
+appearance channel; `features.npy` (objects in clusters.json order); `association.json`
+(`params`, `decisions` [{id, recording, label, decision, partner, kind, observing_views,
+`nearest_compatible` (not unchanged: the closest other-recording object elsewhere with
+compatible labels and feature cosine >= `same_feature_min`, {id, distance, feat_cos}, a
+would-be move; null if none within 2 `max_extent`), `gate`}] of the objects that are not
+weak, `gate`: every object the gate dropped {id, recording, label, decision, partner,
+observing_views, mean_score, label_count, see_through, reasons}, `pairs`: every before /
+after pair at the same place: before, after, labels, weak [b, a], near, centre_dist,
+centre_limit, label_cos, feat_cos, same_place, label_ok, unchanged; `params` also holds
+the gate parameters); `meta.json` (params,
+models, prompt count, vocabulary step, raw / merged detections per recording, `sam3`
+{cached, load_s, seconds, images, seconds_per_image, peak_vram_gb}, `features` {model,
+keyframes, peak_vram_gb}, objects and `weak_objects` per recording, `objects_dropped` (recording, label,
+views, detections, points, extent, reason), decision and candidate counts per recording
+(`candidates` {disappeared, appeared}), `gate` {params, `dropped` per recording, `reasons`
+(objects failing each test)}, `runtime_s`, `peak_ram_gb`).
+
 ## M4 instances + changes -> `<out>/instances/`, `<out>/changes.json`, `<out>/crops/`
 Implemented (`roomdiff/instances.py`, `roomdiff/changes.py`, model wrappers in
 `roomdiff/models.py`; parameters in `configs/default.yaml: instances, changes`).
@@ -231,7 +355,13 @@ with more than `appearance.covered_frac` (50 %) of its points within
 `appearance.covered_dist` (3 cm) of the points of one instance of its recording is
 already covered (listed in meta.json), the others become instances with ids N+1.. (by
 point count), `source` "appearance", kind disappeared (before) / appeared (after), the
-cluster's views and masks, no blobs.
+cluster's views and masks, no blobs. Then the detection candidates (with
+`detection.enabled` and `<out>/detection/clusters.json`; objects with a `kind`) are
+appended the same way: covered by a geometry or appearance instance of their recording
+(more than `detection.covered_frac` (50 %) of the object's points within
+`detection.covered_dist` (3 cm)) or added with the next ids (by point count), `source`
+"detection", kind as decided by the detection stage (disappeared / appeared), the
+object's SAM 3 views and masks.
 
 `instances/<rec>.json`: `{recording, image_size [W, H], image_size_full [W, H] (keyframe
 size of the `rle_full` masks below, null if there are none), instances: [...]}`; per instance:
@@ -249,7 +379,8 @@ prompted keyframe: `frame` index into recon.npz, `file`, prompt `box`, `mask_box
 `feature_index` (row in the feature files = id - 1), `n_frame_masks`, `merged_from`
 (blob ids of each part joined by the gap rule, e.g. [[7, 18], [11]]; empty if none),
 `lift_fallback` (some view of a part used the bounded lifting), `source` ("geometry" for
-M3 blobs, "appearance" for appearance clusters), `demoted` (the M3 `demotion_reason` of a
+M3 blobs, "appearance" for appearance clusters, "detection" for detection objects; their
+`views` are the SAM 3 detections, `score` the SAM 3 score), `demoted` (the M3 `demotion_reason` of a
 source blob, "weak_alignment"; null if none was demoted), `evidence`
 (aggregated over the source blobs, verified ones if any: `voxels`, `volume_m3`,
 `free_rays` = sum over blob voxels of the other recording's free count, voxel-weighted
@@ -257,7 +388,9 @@ source blob, "weak_alignment"; null if none was demoted), `evidence`
 appearance instances: `voxels` 0, `volume_m3` of the `obb`, the cluster's `free_rays`,
 `free_frames_mean`, `observing_views` and `min_camera_distance`, `occ_points` = points,
 and `appearance` {`cluster`, `frames_supporting`, `mean_score`, `feat_term`, `geom_term`,
-`partners_visible`}).
+`partners_visible`}; detection instances likewise from the object's `place` evidence, with
+`detection` {`object`, `top_label`, `label_votes`, `mean_score`, `n_views`,
+`observing_views`, `decision`, `partner`, `surface_consistent`, `see_through`}).
 `instances/<rec>_feats.npy` (N, 1024) float32: L2-normalised DINOv3 ViT-L/16 patch tokens
 pooled inside the eroded masks, averaged over views. `instances/<rec>_cls.npy` (N, 1024):
 CLS token of the best view's mask box crop. `instances/<rec>_points.npz`: `points` (M, 3)
@@ -280,9 +413,12 @@ keyframe mask area-downsampled: set where it covers more than half of a pixel),
 one) / `decode_rle`.
 `instances/meta.json`: parameters, selected / dropped blobs with the reason (small or
 too large unverified, hidden surface, no clear view, no mask, too few points), fragment
-and instance counts, `sources` (per recording: geometry / appearance instances),
-`appearance` (null without clusters, else `clusters`, `covered` [{cluster, recording,
-instance, overlap}], `added` [{cluster, recording, overlap}]), `lift_fallbacks` (per recording: blob ids whose lifting fell back),
+and instance counts, `sources` (per recording: geometry / appearance / detection
+instances), `appearance` (null without clusters, else `clusters`, `covered` [{cluster,
+recording, instance, overlap}], `added` [{cluster, recording, overlap}]), `detection` (null
+without detection output, else `objects`, `candidates`, `covered` [{object, recording,
+label, kind, instance, overlap}], `added` [{object, recording, label, kind, overlap}]),
+`lift_fallbacks` (per recording: blob ids whose lifting fell back),
 `lift_growth` (per blob id: the growth ratio of each prompted view, null without a
 connected part), `gap_merges` (per gap-rule merge: `recording`, `kind`, `parts` (blob
 ids of both), `near_fraction`, `union_obb_extents`), runtime, peak VRAM. `instances/matching.json`: cosine and cost
@@ -290,10 +426,15 @@ matrices of the moved candidates and the accepted pairs (cost = 1 - cosine +
 `lambda_size` |log volume ratio|; volumes and the extent-ratio test use the `obb`
 extents, which do not change when the world frame turns about +Y), and `replaced`
 [[before id, after id, overlap]]: candidate in-place replacements, i.e. a before and an
-after appearance instance whose `obb`s, each grown by 2 cm, overlap by more than
-`appearance.replace_overlap` (0.3) of the smaller grown volume (greedy one-to-one,
-largest overlap first). These pairs skip the moved matching (no 0 m "moves"); every
-other appearance instance is matched and typed like a geometric one.
+after instance of one source, appearance with appearance or detection with detection
+(`changes.IN_PLACE_SOURCES`, `in_place_pairs`; never across sources: a detection of a pen
+at a moved mug's old place took the mug's appearance instance out of the moved matching),
+whose `obb`s, each grown by 2 cm, overlap by more than `appearance.replace_overlap` (0.3)
+of the smaller grown volume (greedy one-to-one, largest overlap first). These pairs skip
+the moved matching (no 0 m "moves"); every other appearance instance is matched and typed
+like a geometric one. Detection instances never enter the moved matching
+(`changes.NO_MOVE_SOURCES`, `move_candidates`): they are removed / added (on the dev pairs
+all 11 moved changes with a detection side were look-alike objects).
 
 `changes.json`:
 ```json
@@ -325,12 +466,13 @@ other appearance instance is matched and typed like a geometric one.
 ```
 Every change has all keys; `obb` is the instance's oriented box (`aabb` / `extents` are
 kept for compatibility); each side also carries the instance's `source` ("geometry" |
-"appearance"). A candidate in-place replacement (`matching.json: replaced`) is written as
+"appearance" | "detection"). A candidate in-place replacement (`matching.json: replaced`) is written as
 a `removed` change with `"replaced_by": <id of the added change>` and an `added` change
 with `"replaces": <id of the removed change>` (optional keys, only on such pairs; after M5
 the linked change may be in `rejected` or merged away), both with
 `evidence.replace_overlap`. Removed / added changes of appearance instances also have
-`evidence.appearance` (the instance's appearance terms); `before` / `after` is null on the side where the object does
+`evidence.appearance` (the instance's appearance terms), those of detection instances
+`evidence.detection` (the instance's detection terms); `before` / `after` is null on the side where the object does
 not exist (removed: after, added: before, unverified: the other recording, which never
 observed it or, demoted, seemed to see it empty) and `transform` is null unless moved.
 `R`, `t` map before points to after points
@@ -343,7 +485,8 @@ description); below `icp_min_fitness` `R` = I, `t` = centroid difference,
 `rotation_deg` null and `rotation_reliable` false (also for transforms built by M5
 re-pairing / merging). Order: moved, removed, added, unverified; by confidence within a type.
 Changes of appearance instances have their confidence scaled by the appearance factor A
-below (moved: the smaller factor of both sides).
+below, those of detection instances by the detection factor D (moved: the smaller factor
+of both sides).
 M4 writes `label: "object"`, a templated `description` and `vlm_verdict: null` (M5 fills
 them, see below). Evidence keys: removed / added / unverified: `free_rays`, `free_frames_mean`,
 `observing_views` (keyframes of the other recording that saw through the place),
@@ -363,7 +506,11 @@ geometry instance; for an appearance instance A = 0.5 + 0.5 min(cue / full, 1) i
 with `changes.appearance_evidence` "score": cue = the cluster's `mean_score` (mean region
 score: depth vote share + `appearance.w_feat` x feature dissimilarity), full =
 `appearance_score_full` (2.0, its largest value), or "frames": cue = `frames_supporting`,
-full = `appearance_frames_full` (4). The earlier formula is w_mask 0.3, w_free 0.4,
+full = `appearance_frames_full` (4). D = 1 for other instances; for a detection instance D =
+its `evidence.detection.mean_score` (mean SAM 3 score of its views, in [`detection.score_min`,
+1]; its S_mask is that same mean, its S_free from its `observing_views`): no free-space
+test was made, so it ranks below a geometric change with the same evidence, the lower
+the less sure SAM 3 was. The earlier formula is w_mask 0.3, w_free 0.4,
 w_consistency 0.3 with "frames"; on SceneDiff pairs view consistency did not separate true
 from false detections, frames_supporting only on one of two subsets, the SAM score and the
 region score on both (README, benchmark section).
@@ -477,7 +624,8 @@ or merged); M5 sets or adds:
   "rigid" | "deformed" | "unknown" and `evidence.vlm_motion_reason` (`motion_kind` is null
   for the other types). Unverified regions are rejected unless the VLM sees a distinct
   object (not wall / floor / door frame / window / mirror reflection / shadow / lighting).
-* `evidence.reason_class` (entries of `rejected` only, `REJECT_CLASSES`): why the candidate
+* `evidence.reason_class` (entries of `rejected`, `REJECT_CLASSES`; on a kept change only
+  "geometry_override", below): why the candidate
   is not a change. `room_or_surface`: part of the room or a bare surface: an unverified
   region whose label names part of the room (`is_background`), an appearance-channel
   removed / added change whose label names part of the room or a bare surface
@@ -493,6 +641,17 @@ or merged); M5 sets or adds:
   `weak_alignment` (a geometry candidate demoted because the two reconstructions disagree),
   so a rejected unverified region shows its M4 class. Changes the optional SAM 3 re-check
   moves to `rejected` get no class (`evidence.recheck_verdict` says why).
+* Geometry override (`geometry_override`): a removed / added change of the detection
+  channel that the judge rejects as `judge_same` (still / already at its place, or an
+  in-place answer "same" / the other type) stays a change with `vlm_verdict` "confirmed"
+  if its `evidence.detection.see_through` is at least `detection.see_through_override`
+  (0.5; above 1 = off): at least half of its visible points are seen through by the other
+  recording, so its place is empty there. Such a kept change has `evidence.reason_class`
+  "geometry_override", `evidence.judge_override` {verdict, reason, reason_class,
+  see_through} (the judge's answer) and `vlm_reason` "geometry override: see_through <s>
+  >= <t> (...); the judge said: <reason>". On the dev pairs the judge called a removed
+  basket (see_through 0.95) and a removed brush (0.72) unchanged; no other judge-rejected
+  detection candidate had see_through >= 0.5.
 * A `moved` change (M4 geometric match or re-pairing) whose match the judge rejects is not
   dropped: it is split into a `removed` change (its `before` side; id = the moved id, or
   the first merged candidate's) and an `added` change (its `after` side; id = the second
@@ -524,7 +683,9 @@ or merged); M5 sets or adds:
   union: centroid, `aabb`, `extents` and `obb` of the union of both instances' points
   (`instance_ids` [both], `n_points` summed, `blob_ids` united; box union without the
   points); confidence = max; the description is regenerated (step below). Then judged
-  like any other change. The masks of all `instance_ids` are united per frame for the
+  like any other change. A change of the detection channel merges only with another
+  detection change (absorbing an appearance change would drop that change's in-place
+  link, and its partner would be judged alone). The masks of all `instance_ids` are united per frame for the
   SceneDiff evaluation.
 * Re-paired removed R + added or after-only unverified A -> one `moved` change with R's
   id. Candidate pairs (centroids < `repair_max_distance`; closest first, each change in at
@@ -536,7 +697,9 @@ or merged); M5 sets or adds:
   several) is at least `repair_min_similarity`, the sorted `obb` extents of those two
   instances pass the M4 size gate (`changes.extent_ratio_min` / `extent_ratio_max`) and
   neither change is named "object" or after a part of the room; such a pair may be the
-  two sides of one in-place pair (a ladder moved 0.2 m overlaps its old place). The VLM
+  two sides of one in-place pair (a ladder moved 0.2 m overlaps its old place). Changes
+  with a side from the detection channel (`source` "detection") are never candidates,
+  and a moved change never absorbs one (next item): they stay removed / added. The VLM
   decides with the strict same-object prompt; confirmed: `before` = R's side, `after` =
   A's, `transform` from the centroids (`R` = I, `rotation_deg` / `icp_*` null),
   confidence = mean, `crops` `before` = R's, `after` = A's, `before_place` = R's after
@@ -565,7 +728,9 @@ re-pair checks also `candidate` "label" | "features", `appearance_similarity` an
 `cls_similarity` as above),
 splits (rejected moved changes: `id`, `label`,
 `into` [removed id, added id], `labels`, `reason`, `verdicts` of the two halves), verdict
-per id, `replacements` (per in-place pair question: `ids`, `labels`, `answer`, `reason`),
+per id, `overrides` (kept changes whose judge rejection the geometry overruled: `id`,
+`type`, `label` + `evidence.judge_override`), `replacements` (per in-place pair question:
+`ids`, `labels`, `answer`, `reason`),
 polished /
 template-kept counts, scene frame (up vector: +Y in a levelled frame, else the camera
 estimate; floor height), `peak_vram_gb`, `peak_ram_gb`.

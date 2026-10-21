@@ -353,6 +353,37 @@ CC BY-NC (InstantSfM, the VGGSfM keyframe ranking) code into the pipeline. Nothi
 inputs (coverage, Pi3X confidence) tells the pairs it helps from the pairs it breaks, so
 the joint Pi3X pass stays; the scripts remain for reproduction.
 
+*A detection channel, after SuperMap's object association (21 October).* The geometry and
+appearance channels need a difference first, so an object whose difference they miss never
+becomes a candidate (32 of the 37 misses in the error analysis had none). SuperMap (CMU, RSS
+2026) builds one object table per pass with an open-vocabulary detector and associates the
+tables; we built the same as a third channel (`roomdiff/detection.py`, `detection.enabled`,
+off by default): Qwen3-VL lists the objects in four keyframes per video (SuperMap uses a
+fixed prompt list and names automatic prompting as future work), SAM 3 segments every phrase
+in every keyframe, the masks are lifted with the reconstruction's depth and clustered into
+one object table per recording, the tables are associated by place, label votes and DINOv3
+features, and an object without a counterpart at its place is a candidate for the usual judge.
+Ungated on the 20 development pairs it found 6 more objects but quadrupled the false
+positives (26 / 15 / 22 -> 32 / 62 / 16 found / false / missed): look-alike shop items
+(price tags, bottles) that SAM 3 detects in one video and not the other, reflections, things
+seen through a window, and the Hungarian matching pairing the leftovers into false moves. A
+gate before the judge (the place seen in at least 3 keyframes of the other video, mean SAM 3
+score 0.65, top label shared by at most 2 objects of the recording), no moves and no in-place
+pairs across channels, and a judge override where the other video sees through more than
+half of the object took that subset to 0.626 / 0.660 / 0.501 per-view / per-scene / typed AP
+(base 0.521 / 0.497 / 0.418), with the thresholds fitted there on six true detections. Held
+out on the reported 20 pairs it gave 0.483 / 0.425 / 0.284 and pixel IoU 0.447 against 0.474
+/ 0.444 / 0.325 and 0.533: one more object and nine more false positives that pass every
+gate (unchanged furniture whose counterpart the other table lacked because it was larger than
+the 2 m object limit, a duvet the override kept), while the label rule, which carried most of
+the development gain, removed three of the five true detections there (jars among "bottles").
+On our tabletop pairs it changed nothing except one false floor tile. SuperMap's per-object
+existence test (the depth residual along the ray: present, occluded or departed) turned out
+to be a poor drop rule for us, since a thin object on a table reads as "surface still there"
+within the 5 cm tolerance, and only usable as positive evidence. The channel stays off; the
+option, its tests and the experiment scripts remain, and the per-pair detection stage costs
+about 2 min (vocabulary 20-90 s, SAM 3 0.5-2 s per keyframe with 10-40 prompts).
+
 ## Limitations we know about
 - Small, flat or thin objects are missed by the geometric channel; the appearance channel
   recovers many of them but depends on co-visible keyframes (at about 1 keyframe per

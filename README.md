@@ -159,7 +159,12 @@ roomdiff viewer --out outputs/scene1
 An optional last stage, `roomdiff recheck` (`--set recheck.enabled=true`), asks SAM 3 for
 each change's label on the object and at its place in the other video and records the
 answer as extra evidence; it is off by default because it did not improve the benchmark
-(see the design note).
+(see the design note). A second optional stage, `roomdiff detect` (`--set
+detection.enabled=true`, between `appearance` and `instances`), builds one object table per
+video (Qwen3-VL lists the objects, SAM 3 segments them in every keyframe) and proposes the
+objects without a counterpart in the other table as change candidates, after SuperMap's
+object association; it is off by default because it did not generalise to the held-out
+benchmark pairs (design note, "what we tried").
 The results of a run are `outputs/scene1/report.md` (every change with its evidence and
 crops, a summary and the rejected candidates), `changes.json` (the machine-readable list,
 see `docs/interfaces.md`), `scene.rrd` (open with `rerun scene.rrd`) and `viewer/`.
@@ -514,6 +519,11 @@ Refining the Pi3X poses with Glob3R's global bundle adjustment did not help the 
 FAIR / WEAK pairs either: the co-visible 3 cm share fell by 0.10 on average and the
 per-scene AP of those pairs from 0.20 to 0.08, because several pairs came out with the
 two recordings at different scales (design note, "what we tried").
+A detection channel after SuperMap's object association (a VLM vocabulary, SAM 3 masks,
+one object table per video, associated by place, label and DINOv3 feature; `detection.enabled`)
+raised the development subset from 0.521 / 0.497 / 0.418 to 0.626 / 0.660 / 0.501 with its
+gate thresholds fitted there, but held out on the reported pairs gave 0.483 / 0.425 / 0.284
+and pixel IoU 0.447 against 0.474 / 0.444 / 0.325 and 0.533, so it stays off.
 Median run time per pair: 70 s at 1 s keyframes, 85 s at 0.5 s (RTX 5090).
 
 ```bash

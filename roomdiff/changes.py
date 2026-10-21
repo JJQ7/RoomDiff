@@ -12,13 +12,22 @@
   instances -> `unverified` (with the recording that saw them, and `evidence.reason_class`:
   "never_observed", or "weak_alignment" when M3 demoted the blobs because the two
   reconstructions do not line up).
-* Appearance instances (`source` "appearance", roomdiff.appearance) are disappeared (before)
-  or appeared (after) instances like the others. A before and an after appearance
-  instance at the same place (oriented boxes grown by `REPLACE_PAD` overlapping more than
+* Appearance instances (`source` "appearance", roomdiff.appearance) and detection
+  instances (`source` "detection", roomdiff.detection) are disappeared (before) or appeared
+  (after) instances like the others. A before and an after instance of one of these two
+  sources (`IN_PLACE_SOURCES`; appearance with appearance, detection with detection) at the
+  same place (oriented boxes grown by `REPLACE_PAD` overlapping more than
   `appearance.replace_overlap` of the smaller one; greedy, largest overlap first) are a
   candidate in-place replacement instead: they skip the moved matching and become a
   `removed` and an `added` change linked by `replaced_by` / `replaces` (the M5 judge
-  decides: same object, different object, object gone or object new).
+  decides: same object, different object, object gone or object new). Geometry instances
+  are never paired this way (their free-space test already says that the place is empty).
+  Sources are not mixed: a detection of another object at a moved object's old place would
+  take the appearance instance of its before side out of the moved matching (living_room_35:
+  a pen at the old place of a moved mug split the mug's move).
+* Detection instances (`NO_MOVE_SOURCES`) take no part in the moved matching: they stay
+  removed / added (on the SceneDiff dev pairs all 11 moved changes built with a detection
+  side were false, look-alike price tags and bottles; M5 does not re-pair them either).
 * Confidence in [0, 1] = (w_mask * S_mask + w_free * S_free + w_consistency * S_cons) /
   (w_mask + w_free + w_consistency) with S_mask = mean SAM mask score, S_free =
   min(observing_views / free_views_full, 1) of the other recording (moved: mean of both
@@ -35,6 +44,12 @@
   w_consistency 0, "score") rank the SceneDiff detections better than the earlier formula
   (w_mask 0.3, w_free 0.4, w_consistency 0.3, "frames"): view consistency did not separate
   true from false detections, the mask score and the region score did (README, benchmark).
+  A detection instance scales its change's confidence by D = the mean SAM 3 score of its
+  views (`detection_support`, in [detection.score_min, 1]; a side's factor is the product
+  of its appearance and detection factors, moved: the smaller of the two sides').
+  Its S_mask is also the mean SAM 3 score (its views are SAM 3 detections) and S_free its
+  `observing_views`, so a detection candidate ranks below a geometric one with the same
+  free-space evidence, the more so the less sure SAM 3 was: no free-space test was made.
 * Crops `<out>/crops/<id>_before.jpg` / `<id>_after.jpg` (moved also `_before_place` /
   `_after_place`): the object in its own recording with mask outline and box, and the
   other recording looking at the same place; both views are ranked by
@@ -86,6 +101,8 @@ CROP_DEPTH_TOL = 0.05  # m, depth tolerance of the crop view scoring
 CROP_MIN_ASPECT = 0.6  # crops are at least this wide relative to their height (and v.v.)
 UNITS = "metres (approx.)"
 REPLACE_PAD = 0.02  # m, boxes of a candidate replaced pair are grown by this before the overlap
+IN_PLACE_SOURCES = ("appearance", "detection")  # paired by box overlap, each source with itself
+NO_MOVE_SOURCES = ("detection",)  # instance sources kept out of the moved matching
 
 
 # ------------------------------------------------------------------ matching
@@ -231,13 +248,27 @@ def appearance_support(record: Mapping[str, Any], params: Mapping[str, Any]) -> 
     return 0.5 + 0.5 * min(max(cue, 0.0) / full, 1.0)
 
 
+def detection_support(record: Mapping[str, Any]) -> float:
+    """Confidence factor of an instance record (module docstring): 1 unless it is a
+    detection instance, else the mean SAM 3 score of its views (in [0, 1])."""
+    det = record["evidence"].get("detection")
+    if det is None:
+        return 1.0
+    return float(np.clip(det.get("mean_score", 0.0), 0.0, 1.0))
+
+
+def source_support(record: Mapping[str, Any], params: Mapping[str, Any]) -> float:
+    """Product of the appearance and detection factors (1 for a geometry instance)."""
+    return appearance_support(record, params) * detection_support(record)
+
+
 def replaced_pairs(
     before: Sequence[Mapping[str, Any]], after: Sequence[Mapping[str, Any]], min_overlap: float,
 ) -> list[tuple[int, int, float]]:
-    """Candidate in-place replacements `(i, j, overlap)` among appearance instance records
-    (indices into `before` / `after`): oriented boxes grown by `REPLACE_PAD` overlapping
-    more than `min_overlap` (`obb_overlap`, relative to the smaller box); one-to-one,
-    largest overlap first."""
+    """Candidate in-place replacements `(i, j, overlap)` among appearance / detection
+    instance records (indices into `before` / `after`): oriented boxes grown by
+    `REPLACE_PAD` overlapping more than `min_overlap` (`obb_overlap`, relative to the
+    smaller box); one-to-one, largest overlap first."""
     scored = []
     for i, b in enumerate(before):
         for j, a in enumerate(after):
@@ -252,6 +283,31 @@ def replaced_pairs(
             used_b.add(i)
             used_a.add(j)
     return pairs
+
+
+def in_place_pairs(
+    before: Sequence[Mapping[str, Any]], after: Sequence[Mapping[str, Any]], min_overlap: float,
+) -> list[tuple[int, int, float]]:
+    """Candidate in-place replacements `(i, j, overlap)` (indices into the `before` /
+    `after` instance records): `replaced_pairs` among the disappeared (before) and appeared
+    (after) instances of each `IN_PLACE_SOURCES` source, never across sources."""
+    out = []
+    for source in IN_PLACE_SOURCES:
+        own_b = [k for k, r in enumerate(before)
+                 if r["kind"] == "disappeared" and r.get("source") == source]
+        own_a = [k for k, r in enumerate(after)
+                 if r["kind"] == "appeared" and r.get("source") == source]
+        out += [(own_b[i], own_a[j], o) for i, j, o in replaced_pairs(
+            [before[k] for k in own_b], [after[k] for k in own_a], min_overlap)]
+    return out
+
+
+def move_candidates(records: Sequence[Mapping[str, Any]], kind: str, in_place: set[int]
+                    ) -> list[int]:
+    """Indices of the instance records of `kind` (disappeared / appeared) that enter the
+    moved matching: not in a candidate in-place pair, not of a `NO_MOVE_SOURCES` source."""
+    return [k for k, r in enumerate(records) if r["kind"] == kind and k not in in_place
+            and r.get("source", "geometry") not in NO_MOVE_SOURCES]
 
 
 # ------------------------------------------------------------------ crops
@@ -434,8 +490,9 @@ def instance_evidence(record: Mapping[str, Any]) -> dict[str, Any]:
            "observing_views": ev["observing_views"], "occ_points": ev["occ_points"],
            "mask_score": record["mask_score_mean"],
            "view_consistency": record["view_consistency"]}
-    if ev.get("appearance") is not None:
-        out["appearance"] = ev["appearance"]
+    for key in ("appearance", "detection"):
+        if ev.get(key) is not None:
+            out[key] = ev[key]
     return out
 
 
@@ -460,16 +517,10 @@ def run_changes(out_dir: str | Path, cfg: Mapping[str, Any]) -> dict[str, Any]:
     recon = load_recon(paths.recon / "recon.npz")
     data = {name: load_instances(out_dir, name) for name in RECORDINGS}
     bef, aft = data["before"], data["after"]
-    d_idx = [k for k, r in enumerate(bef["instances"]) if r["kind"] == "disappeared"]
-    a_idx = [k for k, r in enumerate(aft["instances"]) if r["kind"] == "appeared"]
-    app_d = [k for k in d_idx if bef["instances"][k].get("source") == "appearance"]
-    app_a = [k for k in a_idx if aft["instances"][k].get("source") == "appearance"]
     min_overlap = (cfg.get("appearance") or {}).get("replace_overlap", 0.3)
-    replaced = [(app_d[i], app_a[j], o) for i, j, o in replaced_pairs(
-        [bef["instances"][k] for k in app_d], [aft["instances"][k] for k in app_a], min_overlap)]
-    in_place_b, in_place_a = {kb for kb, _, _ in replaced}, {ka for _, ka, _ in replaced}
-    d_idx = [k for k in d_idx if k not in in_place_b]  # no moved match for these
-    a_idx = [k for k in a_idx if k not in in_place_a]
+    replaced = in_place_pairs(bef["instances"], aft["instances"], min_overlap)
+    d_idx = move_candidates(bef["instances"], "disappeared", {kb for kb, _, _ in replaced})
+    a_idx = move_candidates(aft["instances"], "appeared", {ka for _, ka, _ in replaced})
     pairs, cos, cost = match_instances(
         bef["feats"][d_idx], aft["feats"][a_idx],
         [box_extents(bef["instances"][k]) for k in d_idx],
@@ -499,7 +550,7 @@ def run_changes(out_dir: str | Path, cfg: Mapping[str, Any]) -> dict[str, Any]:
                           [rb["view_consistency"], ra["view_consistency"]],
                           [rb["evidence"]["observing_views"], ra["evidence"]["observing_views"]],
                           params)
-        conf = round(conf * min(appearance_support(rb, params), appearance_support(ra, params)), 3)
+        conf = round(conf * min(source_support(rb, params), source_support(ra, params)), 3)
         entries.append(("moved", {"before": side_record(rb), "after": side_record(ra),
                                   "transform": transform, "evidence": evidence,
                                   "confidence": conf}))
@@ -513,7 +564,7 @@ def run_changes(out_dir: str | Path, cfg: Mapping[str, Any]) -> dict[str, Any]:
                 continue
             conf = confidence([r["mask_score_mean"]], [r["view_consistency"]],
                               [r["evidence"]["observing_views"]], params)
-            conf = round(conf * appearance_support(r, params), 3)
+            conf = round(conf * source_support(r, params), 3)
             body = {side: side_record(r), "evidence": instance_evidence(r), "confidence": conf}
             if (side, k) in links:
                 body["link"], overlap = links[(side, k)]
@@ -524,7 +575,7 @@ def run_changes(out_dir: str | Path, cfg: Mapping[str, Any]) -> dict[str, Any]:
             if r["kind"] != "unverified":
                 continue
             conf = confidence([r["mask_score_mean"]], [r["view_consistency"]], None, params)
-            conf = round(conf * appearance_support(r, params), 3)
+            conf = round(conf * source_support(r, params), 3)
             entries.append(("unverified", {name: side_record(r),
                                            "evidence": unverified_evidence(r, name),
                                            "confidence": conf}))

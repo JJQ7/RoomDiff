@@ -107,6 +107,61 @@ appearance:
   replace_overlap: 0.3   # an appearance instance of each recording whose boxes (grown by 2 cm)
                          # overlap more than this: a candidate `replaced` pair (removed + added)
 
+# Detection channel (roomdiff/detection.py, `roomdiff detect`; part of `roomdiff run` only when
+# enabled): Qwen3-VL lists the objects it sees (model / device from `semantics`), SAM 3 segments
+# them in every keyframe (model / device from `recheck`), the masks are lifted to 3D and
+# clustered into one object table per recording (lift_voxel / lift_cell_m / lift_link_m /
+# mask_erode_px / DINOv3 from `instances`), and the two tables are associated; objects without
+# a counterpart at their place that pass the gate below become candidates (instances `source:
+# detection`). Their change confidence is scaled by the mean SAM 3 score of their views
+# (changes.py, detection_support); they pair in place only with each other and never become
+# moved changes (no M4 moved matching, no M5 re-pairing: look-alike items elsewhere)
+detection:
+  enabled: false
+  vocab_frames: 4        # keyframes per recording shown to the VLM (spread over time, the
+                         # sharpest of each time segment), one question each
+  vocab_max_tokens: 400  # answer length of a vocabulary question
+  max_prompts: 40        # phrases kept (most often named first) ...
+  extra_prompts: []      # ... plus these (e.g. [chair, backpack]); parts of the place and generic
+                         # words (object, item, furniture, person) are never prompts
+  score_min: 0.5         # SAM 3 detections from this score (detection x presence) ...
+  min_mask_px: 100       # ... with at least this many pixels at the recon resolution ...
+  max_mask_frac: 0.5     # ... and at most this share of the image
+  merge_iou: 0.7         # detections of different phrases in one keyframe overlapping more
+                         # than this (mask IoU) are one detection voting for both phrases
+  lift_erode_px: 2       # mask erosion before lifting (mixed-depth pixels on the outline)
+  cluster_dist: 0.03     # m, detections of one recording are one object when more than
+  cluster_frac: 0.3      # cluster_frac of the points of one lie this close to the other's and
+                         # they share a phrase, or more than
+  cluster_frac_any: 0.5  # cluster_frac_any of each one's points (a book on a table: most book
+                         # points lie on the table, few table points on the book)
+  min_views: 2           # objects need detections in this many keyframes ...
+  min_points: 50         # ... this many points (1 cm voxels) ...
+  max_extent: 2.0        # ... and no oriented-box side above this (m): walls, floors, whole
+                         # counters are not objects
+  feature_views: 4       # DINOv3 feature of an object: mask-pooled tokens of its best views
+  same_place_dist: 0.05  # m, a before and an after object are at the same place if
+  same_place_frac: 0.5   # this share of the smaller one's points lies within same_place_dist
+                         # of the other's, or their box centres are closer than
+  same_place_centre_min: 0.10  # max(same_place_centre_min,
+  same_place_centre_rel: 0.25  #     same_place_centre_rel x the longest box side of the two)
+  label_cos_min: 0.3     # compatible labels: equal top phrases or phrase-vote cosine >= this
+  same_feature_min: 0.5  # same place + compatible labels + DINOv3 cosine >= this: unchanged;
+                         # same place otherwise: candidate in-place replacement (both kept)
+  min_observing_views: 3 # gate before the judge: a replaced / unmatched object is a candidate
+                         # only if the other recording saw its place in this many keyframes
+                         # (never seen: dropped, the channel makes no unverified regions) ...
+  min_mean_score: 0.65   # ... its mean SAM 3 score is at least this ...
+  max_label_count: 2     # ... and its top label names at most this many (not weak) objects of
+                         # its recording (price tags, bottles on a shelf); dropped objects are
+                         # listed with the reasons in detection/association.json `gate`
+  see_through_override: 0.5  # M5: a removed / added detection change that the judge calls
+                         # still / already there stays confirmed if at least this share of its
+                         # visible points is seen through in the other recording
+                         # (evidence.reason_class geometry_override); above 1: off
+  covered_dist: 0.03     # m, a candidate with more than covered_frac of its points this close
+  covered_frac: 0.5      # to a geometry / appearance instance of its recording is not added
+
 # M4: object instances from the change blobs (SAM 2.1 masks lifted to 3D, DINOv3 features)
 instances:
   device: cuda           # torch device for SAM 2.1 and DINOv3 (cpu if no GPU)
