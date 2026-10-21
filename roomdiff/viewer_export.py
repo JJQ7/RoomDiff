@@ -3,8 +3,10 @@
 Writes
 * `before.ply`, `after.ply`: the valid points of `recon.npz` with keyframe colours, voxel-
   downsampled with one shared voxel size, grown until each cloud has <= `target_points`;
-* `changes.json`: `<out>/changes.json` if it exists, else changes generated from the M3
-  `visibility/candidates.json`, else an empty change list (schema: docs/interfaces.md);
+* `changes.json`: `<out>/changes.json` if it exists (each `relations.text` written afresh
+  by `roomdiff.relations.change_text`, so it names kept changes only), else changes
+  generated from the M3 `visibility/candidates.json`, else an empty change list (schema:
+  docs/interfaces.md);
 * `crops/`: the crop images referenced by `changes.json`;
 * `scene.json`: manifest read by the viewer (file names, point counts, extent, up axis:
   [0, 1, 0] if recon/meta.json says the frame is levelled, else `estimate_up`);
@@ -32,6 +34,7 @@ import numpy as np
 from roomdiff.geometry import estimate_up, voxel_downsample
 from roomdiff.paths import RECORDINGS, OutputPaths
 from roomdiff.recon import is_levelled, load_recon, recording_points, write_ply
+from roomdiff.relations import change_text
 
 VIEWER_SRC = Path(__file__).resolve().parent.parent / "viewer"
 APP_FILES = ("index.html", "app.js", "style.css")
@@ -299,6 +302,9 @@ def export_viewer(out_dir: str | Path, target_points: int = TARGET_POINTS) -> Pa
         write_ply(viewer / f"{name}.ply", points, colors)
 
     changes = load_changes(paths)
+    for change in changes["changes"]:  # the phrase the viewer shows (app.js: relations.text)
+        if change.get("relations"):
+            change["relations"]["text"] = change_text(changes, change)
     copy_crops(changes, paths.root, viewer)
     (viewer / "changes.json").write_text(json.dumps(changes, indent=2))
 

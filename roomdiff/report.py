@@ -1,7 +1,8 @@
 """M5 report: `<out>/report.md` from `<out>/changes.json` (after the semantics stage).
 
 Title, summary paragraph, counts table, one section per change (type badge, label,
-confidence, description, evidence line, crops as relative markdown images), a collapsible
+confidence, where the object sits from its `relations` (roomdiff.relations), description,
+evidence line, crops as relative markdown images), a collapsible
 list of the rejected candidates with their `evidence.reason_class` as a tag and the VLM's
 reason, and a coverage note from `recon/meta.json` (share of each recording's points the
 other one could observe).
@@ -18,6 +19,7 @@ from typing import Any
 from roomdiff.changes import CHANGE_TYPES
 from roomdiff.paths import OutputPaths
 from roomdiff.recon import frac_lt_3cm_min
+from roomdiff.relations import change_text
 
 PLACES_NOTE = ("- Places (left / right, near / far) are as seen along the average camera "
                "direction; distances are in approximate metres from the reconstruction.")
@@ -104,7 +106,8 @@ def crop_table(crops: Mapping[str, str | None] | None, cid: Any) -> list[str]:
     return [head, rule, row]
 
 
-def change_section(change: Mapping[str, Any]) -> list[str]:
+def change_section(change: Mapping[str, Any], where: str = "") -> list[str]:
+    """Markdown lines of one change; `where`: its relation phrase (`change_text`)."""
     cid, kind = change["id"], change["type"]
     ev = change.get("evidence") or {}
     facts = [f"**confidence** {change['confidence']:.2f}"]
@@ -114,6 +117,8 @@ def change_section(change: Mapping[str, Any]) -> list[str]:
         facts.append(f"**motion** {change['motion_kind']}")
     if change.get("attributes"):
         facts.append(f"**appearance** {change['attributes']}")
+    if where:
+        facts.append(f"**where** {where}")
     lines = [f"### {cid}. `{kind.upper()}` {change.get('label', 'object')}", "",
              " · ".join(facts), "", change.get("description", ""), "",
              f"*Evidence:* {evidence_line(change)}", ""]
@@ -180,7 +185,7 @@ def render_report(doc: Mapping[str, Any], title: str, coverage: Sequence[str]) -
     if not changes:
         lines += ["No change was found.", ""]
     for change in changes:
-        lines += change_section(change)
+        lines += change_section(change, change_text(doc, change))
     if rejected:
         lines += [f"<details><summary>Rejected candidates ({len(rejected)})</summary>", ""]
         for c in rejected:

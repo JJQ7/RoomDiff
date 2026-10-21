@@ -313,9 +313,14 @@ other appearance instance is matched and typed like a geometric one.
      "evidence": {"free_rays": 412, "observing_views": 9, "appearance_similarity": 0.81,
                   "vlm_verdict": "same object, moved"},
      "description": "The office chair moved about 0.9 m from the desk towards the window.",
-     "crops": {"before": "crops/1_before.jpg", "after": "crops/1_after.jpg"}}
+     "crops": {"before": "crops/1_before.jpg", "after": "crops/1_after.jpg"},
+     "relations": {"before": {"support": {"kind": "floor", "height": 0.01, ...}, "cover": null,
+                              "objects": [{"relation": "beside", "other_change_id": 4}]},
+                   "after": {...}, "moved": {"from": {"kind": "floor"}, "to": {...}, ...},
+                   "text": "on the floor both times, beside the desk"}}
   ],
-  "summary": "3 changes detected: 1 moved, 1 added, 1 removed; 1 region unverified."
+  "summary": "3 changes detected: 1 moved, 1 added, 1 removed; 1 region unverified.",
+  "relations_info": {"levelled": true, "reason": null, "floor_known": true, ...}
 }
 ```
 Every change has all keys; `obb` is the instance's oriented box (`aabb` / `extents` are
@@ -375,6 +380,68 @@ the old / new place). A side is missing if no keyframe of that recording sees th
 else the AABB), labelled "<id> <type>: <label>", instance points, moved arrows from the
 before to the after box centre (`roomdiff/viz_rerun.py`); world view coordinates LUF
 (y up) for a levelled reconstruction, else RDF.
+
+### Spatial relations -> `relations` of every change, `relations_info` of `changes.json`
+Implemented (`roomdiff/relations.py`, parameters in `configs/default.yaml: relations`, no
+model). Where each changed object sits, for the report and the viewer only (after
+SuperMap's On / beside / under predicates): an added key, nothing else changes (types,
+confidences, masks and the SceneDiff predictions stay the same). Computed by `roomdiff
+changes` on the M4 changes, again by `roomdiff describe` on its final changes (merges,
+splits and re-pairing make the M4 ones stale; rejected entries too), or alone by `roomdiff
+relations --out <dir>` on any `changes.json` (rewrites `report.md` after M5); the re-check
+keeps both keys. `enabled: false`: neither key is written.
+
+Only in a levelled frame (`recon/meta.json: levelled`); otherwise every `relations` is
+null and `relations_info` = `{levelled: false, reason}`. Per change, for each place where
+the object is (removed: `before`; added: `after`; unverified: the recording that saw it;
+moved: both), with the cloud of that recording (every `cloud_stride`-th valid pixel of
+its keyframes) and the object's instance points (bottom / top = 1st / 99th percentile of
+their y; the box without points):
+* `support` `{kind: floor | surface | none, height, gap, coverage, points, spread}`:
+  cloud points in the ring around the footprint (`obb` grown by `support_pad`, minus the
+  footprint, where the object hides what it stands on), heights within [bottom -
+  `support_depth`, bottom + `support_tol`], minus points within `own_dist` of the
+  instance points. Scanning down in 5 mm steps, a window of +- `support_spread` qualifies
+  with >= `support_min_points` points in >= `support_min_frac` of the ring's 2 cm cells;
+  the best window of the first run of qualifying ones, re-centred on its median, is the
+  support if its cells hold >= `peak_frac` of their points within 3x the window (a level
+  surface, not a slice of a wall or of the object's own unlifted side). `height` = that
+  median, `gap` = bottom - height, `coverage` = share of the ring cells, `spread` =
+  interquartile range of the heights. `floor` if height < `floor_max` and the floor is
+  known (below), else `surface`; `none` without such a patch (`height`, `gap`, `coverage`
+  null; `points` = ring points in the band): the object hangs, or its lower part and what
+  it stands on were not reconstructed.
+* `cover` `{height, coverage, points, spread}` or null: the lowest such patch inside the
+  footprint between top + `cover_gap` and top + `cover_max`, over >= `cover_min_frac` of
+  the footprint cells (scanning up): the object stands under a table top or a shelf.
+* `objects` `[{relation: on | under | beside, other_change_id}]` among the kept changes of
+  the same recording (rejected entries: []): on(A, B) if |bottom(A) - top(B)| < `on_tol`
+  and B's footprint covers more than `on_overlap` of A's (SuperMap's IoU misses a cup on a
+  table; this also keeps a car off its own bumper); under(A, B) if top(A) is at least
+  `on_tol` below bottom(B) with that overlap; beside if neither, the footprints overlap by
+  at most `on_overlap` of the smaller one, are less than `beside_gap` apart and the height
+  ranges overlap. Sorted on, under (most overlap first), beside (closest first).
+Moved changes also get `moved` = `{from, to, distance_m, horizontal_m}`: `from` / `to` =
+`{kind}` or `{kind: "surface", height}` of the two supports, `distance_m` =
+`transform.translation_m`, `horizontal_m` = the x-z distance of the centroids. Every change
+gets `text`, a phrase (`relation_text`): "on the floor", "on a surface 0.72 m above the
+floor", "on the <label>" (an `on` relation), then "under the <label>" or "(partly) under a
+surface 0.75 m above the floor" (cover over less than half the footprint: partly), then
+"beside the <label>" (at most two); moved: "from the surface at 0.72 m to the floor", "on
+the floor both times" (supports within `same_height_tol`), "from ..." / "to ..." when one
+support is unknown, then the after place's under / beside phrases; "" when nothing is
+known. Other changes are named by label ("change <id>" while labelled "object"). The report
+and the viewer recompute it with `relations.change_text(doc, change)`, which names kept
+changes only (a later stage may have rejected one).
+
+The floor is known only if levelling fitted a floor plane (`level.method` "ransac floor
+plane") holding >= `floor_min_inliers` of its candidates (`floor_inliers_fraction`): a
+kitchen filmed without its floor levels on the counter (kitchen_8: 9 %). Otherwise no
+support is `floor` and no height is quoted: "on a horizontal surface", "under a horizontal
+surface", moved "from a surface to one 0.30 m lower".
+`relations_info`: `levelled`, `reason` (null when computed), `floor_known`, `floor_note`
+(why not), `floor_method`, `floor_inliers_fraction`, `supports` (count per kind over all
+places), `params`.
 
 ## M5 semantics -> `<out>/changes.json` (rewritten), `<out>/semantics/`, `<out>/report.md`
 Implemented (`roomdiff/semantics.py`, `roomdiff/vlm.py`, `roomdiff/report.py`, command
@@ -504,9 +571,11 @@ template-kept counts, scene frame (up vector: +Y in a levelled frame, else the c
 estimate; floor height), `peak_vram_gb`, `peak_ram_gb`.
 `semantics/log.jsonl`: one line per VLM call `{tag, images, prompt, answer, seconds}`.
 `report.md`: title, summary, counts table, one section per change (type badge, label,
-confidence, verdict, motion, description, evidence line, crops as relative markdown
-images), collapsible rejected list with the reason class as a tag and the VLM reasons,
-coverage note from `recon/meta.json`.
+confidence, verdict, motion, appearance, "**where**" + the relation phrase (above),
+description, evidence line, crops as relative markdown images), collapsible rejected list
+with the reason class as a tag and the VLM reasons, coverage note from `recon/meta.json`.
+The final step recomputes `relations` / `relations_info` of the kept and rejected changes
+(above).
 
 ## Re-check (optional) -> `<out>/changes.json` (rewritten), `<out>/recheck/`, `<out>/report.md`
 Implemented (`roomdiff/recheck.py`, SAM 3 wrapper `Sam3TextSegmenter` in
@@ -596,7 +665,9 @@ for a levelled
 reconstruction, else the camera-based estimate; `view_dir` = the horizontal direction of
 the viewer's home view, chosen among 12 azimuths as the one whose home camera sees the
 largest unoccluded share of the points, `viewer_export.best_view_dir`). The viewer draws each change's `obb`
-when present (else its `aabb`) and the moved arrow between the box centres.
+when present (else its `aabb`) and the moved arrow between the box centres. The exported
+changes.json gets each `relations.text` afresh (`relations.change_text`); the change list
+shows it under the title (and as the title's tooltip).
 
 ## Evaluation (SceneDiff) -> `<out-root>/`
 Implemented (`roomdiff/eval_scenediff.py`, `roomdiff eval`, parameters in

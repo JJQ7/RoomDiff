@@ -143,11 +143,14 @@ def test_scene_changes_have_the_right_types(scene):
 def test_changes_json_schema(scene):
     out, _, doc = scene
     assert json.loads((out / "changes.json").read_text()) == doc
-    assert set(doc) == {"scene", "changes", "summary"} and doc["scene"]["units"]
+    assert set(doc) == {"scene", "changes", "summary", "relations_info"} and doc["scene"]["units"]
+    # the synthetic recon is not levelled: no floor, so no relations (roomdiff.relations)
+    assert doc["relations_info"]["levelled"] is False and doc["relations_info"]["reason"]
     assert [c["id"] for c in doc["changes"]] == list(range(1, len(doc["changes"]) + 1))
     for c in doc["changes"]:
         for key, kind in REQUIRED.items():
             assert isinstance(c[key], kind), (key, c[key])
+        assert c["relations"] is None
         assert c["type"] in ("moved", "added", "removed", "unverified")
         assert 0.0 <= c["confidence"] <= 1.0 and c["label"] == "object"
         assert "before" in c and "after" in c and "transform" in c

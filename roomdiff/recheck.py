@@ -638,6 +638,8 @@ def run_recheck(out_dir: str | Path, cfg: Mapping[str, Any],
     result = {"scene": doc["scene"], "changes": sort_changes(kept),
               "rejected": sort_changes([*doc["rejected"], *dropped]),
               "summary": updated_summary(doc["summary"], kept, dropped)}
+    if "relations_info" in doc:  # texts drop relations to the newly rejected (change_text)
+        result["relations_info"] = doc["relations_info"]
     _write_atomic(paths.changes_json, json.dumps(result, indent=2))
     times["decide"] = time.perf_counter() - t0
     times["total"] = time.perf_counter() - start

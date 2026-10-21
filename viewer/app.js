@@ -474,9 +474,16 @@ function buildEntry(change, type, index) {
   entry.tabIndex = 0;
   const confidence = typeof change.confidence === 'number' ? `${Math.round(100 * change.confidence)} %` : '';
   const head = el('div', 'change-head');
-  head.append(badge(type), el('span', 'change-title', `${change.id} ${change.label ?? ''}`), el('span', 'conf', confidence));
+  const title = el('span', 'change-title', `${change.id} ${change.label ?? ''}`);
+  head.append(badge(type), title, el('span', 'conf', confidence));
   if (confidence) head.lastChild.title = 'confidence';
   entry.append(head);
+  // where the object sits (changes.json: relations.text, roomdiff/relations.py)
+  const where = typeof change.relations?.text === 'string' ? change.relations.text : '';
+  if (where) {
+    title.title = where;
+    entry.append(el('p', 'where', where));
+  }
   if (change.description) entry.append(el('p', 'desc', change.description));
   const evidence = evidenceText(change);
   if (evidence) entry.append(el('p', 'evidence', evidence));
@@ -609,6 +616,7 @@ function automationApi() {
     count: state.items.length,
     items: () => state.items.map((it, i) => ({
       index: i, id: it.change.id, type: it.type, label: it.change.label, hidden: it.entry.hidden,
+      where: it.change.relations?.text ?? '',
     })),
     jumpHome() {
       select(-1);

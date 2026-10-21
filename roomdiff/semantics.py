@@ -46,6 +46,8 @@ the stage can be re-run):
    text-only VLM call polishes all of them, a sentence is kept only if every number and
    the label survived.
 6. Summary: "N changes: a moved, b added, c removed; d unverified" + a VLM paragraph.
+7. Relations: the spatial relations of the final changes are computed again
+   (roomdiff.relations, no model): merges, splits and re-pairing make the M4 ones stale.
 
 Writes `<out>/changes.json`, `<out>/semantics/meta.json` and `<out>/semantics/log.jsonl`
 (every prompt and answer). Prompts are module constants.
@@ -76,6 +78,7 @@ from roomdiff.changes import (
 )
 from roomdiff.geometry import floor_obb, obb_corners, obb_gap
 from roomdiff.paths import RECORDINGS, OutputPaths
+from roomdiff.relations import add_relations
 from roomdiff.vlm import BaseVLM
 
 VERDICTS = ("confirmed", "rejected", "unclear")
@@ -1386,6 +1389,9 @@ def run_semantics(out_dir: str | Path, cfg: Mapping[str, Any],
 
     result = {"scene": doc["scene"], "changes": kept, "rejected": rejected,
               "summary": f"{line}. {paragraph}".strip()}
+    t0 = time.perf_counter()  # merged, split and re-paired changes need them afresh
+    add_relations(paths.root, result, cfg, points=points)
+    times["relations"] = time.perf_counter() - t0
     paths.changes_json.write_text(json.dumps(result, indent=2))
     times["total"] = time.perf_counter() - start
     meta = {

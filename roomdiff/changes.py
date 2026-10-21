@@ -41,7 +41,9 @@
   `roomdiff.projection.score_views` on the instance points (frame-independent).
 
 Writes `<out>/changes.json` (docs/interfaces.md) with label "object" and a templated
-description (M5 replaces both), `<out>/crops/` and `<out>/instances/matching.json`.
+description (M5 replaces both), the spatial relations of every change (`relations`,
+roomdiff.relations: support, on / under / beside; presentation only), `<out>/crops/` and
+`<out>/instances/matching.json`.
 """
 
 from __future__ import annotations
@@ -68,6 +70,7 @@ from roomdiff.instances import (
 from roomdiff.paths import RECORDINGS, OutputPaths
 from roomdiff.projection import score_views
 from roomdiff.recon import load_recon
+from roomdiff.relations import add_relations
 
 CHANGE_TYPES = ("moved", "removed", "added", "unverified")
 TYPE_COLORS: dict[str, tuple[int, int, int]] = {
@@ -547,6 +550,8 @@ def run_changes(out_dir: str | Path, cfg: Mapping[str, Any]) -> dict[str, Any]:
             c["replaces"] = ids[("removed", n)]
 
     doc = {"scene": scene_info(paths), "changes": changes, "summary": summarize(changes)}
+    add_relations(paths.root, doc, cfg, recon=recon,
+                  points={name: data[name]["points"] for name in RECORDINGS})
     paths.changes_json.write_text(json.dumps(doc, indent=2))
     matching = {
         "before_candidates": [bef["instances"][k]["id"] for k in d_idx],

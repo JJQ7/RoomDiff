@@ -168,7 +168,8 @@ body {
 }
 .badge.unverified { color: #1f2328; }
 
-.desc, .evidence, .verdict { margin: 4px 0 0; }
+.desc, .evidence, .verdict, .where { margin: 4px 0 0; }
+.where { font-size: 12px; font-style: italic; overflow-wrap: anywhere; }
 .desc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .selected .desc { white-space: normal; }
 .evidence, .verdict, .missing { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }

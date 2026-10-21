@@ -684,7 +684,8 @@ def test_cli_describe_and_viewer(tmp_path, monkeypatch):
         assert result.exit_code == 0, result.output
     assert "[semantics]" in result.output and "[report]" in result.output
     doc = json.loads((tmp_path / "changes.json").read_text())
-    assert set(doc) == {"scene", "changes", "rejected", "summary"}
+    assert set(doc) == {"scene", "changes", "rejected", "summary", "relations_info"}
+    assert all("relations" in c for c in doc["changes"] + doc["rejected"])  # recomputed
     # the fake names everything "box" and calls every pair the same object, so the
     # removed blue box and the added green box (0.8 m apart) are re-paired into a move
     assert doc["summary"].startswith("2 changes: 2 moved, 0 added, 0 removed; ")

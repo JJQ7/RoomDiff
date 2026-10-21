@@ -172,6 +172,15 @@ see `docs/interfaces.md`), `scene.rrd` (open with `rerun scene.rrd`) and `viewer
   descriptions, a summary, `<out>/report.md` and the VLM log `<out>/semantics/log.jsonl`.
   Settings: `configs/default.yaml: semantics`.
 
+- **Spatial relations** (part of `changes` and `describe`, or alone: `roomdiff relations
+  --out <dir>`, no model, about 2 s): where each change sits, after SuperMap's On / beside /
+  under predicates, from the cloud around and above the object in a levelled frame: "on
+  the floor", "on a surface 0.72 m above the floor", "partly under a surface 0.77 m above
+  the floor", "beside the bucket", moved "from the surface at 0.78 m to the floor". Shown
+  in the report ("**where**") and the viewer; stored as `relations` in `changes.json`
+  (nothing else changes, so the benchmark predictions are identical). Settings:
+  `configs/default.yaml: relations`.
+
 - **Diagnostics**: `python scripts/plot_align.py outputs/scene1` renders top-down and side views of the before/after clouds (`<out>/recon/<run>_{top,side}.png`) to check the alignment by eye.
 
 ## Example outputs

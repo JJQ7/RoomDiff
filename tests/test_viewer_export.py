@@ -271,3 +271,27 @@ def test_best_view_dir_prefers_the_open_side_of_a_room():
     # cameras looking at the back wall already give the right answer and are kept
     cam2world[:, :3, :3] = np.eye(3)
     assert np.allclose(best_view_dir(points, up, cam2world), [0, 0, 1], atol=1e-6)
+
+
+def test_export_writes_the_relation_phrase(tmp_path):
+    """The viewer copy gets `relations.text` afresh: relations to changes that are no
+    longer kept are left out of the phrase (app.js shows it)."""
+    make_run(tmp_path)
+    floor = {"kind": "floor", "height": 0.0}
+    changes = {
+        "scene": {"units": "metres (approx.)"},
+        "changes": [{"id": 1, "type": "removed", "label": "lamp", "confidence": 0.7,
+                     "before": {"centroid": [0, 0, 0], "aabb": [[0, 0, 0], [1, 1, 1]]},
+                     "relations": {"before": {"support": floor, "cover": None, "objects": [
+                         {"relation": "beside", "other_change_id": 2}]}, "after": None,
+                                   "text": "on the floor, beside the chair"}}],
+        "rejected": [{"id": 2, "type": "removed", "label": "chair", "confidence": 0.4}],
+        "summary": "1 change",
+        "relations_info": {"levelled": True, "floor_known": True},
+    }
+    (tmp_path / "changes.json").write_text(json.dumps(changes))
+    viewer = export_viewer(tmp_path, target_points=1000)
+    copied = json.loads((viewer / "changes.json").read_text())
+    assert copied["changes"][0]["relations"]["text"] == "on the floor"
+    app_js = (VIEWER_SRC / "app.js").read_text()
+    assert "relations?.text" in app_js and "'where'" in app_js

@@ -185,6 +185,39 @@ changes:
   crop_min_px: 256       # crops are at least this many pixels per side (keyframe resolution) ...
   crop_context: 1.6      # ... and this many times the object box
 
+# Spatial relations of the changes (roomdiff/relations.py; computed by `changes`, again by
+# `describe` on its final change list, or alone by `roomdiff relations`): where each object
+# sits ("on the floor", "on a surface 0.72 m above the floor", "under ...", "beside ...",
+# moved "from ... to ..."), for the report and the viewer only (an added `relations` key;
+# no type, confidence or mask changes). No model; levelled frames only (heights above y = 0)
+relations:
+  enabled: true
+  cloud_stride: 2        # cloud of a recording = every n-th valid pixel (rows and columns)
+  support_pad: 0.08      # m, support: cloud points in the ring around the object's footprint
+                         # (its oriented box grown by this, minus the footprint) ...
+  support_depth: 0.10    # m, ... from this far below the object's bottom (1st percentile of
+  support_tol: 0.03      # its points' y) to this far above it ...
+  own_dist: 0.02         # m, ... farther than this from the object's own instance points
+  support_spread: 0.015  # m, horizontal patch: points within +- this of a height ...
+  support_min_frac: 0.25 # ... in at least this share of the ring's 2 cm cells ...
+  support_min_points: 30 # ... at least this many ...
+  peak_frac: 0.5         # ... and at least this share of those cells' points within 3x the
+                         # window (a level surface, not a slice of a wall); highest one wins
+  floor_max: 0.05        # m, a support lower than this is the floor ...
+  floor_min_inliers: 0.5 # ... if recon fitted a floor plane holding at least this share of the
+                         # lowest 10 % of the points (recon/meta.json: floor_inliers_fraction);
+                         # else y = 0 may be a counter that was the lowest surface filmed
+                         # (kitchen_8: 0.09) and no height is quoted ("on a horizontal surface")
+  cover_gap: 0.02        # m, cover ("under a surface"): the lowest such patch inside the
+  cover_max: 1.2         # footprint from this to this far above the object's top ...
+  cover_min_frac: 0.15   # ... over at least this share of the footprint cells
+  on_tol: 0.05           # m, on(A, B): |bottom(A) - top(B)| below this and the footprints
+  on_overlap: 0.3        # overlapping by more than this share of the smaller one (SuperMap's
+                         # IoU misses a cup on a table); under(A, B): A's top at least on_tol
+                         # below B's bottom, same overlap
+  beside_gap: 0.15       # m, beside: footprints closer than this, height ranges overlapping
+  same_height_tol: 0.05  # m, moved: before / after supports this close are "both times"
+
 # M5: Qwen3-VL naming, paired-crop judge, re-pairing and descriptions (prompts are
 # constants in roomdiff/semantics.py)
 semantics:

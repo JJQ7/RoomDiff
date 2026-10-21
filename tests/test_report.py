@@ -146,3 +146,25 @@ def test_report_without_changes_or_recon(tmp_path):
     text = write_report(tmp_path).read_text()
     assert "No change was found." in text and "<details>" not in text
     assert "- No reconstruction diagnostics available." in text
+
+
+def test_report_says_where_each_change_sits():
+    support = {"kind": "surface", "height": 0.72}
+    ladder = {**DOC["changes"][0], "relations": {
+        "before": {"support": support, "cover": None, "objects": []},
+        "after": {"support": {"kind": "floor", "height": 0.0}, "cover": None,
+                  "objects": [{"relation": "beside", "other_change_id": 3},
+                              {"relation": "beside", "other_change_id": 9}]}}}
+    bag = {**DOC["changes"][1], "relations": {
+        "before": {"support": {"kind": "floor", "height": 0.01},
+                   "cover": {"height": 0.75, "coverage": 0.3}, "objects": []},
+        "after": None}}
+    doc = {**DOC, "changes": [ladder, bag, DOC["changes"][2]],
+           "relations_info": {"levelled": True, "floor_known": True}}
+    text = render_report(doc, "scene_x", [])
+    # rejected change 9 is not named; the dresser has no relations: no "where"
+    assert "**confidence** 0.77 · **VLM verdict** confirmed · **motion** rigid · " \
+        "**appearance** brown wood · **where** from the surface at 0.72 m to the floor, " \
+        "beside the brown bag" in text
+    assert "· **where** on the floor, partly under a surface 0.75 m above the floor" in text
+    assert text.split("### 7.")[1].count("**where**") == 0

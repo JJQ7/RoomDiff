@@ -194,6 +194,20 @@ each verdict), `report.md`, a Rerun session for inspection, and a self-contained
 viewer (three.js) that shows both clouds in the shared frame, the change boxes, the
 natural-language report and the before/after crops, and runs on GitHub Pages.
 
+*Where a change sits (21 October).* SuperMap (CMU, RSS 2026) attaches On / beside / under
+predicates to its object nodes and hands them to a language model as text. We use the same
+predicates only for presentation: in the levelled frame each change gets the horizontal
+patch it rests on (the floor, or "a surface 0.78 m above the floor", from the cloud in a
+ring around the object's footprint), a patch above it ("partly under a surface ..."), and
+on / under / beside relations to the other changes of the same recording; a moved object
+gets "from the surface at 0.78 m to the floor". The floor counts as known only when
+levelling fitted a floor plane with enough inliers, so a kitchen filmed without its floor
+says "on a horizontal surface" instead. The phrase goes into the report and the viewer and
+the structure into `changes.json` (`relations`); nothing else changes, so the benchmark
+predictions are byte-identical. Limits: the lower part of an object the videos never
+reconstructed (stool legs, a bucket behind the table edge) leaves the support unknown, and
+objects far from the cameras have too few points in the ring (`roomdiff/relations.py`).
+
 ## 6. A held-out check on our own recordings
 Three pairs of iPhone videos around a low table (consecutive states; the staged changes
 were written down first, `examples/tabletop_*/gt.yaml`), each run once with the default

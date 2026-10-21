@@ -85,6 +85,15 @@ def changes(out: OutOpt, config: ConfigOpt = None, set_: SetOpt = None) -> None:
 
 
 @app.command()
+def relations(out: OutOpt, config: ConfigOpt = None, set_: SetOpt = None) -> None:
+    """Where each change sits (support, on / under / beside) into <out>/changes.json, no
+    model; rewrites report.md after describe. `changes` and `describe` already do this."""
+    from roomdiff.relations import run_relations
+
+    run_relations(out, _load_config(config, set_))
+
+
+@app.command()
 def describe(out: OutOpt, config: ConfigOpt = None, set_: SetOpt = None) -> None:
     """Name, verify (VLM judge) and describe the changes with Qwen3-VL; write report.md."""
     _describe_stage(out, _load_config(config, set_))
